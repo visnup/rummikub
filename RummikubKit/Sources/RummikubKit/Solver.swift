@@ -62,6 +62,11 @@ final class Search {
     let rack: Counts
 
     func after(_ move: Move) -> Key { Key(table: table &- move.fromTable, rack: rack &- move.fromRack) }
+
+    // SIMD's own hash combines each lane separately.
+    func hash(into hasher: inout Hasher) {
+      withUnsafeBytes(of: self) { hasher.combine(bytes: $0) }
+    }
   }
 
   struct Entry: Equatable {
@@ -71,59 +76,78 @@ final class Search {
 
   /// Templates by their lowest tile, since `moves` only ever settles the lowest tile left.
   static let byTile = (0..<53).map { tile in Template.all.indices.filter { Template.all[$0].counts.first == tile } }
+  static let counts = Template.all.map(\.counts)
+  static let colors = Template.all.map(\.color)
+  /// Each template's distinct tiles, five apiece, padded with a lane that's always zero.
+  static let support = Template.all.flatMap { template in
+    let tiles = (0..<53).filter { template.counts[$0] > 0 }
+    return tiles + Array(repeating: 63, count: 5 - tiles.count)
+  }
 
   let old: [Counts]
-  var memo = [Key: [Entry]]()
-
+  let oldTotals: [Int]
   let oldColors: [TileColor?]
+  var memo = [Key: [Entry]]()
+  /// `kept`, by template and how many of each of its tiles come from the table, two bits apiece.
+  var keptCache: [Int8]
 
   init(old: [[Tile]]) {
     self.old = old.map(Counts.init)
+    oldTotals = old.map(\.count)
     oldColors = old.map(runColor)
+    keptCache = Array(repeating: -1, count: Template.all.count << 10)
   }
 
   /// Every way to settle the lowest tile left: the melds it could go in and, for a rack tile, keeping it. Going in
   /// value order means everything below the lowest tile is settled, so the states left are few, as in a DP by value.
-  func moves(_ key: Key) -> [Move] {
+  /// Stops when `body` returns false.
+  func moves(_ key: Key, _ body: (Move) -> Bool) {
     let available = key.table &+ key.rack
-    guard let tile = available.first else { return [] }
-    var keep = [Move]()
+    guard let tile = available.first else { return }
     if key.table[tile] == 0 {
       var counts = Counts()
       counts[tile] = 1
-      keep.append(Move(template: nil, fromTable: .zero, fromRack: counts))
+      if !body(Move(template: nil, fromTable: .zero, fromRack: counts)) { return }
     }
-    return keep
-      + Self.byTile[tile].compactMap {
-        let counts = Template.all[$0].counts
-        if any(counts .> available) { return nil }
-        let fromTable = pointwiseMin(counts, key.table)
-        return Move(template: $0, fromTable: fromTable, fromRack: counts &- fromTable)
-      }
+    for template in Self.byTile[tile] {
+      let counts = Self.counts[template]
+      if any(counts .> available) { continue }
+      let fromTable = pointwiseMin(counts, key.table)
+      if !body(Move(template: template, fromTable: fromTable, fromRack: counts &- fromTable)) { return }
+    }
   }
 
   func gain(_ move: Move) -> Entry {
     guard let template = move.template else { return Entry(placed: 0, kept: 0) }
-    let color = Template.all[template].color
-    let kept = old.indices.map {
-      let overlap = old[$0].overlap(move.fromTable)
-      return 2 * overlap > old[$0].total || (color != nil && color == oldColors[$0]) ? overlap : 0
+    var code = template << 10
+    for i in 0..<5 { code |= Int(move.fromTable[Self.support[template * 5 + i]]) << (2 * i) }
+    if keptCache[code] < 0 {
+      let color = Self.colors[template]
+      var kept = 0
+      for k in old.indices {
+        let overlap = old[k].overlap(move.fromTable)
+        if overlap > kept && (2 * overlap > oldTotals[k] || (color != nil && color == oldColors[k])) { kept = overlap }
+      }
+      keptCache[code] = Int8(kept)
     }
-    return Entry(placed: move.fromRack.total, kept: kept.max() ?? 0)
+    return Entry(placed: move.fromRack.total, kept: Int(keptCache[code]))
   }
 
   func front(_ key: Key) -> [Entry] {
     if key.table == .zero && key.rack == .zero { return [Entry(placed: 0, kept: 0)] }
     if let front = memo[key] { return front }
     var front = [Entry]()
-    for move in moves(key) {
+    moves(key) { move in
+      let rests = self.front(key.after(move))
+      if rests.isEmpty { return true }
       let gain = gain(move)
-      for rest in self.front(key.after(move)) {
+      for rest in rests {
         let entry = Entry(placed: rest.placed + gain.placed, kept: rest.kept + gain.kept)
         if front.contains(where: { $0.placed >= entry.placed && $0.kept >= entry.kept }) { continue }
         front.removeAll { $0.placed <= entry.placed && $0.kept <= entry.kept }
         front.append(entry)
       }
+      return true
     }
     memo[key] = front
     return front
@@ -131,12 +155,16 @@ final class Search {
 
   func path(_ key: Key, _ target: Entry) -> [Move] {
     if key.table == .zero && key.rack == .zero { return [] }
-    for move in moves(key) {
+    var path: [Move]?
+    moves(key) { move in
       let gain = gain(move)
       let rest = Entry(placed: target.placed - gain.placed, kept: target.kept - gain.kept)
-      if front(key.after(move)).contains(rest) { return [move] + path(key.after(move), rest) }
+      guard front(key.after(move)).contains(rest) else { return true }
+      path = [move] + self.path(key.after(move), rest)
+      return false
     }
-    preconditionFailure("\(target) isn't on the front")
+    guard let path else { preconditionFailure("\(target) isn't on the front") }
+    return path
   }
 }
 

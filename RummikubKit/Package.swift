@@ -9,7 +9,8 @@ let package = Package(
     .library(name: "RummikubKit", targets: ["RummikubKit"])
   ],
   targets: [
-    .target(name: "RummikubKit"),
+    // Recognition's pixel loops take seconds a frame unoptimized, so debug builds optimize too.
+    .target(name: "RummikubKit", swiftSettings: [.unsafeFlags(["-O"])]),
     .executableTarget(name: "bench", dependencies: ["RummikubKit"]),
     .executableTarget(name: "scan", dependencies: ["RummikubKit"]),
     .testTarget(name: "RummikubKitTests", dependencies: ["RummikubKit"]),

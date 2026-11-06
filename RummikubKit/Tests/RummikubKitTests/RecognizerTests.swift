@@ -15,10 +15,11 @@ func save(_ image: CGImage, _ name: String) {
   CGImageDestinationFinalize(destination)
 }
 
-@Test func readsRenderedTable() {
+@Test(arguments: [CGSize(width: 1200, height: 900), CGSize(width: 804, height: 1748)])
+func readsRenderedTable(size: CGSize) {
   let table = melds("r1 r2 r3 r4, b5 b6 b7, j k4 k5, o5 o6 o7 o8, k1 b1 o1, r9 b9 o9, k10 k11 k12 k13, r13 b13 k13 o13")
-  let (image, _) = Render.table(table)
-  save(image, "table")
+  let (image, _) = Render.table(table, width: Int(size.width), height: Int(size.height))
+  save(image, "table\(Int(size.width))")
   let read = Recognizer.melds(Recognizer.tiles(in: image)).map { $0.map(\.tile) }
   #expect(read == table)
 }

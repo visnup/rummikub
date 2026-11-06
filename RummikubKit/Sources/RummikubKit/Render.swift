@@ -6,10 +6,11 @@ import Foundation
 public enum Render {
   public static let tileSize = CGSize(width: 60, height: 84)
 
-  /// Table melds in rows from the top, then the rack along the bottom. Returns the image and each tile's frame in
-  /// top-left-origin pixels, table tiles first in reading order, then the rack.
+  /// Table melds in rows from `top` down, then the rack `bottom` up from the bottom edge. Returns the image and each
+  /// tile's frame in top-left-origin pixels, table tiles first in reading order, then the rack.
   public static func table(
-    _ melds: [[Tile]], rack: [Tile] = [], width: Int = 1200, height: Int = 900, font: String = "Helvetica-Bold"
+    _ melds: [[Tile]], rack: [Tile] = [], width: Int = 1200, height: Int = 900, top: CGFloat = 30,
+    bottom: CGFloat = 50, font: String = "Helvetica-Bold"
   )
     -> (image: CGImage, frames: [CGRect])
   {
@@ -22,7 +23,7 @@ public enum Render {
     context.fill(CGRect(x: 0, y: 0, width: width, height: height))
 
     var frames = [CGRect]()
-    var origin = CGPoint(x: 30, y: 30)
+    var origin = CGPoint(x: 30, y: top)
     let gap: CGFloat = 40
     for meld in melds {
       let meldWidth = CGFloat(meld.count) * (tileSize.width + 2)
@@ -37,8 +38,8 @@ public enum Render {
       origin.x += meldWidth + gap
     }
     context.setFillColor(CGColor(srgbRed: 0.35, green: 0.22, blue: 0.12, alpha: 1))
-    let rackY = CGFloat(height) - tileSize.height - 50
-    context.fill(CGRect(x: 0, y: rackY - 10, width: CGFloat(width), height: tileSize.height + 60))
+    let rackY = CGFloat(height) - tileSize.height - bottom
+    context.fill(CGRect(x: 0, y: rackY - 10, width: CGFloat(width), height: CGFloat(height) - rackY + 10))
     for (i, tile) in rack.enumerated() {
       let frame = CGRect(origin: CGPoint(x: 30 + CGFloat(i) * (tileSize.width + 4), y: rackY), size: tileSize)
       draw(tile, in: frame, context: context, font: font)

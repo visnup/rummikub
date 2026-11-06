@@ -203,7 +203,7 @@ struct Pixels {
     }
     // Seams between tiles leave slivers far thinner than a 1.
     return numerals.filter {
-      $0.box.height > CGFloat(height) / 60 && $0.box.width > $0.box.height * 0.15 && onTile($0.box, share: 0.75)
+      $0.box.height > CGFloat(min(width, height)) / 80 && $0.box.width > $0.box.height * 0.15 && onTile($0.box, share: 0.75)
     }
   }
 

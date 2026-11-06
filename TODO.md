@@ -24,6 +24,15 @@ old meld kept as-is, extended or trimmed at its ends.
 
 ## Recognition
 
-- Real photos: rummikubsolver.com's two sample photos (not in the repo, no license) show a wood floor, slightly
-  rotated tiles, red smiley jokers, and a rack shot at a low angle.
-- 6 and 9 have underlines; rotated tiles need them.
+Checked against rummikubsolver.com's two sample photos (not in the repo: the site has no license), with
+`swift run -c release scan photo.jpg`, 2026-11-06:
+
+- Top-down board on a wood floor, 2460×1908: all 22 tiles right, jokers included, in 115 ms.
+- Rack at a low angle, 2016×1512: 12 of 13. The green 7 is missed: the left of its tile is shaded too far below the
+  face color for `onTile`. Loosening that margin lets wood grain through on the board photo.
+
+Next:
+- Our own photos, under a few kinds of light, kept as test fixtures. Thresholds tuned on two photos are overfit.
+- A learned detector (Create ML object detection) if heuristics keep trading one photo for another.
+- Tiles upside down or sideways, as from across the table. 6 and 9 have underlines in some editions, not others.
+- Frames are guessed from the numeral's size, so overlapping tiles on a rack can misplace them.

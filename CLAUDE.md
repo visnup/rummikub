@@ -15,7 +15,15 @@ What's next is in `TODO.md`.
     lower values come first.
   - `Meld.swift`: `isMeld`, and `Template.all`, every distinct valid meld as counts.
   - `Solver.swift`: `solve(table:rack:)` returns the plays worth considering, each with its final melds and steps.
-  - `Recognizer.swift`, `Render.swift`: reading tiles from an image, and drawing synthetic table images to test it.
+  - `Recognizer.swift`: reading tiles from an image. It finds numerals, not tiles: blobs of ink with tile face all
+    around, joined into numbers. Digits are matched against glyphs rendered in a few bold fonts, color comes from the
+    ink's hue, and each tile's frame is guessed from its numeral's size. The tile face color is the peak of a
+    saturation/value histogram, since white balance varies too much between photos for fixed thresholds. Vision's
+    text recognition skips lone digits, both rendered and photographed, so it isn't used.
+  - `Overlay.swift`: what to draw for each step of a play over the image: the tile to pick up, its target slot as a
+    ghost, and an arrow.
+  - `Render.swift`: synthetic table images for tests, and drawing overlays onto images.
+  - `scan` reads a photo and writes `<photo>.scan.png` with what it read drawn on.
 
 ## Tile notation
 

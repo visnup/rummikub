@@ -110,6 +110,7 @@ struct Pixels {
       context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
     }
     self.rgba = rgba
+    face = Self.face(rgba)
   }
 
   /// Hue in degrees, saturation and value, all from the pixel at top-left-origin `x`, `y`.
@@ -125,7 +126,24 @@ struct Pixels {
 
   func isTileFace(_ x: Int, _ y: Int) -> Bool {
     let (_, s, v) = hsv(x, y)
-    return v > 0.75 && s < 0.35
+    return abs(s - face.s) < 0.1 && v > face.v - 0.2
+  }
+
+  /// The tile face's saturation and value: the most common pair among bright, nearly gray pixels. White balance and
+  /// exposure move it around too much between photos for fixed thresholds.
+  let face: (s: Double, v: Double)
+
+  static func face(_ rgba: [UInt8]) -> (s: Double, v: Double) {
+    var counts = [Int](repeating: 0, count: 20 * 20)
+    for i in stride(from: 0, to: rgba.count, by: 4 * 7) {
+      let high = Int(max(rgba[i], rgba[i + 1], rgba[i + 2])), low = Int(min(rgba[i], rgba[i + 1], rgba[i + 2]))
+      guard high > 127, high > 0 else { continue }
+      let s = Double(high - low) / Double(high), v = Double(high) / 255
+      guard s < 0.4 else { continue }
+      counts[Int(s * 50) * 20 + min(19, Int(v * 20))] += 1
+    }
+    let peak = counts.indices.max { counts[$0] < counts[$1] }!
+    return ((Double(peak / 20) + 0.5) / 50, (Double(peak % 20) + 0.5) / 20)
   }
 
   let inkValue = 0.35, inkSaturation = 0.5
@@ -167,7 +185,9 @@ struct Pixels {
       let box = CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
       if max(box.width, box.height) >= 4 && onTile(box, share: 0.5) { boxes.append(box) }
     }
-    var numerals = boxes.filter { box in !boxes.contains { $0 != box && $0.contains(box) } }.map { Numeral(parts: [$0]) }
+    // Drop the features inside a joker's face, but not a numeral inside a stretch of wood grain.
+    let containers = boxes.filter { onTile($0, share: 0.75) }
+    var numerals = boxes.filter { box in !containers.contains { $0 != box && $0.contains(box) } }.map { Numeral(parts: [$0]) }
 
     var joined = true
     while joined {
@@ -181,12 +201,9 @@ struct Pixels {
         }
       }
     }
-    numerals = numerals.filter { $0.box.height > CGFloat(height) / 60 && onTile($0.box, share: 0.75) }
-    let heights = numerals.map(\.box.height).sorted()
-    guard let median = heights.dropFirst(heights.count / 2).first else { return [] }
     // Seams between tiles leave slivers far thinner than a 1.
     return numerals.filter {
-      $0.box.height > median / 2 && $0.box.height < median * 2.5 && $0.box.width > $0.box.height * 0.15
+      $0.box.height > CGFloat(height) / 60 && $0.box.width > $0.box.height * 0.15 && onTile($0.box, share: 0.75)
     }
   }
 
@@ -210,20 +227,12 @@ struct Pixels {
     let ring = box.insetBy(dx: -box.height / 5, dy: -box.height / 5)
     guard ring.minX >= 0, ring.minY >= 0, ring.maxX < CGFloat(width), ring.maxY < CGFloat(height) else { return false }
     let step = max(1, Int(ring.height) / 12)
-    var face = 0, total = 0
-    for x in stride(from: Int(ring.minX), to: Int(ring.maxX), by: step) {
-      for y in [Int(ring.minY), Int(ring.maxY) - 1] {
-        total += 1
-        if isTileFace(x, y) { face += 1 }
-      }
-    }
-    for y in stride(from: Int(ring.minY), to: Int(ring.maxY), by: step) {
-      for x in [Int(ring.minX), Int(ring.maxX) - 1] {
-        total += 1
-        if isTileFace(x, y) { face += 1 }
-      }
-    }
-    return Double(face) >= Double(total) * share
+    let xs = stride(from: Int(ring.minX), to: Int(ring.maxX), by: step)
+    let ys = stride(from: Int(ring.minY), to: Int(ring.maxY), by: step)
+    let points =
+      xs.flatMap { x in [(x, Int(ring.minY)), (x, Int(ring.maxY) - 1)] }
+      + ys.flatMap { y in [(Int(ring.minX), y), (Int(ring.maxX) - 1, y)] }
+    return Double(points.count { isTileFace($0.0, $0.1) }) >= Double(points.count) * share
   }
 
   /// The ink inside `box`, scaled to `Glyph.height` and centered, or nil when there's too little.
@@ -251,7 +260,8 @@ struct Pixels {
     for y in Int(box.minY)..<Int(box.maxY) {
       for x in Int(box.minX)..<Int(box.maxX) {
         let (h, s, v) = hsv(x, y)
-        if v < inkValue { dark += 1 } else if s > inkSaturation { hues.append(h) }
+        // Black ink under a color cast is saturated too, but darker than any colored ink.
+        if s > inkSaturation && v > 0.3 { hues.append(h) } else if v < inkValue { dark += 1 }
       }
     }
     guard hues.count + dark > 10 else { return nil }

@@ -24,6 +24,16 @@ func readsRenderedTable(size: CGSize) {
   #expect(read == table)
 }
 
+@Test func liftsSlotsThatCoverAnotherMeld() throws {
+  let table = melds("k1 k2 k3, b9 b10 b11")
+  let (image, _) = Render.table(table)
+  let scene = Scene(table: Recognizer.melds(Recognizer.tiles(in: image)), rack: [])
+  let play = try #require(solve(table: scene.tableTiles, rack: Tile.parse("k4")).last)
+  let k4 = play.slots(in: scene)[0][3]
+  #expect(k4.minY < scene.table[0][0].frame.minY)
+  #expect(!scene.table[1].contains { $0.frame.intersects(k4) })
+}
+
 @Test func walksThroughSteps() throws {
   let table = melds("r3 r4 r5 r6, k1 k2 k3, b9 b10 b11, o12 r12 b12")
   let rack = Tile.parse("b6 k6 k4 o5 b13 o9 j")

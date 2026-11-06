@@ -35,7 +35,8 @@ public enum Mark: Hashable, Sendable {
 
 extension Play {
   /// Where every tile of every new meld sits on the table: kept tiles where they are, the rest in line with them, and
-  /// melds with no anchor in a new row under the table.
+  /// melds with no anchor in a new row under the table. A slot that would cover another meld's tile is lifted above
+  /// the row, since there's no room until that meld moves over.
   public func slots(in scene: Scene) -> [[CGRect]] {
     let all = scene.table.joined().map(\.frame)
     let size = all.first?.size ?? scene.rack.first?.frame.size ?? CGSize(width: 60, height: 84)
@@ -47,7 +48,12 @@ extension Play {
         let old = scene.table[anchor]
         let pairs = tiles.indices.compactMap { i in old.firstIndex { $0.tile == tiles[i] }.map { (i, old[$0].frame) } }
         if let (i, frame) = pairs.first {
-          return tiles.indices.map { frame.offsetBy(dx: CGFloat($0 - i) * pitch, dy: 0) }
+          let others = scene.table.indices.filter { $0 != anchor }.flatMap { scene.table[$0].map(\.frame) }
+          return tiles.indices.map {
+            let slot = frame.offsetBy(dx: CGFloat($0 - i) * pitch, dy: 0)
+            let covers = others.contains { $0.intersects(slot.insetBy(dx: size.width / 10, dy: size.height / 10)) }
+            return covers ? slot.offsetBy(dx: 0, dy: -size.height * 1.1) : slot
+          }
         }
       }
       let origin = free

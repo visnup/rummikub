@@ -20,6 +20,13 @@ What was tried and dropped, so nobody repeats it.
 - **A median-height filter on numerals**: background tiles on the rack photo are a third the size of the rack's, so
   the rack's own were dropped. Only an absolute minimum (shorter side / 80) is left.
 - **A median-saturation check on the ring around a numeral**, to reject wood: the board photo's bluish faces failed it.
+- **Ink value relative to the face** (face − .4 to − .55) instead of a fixed .4, for the out-of-focus black 1 in the
+  TV captures (stem at v .55–.7): 20–28 misreads on the fixtures against 19, and the 1 was still missed.
+- **A numeral centered on a tile-sized face** (2026-11-06), to reject keyboards and subtitles before reading: tile
+  face runs on into neighboring tiles and the rack tray without a visible seam, so real tiles measured 0.02 to 11
+  numeral heights of face to each side, and the false k9 on a subtitle (4.1, 2.1) and k1s on the rack tray (3.5,
+  3.5) fell inside that. Not built. Stroke width caught the keyboard instead.
+- **A 3×3 blur of glyph cells** before matching, to soften aliasing: 29 misreads against 25.
 - **A wider value margin for the face** (peak − .3) to catch the rack photo's shaded green 7: it let wood grain in on
   the board photo and still missed the 7.
 

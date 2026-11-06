@@ -125,6 +125,7 @@ public enum Render {
     context.setFillColor(CGColor(srgbRed: 0.96, green: 0.93, blue: 0.85, alpha: 1))
     context.addPath(CGPath(roundedRect: frame, cornerWidth: 6, cornerHeight: 6, transform: nil))
     context.fillPath()
+    var name = font
     let text: String
     let color: CGColor
     switch tile {
@@ -134,15 +135,14 @@ public enum Render {
     case .joker:
       text = "☺"
       color = ink[.red]!
+      // Fonts without ☺ fall back to Apple Color Emoji on iOS, a filled disc.
+      name = "Arial-BoldMT"
     }
-    let font = CTFontCreateWithName(font as CFString, 36, nil)
-    var attributes: [NSAttributedString.Key: Any] = [
+    let font = CTFontCreateWithName(name as CFString, 36, nil)
+    let attributes: [NSAttributedString.Key: Any] = [
       NSAttributedString.Key(kCTFontAttributeName as String): font,
       NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
     ]
-    if tile.value == 6 || tile.value == 9 {
-      attributes[NSAttributedString.Key(kCTUnderlineStyleAttributeName as String)] = CTUnderlineStyle.thick.rawValue
-    }
     let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
     let width = CTLineGetTypographicBounds(line, nil, nil, nil)
     context.saveGState()

@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 public struct Detection: Hashable, Sendable {
   public let tile: Tile
@@ -20,7 +21,12 @@ public enum Recognizer {
       // A real joker's face is half again as tall as a numeral; a rendered one is the size of one.
       let big = box.height > heights[heights.count / 2] * 1.4 && (0.8...1.25).contains(box.width / box.height)
       let whole = glyphs.min { glyph.distance(to: $0.glyph) < glyph.distance(to: $1.glyph) }!.value
-      guard !big, whole != nil else { return Detection(tile: .joker, frame: frame(around: box, height: 0.45)) }
+      let joker = Detection(tile: .joker, frame: frame(around: box, height: 0.45))
+      // A joker's face is a thin drawing in a square; other thin ink, like a keyboard's legends, isn't a tile.
+      if pixels.stroke(in: box) < 0.1 { return (0.8...1.25).contains(box.width / box.height) ? joker : nil }
+      guard !big, whole != nil else { return joker }
+      // A joker's face has its features close around it; a number stands alone on its tile, unlike printed text.
+      guard pixels.crowding(around: box) < 0.08 else { return nil }
       let read = numeral.digits.map { part in
         let glyph = pixels.glyph(in: part)!
         return digits.min { glyph.distance(to: $0.glyph) < glyph.distance(to: $1.glyph) }!.digit
@@ -30,30 +36,34 @@ public enum Recognizer {
     }
   }
 
+
   /// A tile around a numeral that takes up `height` of it, centered a bit above the middle.
   static func frame(around box: CGRect, height fraction: CGFloat) -> CGRect {
     let height = box.height / fraction
     return CGRect(x: box.midX - height * 0.35, y: box.midY - height * 0.42, width: height * 0.7, height: height)
   }
 
-  /// 1–13, and nil for the joker, cut from tiles rendered in bold fonts close to the real tiles' one, which ships on
-  /// no device.
-  static let glyphs: [(value: Int?, glyph: Glyph)] = references.flatMap { pixels, numerals in
-    zip(referenceTiles, numerals).map { ($0.value, pixels.glyph(in: $1.box)!) }
+  /// 1–13, and nil for the joker.
+  static let glyphs: [(value: Int?, glyph: Glyph)] = references.filter { $0.label < 100 }.map {
+    ($0.label == 0 ? nil : $0.label, $0.glyph)
   }
 
-  /// 0–9 on their own, from the same.
-  static let digits: [(digit: Int, glyph: Glyph)] = references.flatMap { pixels, numerals in
-    zip(referenceTiles.compactMap(\.value), numerals).flatMap { value, numeral in
-      zip(String(value), numeral.digits).map { (Int(String($0))!, pixels.glyph(in: $1)!) }
+  /// 0–9 on their own.
+  static let digits: [(digit: Int, glyph: Glyph)] = references.filter { $0.label >= 100 }.map {
+    ($0.label - 100, $0.glyph)
+  }
+
+  /// Numbers (0 for the joker) and digits (100 + digit), cut from tiles rendered in bold fonts close to the real
+  /// tiles' one, which ships on no device. Baked on macOS by `bakesReferences`, since iOS renders fonts differently.
+  static let references: [(label: Int, glyph: Glyph)] = {
+    let data = try! Data(contentsOf: Bundle.module.url(forResource: "References", withExtension: "bin")!)
+    let cells = Glyph.width * Glyph.height, size = 1 + cells * 4
+    return stride(from: 0, to: data.count, by: size).map { start in
+      data[start..<start + size].withUnsafeBytes { bytes in
+        (Int(bytes[0]), Glyph(cells: (0..<cells).map { bytes.loadUnaligned(fromByteOffset: 1 + $0 * 4, as: Float.self) }))
+      }
     }
-  }
-
-  static let referenceTiles = (1...13).map { Tile.number(.black, $0) } + [.joker]
-  static let references = ["Helvetica-Bold", "Arial-BoldMT", "Futura-Bold", "AvenirNext-Heavy", "Verdana-Bold"].map {
-    let pixels = Pixels(Render.table([referenceTiles], height: 300, font: $0).image)
-    return (pixels, pixels.numerals().sorted { $0.box.minX < $1.box.minX })
-  }
+  }()
 
   /// Tiles side by side in the same row, in reading order.
   public static func melds(_ detections: [Detection]) -> [[Detection]] {
@@ -129,8 +139,9 @@ struct Pixels {
     return abs(s - face.s) < 0.1 && v > face.v - 0.2
   }
 
-  /// The tile face's saturation and value: the most common pair among bright, nearly gray pixels. White balance and
-  /// exposure move it around too much between photos for fixed thresholds.
+  /// The tile face's saturation and value: the brightest pair among bright, nearly gray pixels that's at least a
+  /// quarter as common as the most common, which can be a gray mat. White balance and exposure move it around too
+  /// much between photos for fixed thresholds.
   let face: (s: Double, v: Double)
 
   static func face(_ rgba: [UInt8]) -> (s: Double, v: Double) {
@@ -142,11 +153,12 @@ struct Pixels {
       guard s < 0.4 else { continue }
       counts[Int(s * 50) * 20 + min(19, Int(v * 20))] += 1
     }
-    let peak = counts.indices.max { counts[$0] < counts[$1] }!
+    let most = counts.max()!
+    let peak = counts.indices.filter { counts[$0] * 4 >= most }.max { $0 % 20 < $1 % 20 }!
     return ((Double(peak / 20) + 0.5) / 50, (Double(peak % 20) + 0.5) / 20)
   }
 
-  let inkValue = 0.35, inkSaturation = 0.5
+  let inkValue = 0.4, inkSaturation = 0.3
 
   /// Dark or strongly colored, unlike the tile face, its embossed logo and its shadowed edges.
   func isInk(_ x: Int, _ y: Int) -> Bool {
@@ -154,15 +166,14 @@ struct Pixels {
     return v < inkValue || s > inkSaturation
   }
 
-  /// A number's ink blobs: its digits, and the underline of a 6 or 9.
+  /// A number's ink blobs, one per digit.
   struct Numeral {
     var parts: [CGRect]
     var box: CGRect { parts.dropFirst().reduce(parts[0]) { $0.union($1) } }
-    var digits: [CGRect] { parts.filter { $0.height >= $0.width / 2 }.sorted { $0.minX < $1.minX } }
+    var digits: [CGRect] { parts.sorted { $0.minX < $1.minX } }
   }
 
-  /// The numerals on tiles: ink blobs with tile face all around, joined side by side into numbers, with the
-  /// underlines of 6 and 9.
+  /// The numerals on tiles: ink blobs with tile face all around, joined side by side into numbers.
   func numerals() -> [Numeral] {
     var ink = [Bool](repeating: false, count: width * height)
     for y in 0..<height {
@@ -189,13 +200,18 @@ struct Pixels {
     let containers = boxes.filter { onTile($0, share: 0.75) }
     var numerals = boxes.filter { box in !containers.contains { $0 != box && $0.contains(box) } }.map { Numeral(parts: [$0]) }
 
+    // Only the same ink joins, so an orange 11 doesn't take in the joker beside it.
+    var colors = numerals.map { inkColor(in: $0.box) }
     var joined = true
     while joined {
       joined = false
       for i in numerals.indices {
-        if let j = numerals.indices.first(where: { $0 != i && belongTogether(numerals[i].box, numerals[$0].box) }) {
+        if let j = numerals.indices.first(where: {
+          $0 != i && colors[$0] == colors[i] && belongTogether(numerals[i].box, numerals[$0].box)
+        }) {
           numerals[i].parts += numerals[j].parts
           numerals.remove(at: j)
+          colors.remove(at: j)
           joined = true
           break
         }
@@ -207,19 +223,41 @@ struct Pixels {
     }
   }
 
-  /// Digits of one number, or a 6 or 9 and its underline.
+  /// The ink's stroke width as a share of `box`'s height, from its area and its edge: a tile's bold digits are
+  /// .15–.26, a joker's line drawing and a keyboard's legends under .06.
+  func stroke(in box: CGRect) -> Double {
+    var area = 0, edge = 0
+    for y in Int(box.minY)..<Int(box.maxY) {
+      for x in Int(box.minX)..<Int(box.maxX) where isInk(x, y) {
+        area += 1
+        if !isInk(x - 1, y) || !isInk(x + 1, y) || !isInk(x, y - 1) || !isInk(x, y + 1) { edge += 1 }
+      }
+    }
+    return 2 * Double(area) / Double(max(edge, 1)) / box.height
+  }
+
+  /// The share of ink in a band from a sixth to two fifths of `box`'s height around it. A tile's numeral stands alone on
+  /// its face; a letter in printed text has others close by.
+  func crowding(around box: CGRect) -> Double {
+    let inner = box.insetBy(dx: -box.height / 6, dy: -box.height / 6)
+    let outer = box.insetBy(dx: -box.height / 2.5, dy: -box.height / 2.5)
+    let step = max(1, Int(box.height) / 16)
+    var ink = 0, all = 0
+    for y in stride(from: max(0, Int(outer.minY)), to: min(height, Int(outer.maxY)), by: step) {
+      for x in stride(from: max(0, Int(outer.minX)), to: min(width, Int(outer.maxX)), by: step)
+      where !inner.contains(CGPoint(x: x, y: y)) {
+        all += 1
+        if isInk(x, y) { ink += 1 }
+      }
+    }
+    return Double(ink) / Double(max(all, 1))
+  }
+
+  /// Digits of one number, side by side.
   func belongTogether(_ a: CGRect, _ b: CGRect) -> Bool {
-    let tall = max(a.height, b.height)
-    let sideBySide =
-      min(a.maxY, b.maxY) - max(a.minY, b.minY) > min(a.height, b.height) / 2
-      && max(a.minX, b.minX) - min(a.maxX, b.maxX) < tall * 0.7
+    min(a.maxY, b.maxY) - max(a.minY, b.minY) > min(a.height, b.height) / 2
+      && max(a.minX, b.minX) - min(a.maxX, b.maxX) < max(a.height, b.height) * 0.7
       && (0.6...1.6).contains(a.height / b.height)
-    let (upper, lower) = a.minY < b.minY ? (a, b) : (b, a)
-    let underline =
-      lower.height < lower.width / 2
-      && min(upper.maxX, lower.maxX) - max(upper.minX, lower.minX) > lower.width / 2
-      && lower.minY - upper.maxY < upper.height * 0.4
-    return sideBySide || underline
   }
 
   /// Whether at least `share` of the ring around `box`, a fifth of its height out, is tile face.
@@ -266,8 +304,8 @@ struct Pixels {
     }
     guard hues.count + dark > 10 else { return nil }
     if dark > hues.count { return .black }
-    let reds = hues.count { $0 < 15 || $0 > 330 }
-    let oranges = hues.count { (15..<60).contains($0) }
+    let reds = hues.count { $0 < 5 || $0 > 330 }
+    let oranges = hues.count { (5..<60).contains($0) }
     let blues = hues.count { (150..<270).contains($0) }
     return [(TileColor.red, reds), (.orange, oranges), (.blue, blues)].max { $0.1 < $1.1 }!.0
   }

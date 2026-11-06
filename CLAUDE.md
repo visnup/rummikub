@@ -17,7 +17,8 @@ What's next is in `TODO.md`.
   - `Solver.swift`: `solve(table:rack:)` returns the plays worth considering, each with its final melds and steps.
   - `LP.swift`: the linear and integer program solver behind it.
   - `Recognizer.swift`: reading tiles from an image. It finds numerals, not tiles: blobs of ink with tile face all
-    around, joined into numbers. Digits are matched against glyphs rendered in a few bold fonts, color comes from the
+    around, joined into numbers. Digits are matched against glyphs rendered in a few bold fonts and baked into
+    `References.bin`, color comes from the
     ink's hue, and each tile's frame is guessed from its numeral's size. The tile face color is the peak of a
     saturation/value histogram, since white balance varies too much between photos for fixed thresholds. Vision's
     text recognition skips lone digits, both rendered and photographed, so it isn't used.
@@ -28,9 +29,13 @@ What's next is in `TODO.md`.
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
   times a second; `Game` reads them, keeps the table and rack, solves, and tracks the step shown; `ContentView`
-  draws the step over the camera. A reading only replaces the last one once two frames in a row agree, so a missed
+  draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table
+  and rack as text once two frames agree. A reading only replaces the last one once two frames in a row agree, so a missed
   tile doesn't re-solve. While a play is being shown, readings don't re-solve; they advance the step instead
-  (`Play.stepsDone`). The simulator never uses a camera: it reads a rendered table and rack (`Demo`) once a second.
+  (`Play.stepsDone`). The simulator never uses a camera: it reads a fixture photo of whichever the Table/Rack switch says
+  (`Demo`), straight off the Mac's disk. On the phone, Table/Rack follows the tilt from CoreMotion (`Game.tilt`), shown in degrees
+  beside the switch and written into each capture. The capture button turns into a checkmark for 1.5 s and counts what's saved,
+  so a burst doesn't make duplicates.
   `make` builds it and installs and launches it on the phone (an iPhone named Yam); `make sim`
   builds the Simulator's; `make test` runs the package's tests.
 - `RummikubKit` builds with `-O` even in debug, since recognition's pixel loops take seconds a frame unoptimized.
@@ -51,11 +56,18 @@ rearrangements. What we settled on:
 
 ## Recognition thresholds
 
-All in `Pixels` in `Recognizer.swift`. Face: within .1 saturation of the histogram peak and value above peak − .2.
-Ink: value under .35 or saturation over .5. Color: saturated pixels brighter than .3 vote by hue (red under 15° or
-over 330°, orange 15–60°, blue 150–270°, which takes in the green-teal of real tiles); the rest under .35 are black.
+All in `Pixels` in `Recognizer.swift`. Face: within .1 saturation of the histogram peak and value above peak − .2,
+where the peak is the brightest bin at least a quarter as full as the fullest (a gray mat outnumbers the tiles).
+Ink: value under .4 or saturation over .3; blurred orange and black ink fall short of tighter cuts. Color: saturated
+pixels brighter than .3 vote by hue (red under 5° or over 330°, orange 5–60°, blue 150–270°, which takes in the
+green-teal of real tiles); the rest under .4 are black. Real orange ink measures 10–17° and red about 350°.
 A numeral needs three quarters of the ring a fifth of its height around it to be face. Digits join when they overlap
-vertically by half and sit within .7 of their height; a flat blob under a digit is a 6 or 9's underline.
+vertically by half and sit within .7 of their height, in the same ink color (else an orange 11 takes in the joker
+beside it). Our tiles' 6 and 9 have no underline. Stroke width over height: tile digits are .15–.26, joker
+faces and keyboard legends under .06, so a numeral under .1 is a joker if its box is square (.8–1.25) and otherwise
+not a tile. A number (not a joker, whose features crowd it) needs under 8% ink in the band from a sixth to two
+fifths of its height around it: a tile's numeral stands alone, printed text has neighbors. Wider than two fifths
+reaches the table between rendered tiles.
 `ARCHIVE.md` has what loosening each of these broke.
 
 ## Testing
@@ -68,11 +80,21 @@ vertically by half and sit within .7 of their height; a flat blob under a digit 
 - Real photos: the two samples from rummikubsolver.com (a top-down board on wood, and a rack at a low angle) are not
   in the repo, since the site has no license; download them again from its sample images if needed. Their results
   are in `TODO.md`.
-- Captures from the phone: the app's shutter button saves `<ISO time>.jpg` and `<ISO time>.txt` (what it was looking
-  at, then the melds it read, one per line) to its Documents. Copy them off with
-  `xcrun devicectl device copy from --device Yam --domain-type appDataContainer --domain-identifier
-  com.visnup.Rummikub --source Documents --destination <dir>`. The plan is to keep them as fixtures with the right
-  reading written down, under `RummikubKit/Tests/RummikubKitTests/Fixtures/`.
+- Captures from the phone: the app's shutter button saves `<ISO time>.png` and `<ISO time>.txt` (what it was looking
+  at, then the melds it read, one per line) to its Documents. PNG, so a fixture holds the pixels the phone read; the
+  first seven were JPEG, converted to PNG on the Mac. `devicectl device copy from` with `--source Documents` copies nothing, so list them with
+  `xcrun devicectl device info files --device Yam --domain-type appDataContainer --domain-identifier
+  com.visnup.Rummikub` and copy each with `--source Documents/<file> --destination <dir>/<file>`.
+- Fixtures: captures in `RummikubKit/Tests/RummikubKitTests/Fixtures/`, each `.txt` rewritten with the true melds.
+  `readsCaptures` prints each one's misses and extras and fails if the total rises above its count. Raise the bar
+  as it drops.
+- The reference glyphs are baked into `Sources/RummikubKit/References.bin`, rendered on macOS, because iOS renders
+  the same fonts differently: reading the fixtures from fonts at startup, the Simulator made 32 misreads where macOS
+  made 19, and its joker fell back to Apple Color Emoji, a filled disc. `bakesReferences` fails when a change to
+  recognition or rendering changes them; rebake with `BAKE=1 swift test --filter bakesReferences`. The Simulator
+  runs the same tests: `xcodebuild test -scheme RummikubKit-Package -destination 'name=iPhone 18 Pro'` from
+  `RummikubKit/`. Fixtures are PNG because iOS and macOS decode JPEG differently (a quarter of the bytes differed,
+  by up to 41), which made the Simulator read 22 misreads where macOS read 19.
 - At a real table, the recognizer does best with a plain dark surface, even light, tiles face up and upright in rows
   with gaps between melds, and the camera close to top-down from 30–50 cm. Light wood grain is its main source of
   false reads, and shaded tile edges its main source of misses.

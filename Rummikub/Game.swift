@@ -12,6 +12,14 @@ import UniformTypeIdentifiers
   }
 
   var looking = Looking.table
+  /// How far the camera points below the horizon, in degrees. Looking down at the table it's steep; at the rack,
+  /// nearly level. The gap between the two cutoffs keeps it from flipping back and forth.
+  var tilt: Double? {
+    didSet {
+      guard let tilt else { return }
+      if tilt > 50 { looking = .table } else if tilt < 35 { looking = .rack }
+    }
+  }
   /// The last frame read, and what was read in it.
   var frame: CGImage?
   var detections = [Detection]()
@@ -22,26 +30,20 @@ import UniformTypeIdentifiers
   var step: Int?
   /// A reading that differs from `scene`, kept until a second frame agrees with it.
   private var pending: Scene?
-  /// Whether the table and rack came from one image, as in the demo.
-  private var together = false
 
   var play: Play? { plays.indices.contains(choice) ? plays[choice] : nil }
 
-  /// Reads `image`. With `rackY`, the image holds both the table and, below that line, the rack.
-  func see(_ image: CGImage, rackY: CGFloat? = nil) async {
+  func see(_ image: CGImage) async {
     let found = await Task.detached { Recognizer.tiles(in: image) }.value
     frame = image
     detections = found
     var next = scene
-    if let rackY {
-      next = Scene(found, rackY: rackY)
-    } else if looking == .table {
+    if looking == .table {
       next.table = Recognizer.melds(found)
     } else {
       next.rack = Recognizer.melds(found).flatMap { $0 }
     }
-    together = rackY != nil
-    if let play, let step, rackY != nil || looking == .table {
+    if let play, let step, looking == .table {
       let done = play.stepsDone(next.tableTiles, from: scene.tableTiles)
       if done == play.steps.count {
         self.step = nil
@@ -61,17 +63,18 @@ import UniformTypeIdentifiers
     }
   }
 
-  /// Saves the last frame and what was read in it to Documents, as `<time>.jpg` and `<time>.txt`, to become test
-  /// fixtures.
+  /// Saves the last frame and what was read in it to Documents, as `<time>.png` and `<time>.txt`, to become test
+  /// fixtures. PNG, so the fixture is the same pixels the phone read.
   func capture() {
     guard let frame else { return }
     let base = URL.documentsDirectory.appending(path: Date.now.formatted(.iso8601))
     let destination = CGImageDestinationCreateWithURL(
-      base.appendingPathExtension("jpg") as CFURL, UTType.jpeg.identifier as CFString, 1, nil)!
+      base.appendingPathExtension("png") as CFURL, UTType.png.identifier as CFString, 1, nil)!
     CGImageDestinationAddImage(destination, frame, nil)
     CGImageDestinationFinalize(destination)
     let read = Recognizer.melds(detections).map { $0.map(\.tile.description).joined(separator: " ") }
-    try? (looking.rawValue + "\n" + read.joined(separator: "\n") + "\n")
+    let tilt = tilt.map { " \(Int($0))°" } ?? ""
+    try? (looking.rawValue + tilt + "\n" + read.joined(separator: "\n") + "\n")
       .write(to: base.appendingPathExtension("txt"), atomically: true, encoding: .utf8)
   }
 
@@ -81,19 +84,19 @@ import UniformTypeIdentifiers
     choice = max(0, plays.count - 1)
   }
 
-  /// What to draw for the current step. Unless the rack was read in the same frame as the table, a tile from it
-  /// can't be pointed at.
+  /// What to draw for the current step. The rack is never in the same frame as the table, so a tile from it can't be
+  /// pointed at.
   var marks: [Mark] {
     guard let play, let step, play.steps.indices.contains(step) else { return [] }
     let tile = play.steps[step].tile
-    if looking == .rack && !together {
+    if looking == .rack {
       guard case .rack = play.steps[step].from, let match = detections.first(where: { $0.tile == tile }) else {
         return []
       }
       return [.source(match.frame)]
     }
     let marks = play.marks(in: scene.following(detections), step: step)
-    guard case .rack = play.steps[step].from, !together else { return marks }
+    guard case .rack = play.steps[step].from else { return marks }
     return marks.filter {
       switch $0 {
       case .source, .arrow: false

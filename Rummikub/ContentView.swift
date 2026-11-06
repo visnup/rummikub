@@ -1,3 +1,5 @@
+import CoreMotion
+import ImageIO
 import RummikubKit
 import SwiftUI
 
@@ -5,6 +7,9 @@ struct ContentView: View {
   @State private var game = Game()
   @State private var camera = Camera()
   @State private var live = false
+  @State private var motion = CMMotionManager()
+  @State private var saved = 0
+  @State private var justSaved = false
 
   var body: some View {
     GeometryReader { geometry in
@@ -31,13 +36,18 @@ struct ContentView: View {
     .task {
       live = await camera.start()
       if live {
+        motion.deviceMotionUpdateInterval = 0.2
+        motion.startDeviceMotionUpdates(to: .main) { data, _ in
+          guard let gravity = data?.gravity else { return }
+          // The back camera looks along the device's -z.
+          MainActor.assumeIsolated { game.tilt = asin(max(-1, min(1, -gravity.z))) * 180 / .pi }
+        }
         for await frame in camera.frames { await game.see(frame) }
       } else {
-        // No camera, as in the simulator: read a rendered table and rack, again and again like a camera would.
-        let (image, _) = Render.table(Demo.table, rack: Demo.rack, width: 804, height: 1748, top: 220, bottom: 640)
+        // No camera, as in the simulator: read a photo of whichever the picker says, as often as a camera would.
         while !Task.isCancelled {
-          await game.see(image, rackY: 1748 - 640 - 120)
-          try? await Task.sleep(for: .seconds(1))
+          if let image = Demo.photos[game.looking] { await game.see(image) }
+          try? await Task.sleep(for: .seconds(0.3))
         }
       }
     }
@@ -56,18 +66,36 @@ struct ContentView: View {
         }
         .buttonStyle(.bordered)
       } else {
-        if live {
-          HStack {
-            Picker("Looking at", selection: $game.looking) {
-              ForEach(Game.Looking.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+        HStack {
+          Picker("Looking at", selection: $game.looking) {
+            ForEach(Game.Looking.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+          }
+          .pickerStyle(.segmented)
+          if live {
+            if let tilt = game.tilt { Text("\(Int(tilt))°").font(.caption.monospacedDigit()) }
+            if saved > 0 { Text("\(saved) saved").font(.caption) }
+            Button("Capture", systemImage: justSaved ? "checkmark" : "camera.shutter.button") {
+              game.capture()
+              saved += 1
+              justSaved = true
             }
-            .pickerStyle(.segmented)
-            Button("Capture", systemImage: "camera.shutter.button") { game.capture() }
-              .labelStyle(.iconOnly)
-              .buttonStyle(.bordered)
+            .labelStyle(.iconOnly)
+            .buttonStyle(.bordered)
+            .disabled(justSaved)
+            .sensoryFeedback(.success, trigger: saved)
+            .task(id: saved) {
+              try? await Task.sleep(for: .seconds(1.5))
+              justSaved = false
+            }
           }
         }
-        Text("\(game.scene.table.joined().count) on the table, \(game.scene.rack.count) in your rack")
+        VStack(alignment: .leading) {
+          Text("Table: " + game.scene.table.map { $0.map(\.tile.description).joined(separator: " ") }
+            .joined(separator: " · "))
+          Text("Rack: " + game.scene.rack.map(\.tile.description).joined(separator: " "))
+        }
+        .font(.caption.monospaced())
+        .frame(maxWidth: .infinity, alignment: .leading)
         ForEach(game.plays.indices, id: \.self) { i in
           let play = game.plays[i]
           Button {
@@ -124,7 +152,16 @@ struct Overlay: View {
   var body: some View {
     Canvas { context, _ in
       for detection in detections {
-        context.stroke(Path(roundedRect: fit(detection.frame), cornerRadius: 4), with: .color(.white.opacity(0.4)))
+        let rect = fit(detection.frame)
+        context.stroke(Path(roundedRect: rect, cornerRadius: 4), with: .color(.white.opacity(0.4)))
+        let label = context.resolve(
+          Text(detection.tile.description).font(.system(size: max(12, rect.width * 0.35), weight: .bold))
+            .foregroundStyle(color(detection.tile)))
+        let size = label.measure(in: rect.size)
+        let chip = CGRect(x: rect.midX - size.width / 2 - 4, y: rect.minY - size.height - 4, width: size.width + 8,
+          height: size.height + 2)
+        context.fill(Path(roundedRect: chip, cornerRadius: 4), with: .color(.white.opacity(0.85)))
+        context.draw(label, in: chip.insetBy(dx: 4, dy: 1))
       }
       for mark in marks {
         switch mark {
@@ -169,9 +206,12 @@ struct Overlay: View {
   }
 }
 
+/// Photos from the test fixtures, read straight off the Mac, which the simulator can see.
 enum Demo {
-  static let table = [
-    "r3 r4 r5 r6", "k1 k2 k3", "b9 b10 b11", "o12 r12 b12", "j k7 k8", "o4 o5 o6",
-  ].map(Tile.parse)
-  static let rack = Tile.parse("b6 k6 k4 o3 b13 o9 r9")
+  static let photos: [Game.Looking: CGImage] = [.table: "2026-11-06T155531Z", .rack: "2026-11-06T155556Z"]
+    .compactMapValues { name in
+      let url = URL(filePath: #filePath).deletingLastPathComponent()
+        .appending(path: "../RummikubKit/Tests/RummikubKitTests/Fixtures/\(name).png")
+      return CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }
+    }
 }

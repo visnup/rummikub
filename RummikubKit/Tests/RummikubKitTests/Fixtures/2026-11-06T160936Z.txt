@@ -1,0 +1,6 @@
+table
+k4 k5 k6
+r5 r6 r7
+r12 o12 b12
+k11 o11 j
+k9

@@ -24,6 +24,62 @@ func readsRenderedTable(size: CGSize) {
   #expect(read == table)
 }
 
+#if os(macOS)
+  /// Renders the reference glyphs and checks them against `References.bin`, or with `BAKE=1` writes it. They're baked
+  /// on macOS because iOS renders the fonts differently, and needs a change here whenever recognition's thresholds do.
+  @Test func bakesReferences() throws {
+    let tiles = (1...13).map { Tile.number(.black, $0) } + [.joker]
+    var references = [(label: Int, glyph: Glyph)]()
+    for font in ["Helvetica-Bold", "Arial-BoldMT", "Futura-Bold", "AvenirNext-Heavy", "Verdana-Bold"] {
+      let pixels = Pixels(Render.table([tiles], height: 300, font: font).image)
+      for (tile, numeral) in zip(tiles, pixels.numerals().sorted { $0.box.minX < $1.box.minX }) {
+        references.append((tile.value ?? 0, pixels.glyph(in: numeral.box)!))
+        for (digit, part) in zip(String(tile.value ?? 0), numeral.digits) where tile.value != nil {
+          references.append((100 + Int(String(digit))!, pixels.glyph(in: part)!))
+        }
+      }
+    }
+    if ProcessInfo.processInfo.environment["BAKE"] != nil {
+      var data = Data()
+      for (label, glyph) in references {
+        data.append(UInt8(label))
+        glyph.cells.withUnsafeBytes { data.append(contentsOf: $0) }
+      }
+      try data.write(to: 
+        URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/RummikubKit/References.bin"))
+    } else {
+      #expect(references.map(\.label) == Recognizer.references.map(\.label))
+      #expect(zip(references, Recognizer.references).allSatisfy { zip($0.glyph.cells, $1.glyph.cells).allSatisfy { abs($0 - $1) < 1e-6 } })
+    }
+  }
+#endif
+
+/// Captures from the phone, each with what it was looking at and its true melds in `<name>.txt`. Prints each one's
+/// misreads, and fails only if there are more in all than the last count.
+@Test func readsCaptures() throws {
+  let fixtures = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
+  var wrong = 0
+  for url in try FileManager.default.contentsOfDirectory(at: fixtures, includingPropertiesForKeys: nil).sorted(by: {
+    $0.path < $1.path
+  }) where url.pathExtension != "txt" {
+    let image = try #require(CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil))
+    let lines = try String(contentsOf: url.deletingPathExtension().appendingPathExtension("txt"), encoding: .utf8)
+      .split(separator: "\n")
+    let truth = Counts(Tile.parse(lines.dropFirst().joined(separator: " ")))
+    let read = Counts(Recognizer.tiles(in: image).map(\.tile))
+    let missed = tiles(truth &- pointwiseMin(truth, read)), extra = tiles(read &- pointwiseMin(truth, read))
+    wrong += missed.count + extra.count
+    print(url.deletingPathExtension().lastPathComponent, "missed", missed, "extra", extra)
+  }
+  #expect(wrong <= 68)
+}
+
+func tiles(_ counts: Counts) -> [Tile] {
+  (0...52).flatMap { i in
+    repeatElement(i == 52 ? Tile.joker : .number(TileColor(rawValue: i % 4)!, i / 4 + 1), count: Int(counts[i]))
+  }
+}
+
 @Test func liftsSlotsThatCoverAnotherMeld() throws {
   let table = melds("k1 k2 k3, b9 b10 b11")
   let (image, _) = Render.table(table)

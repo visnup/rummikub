@@ -68,7 +68,7 @@ import RummikubKit
   /// can't be pointed at.
   var marks: [Mark] {
     guard let play, let step, play.steps.indices.contains(step) else { return [] }
-    let marks = play.marks(in: scene, step: step)
+    let marks = play.marks(in: scene.following(detections), step: step)
     guard case .rack = play.steps[step].from, !together else { return marks }
     return marks.filter {
       switch $0 {

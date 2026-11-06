@@ -55,13 +55,15 @@ func readsRenderedTable(size: CGSize) {
 #endif
 
 /// Captures from the phone, each with what it was looking at and its true melds in `<name>.txt`. Prints each one's
-/// misreads, and fails only if there are more in all than the last count.
+/// misreads, and fails only if there are more in all than the last count. `CAPTURES=<dir>` scores that directory
+/// instead, without failing.
 @Test func readsCaptures() throws {
-  let fixtures = try #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
+  let captures = ProcessInfo.processInfo.environment["CAPTURES"].map { URL(filePath: $0) }
+  let fixtures = try captures ?? #require(Bundle.module.url(forResource: "Fixtures", withExtension: nil))
   var wrong = 0
   for url in try FileManager.default.contentsOfDirectory(at: fixtures, includingPropertiesForKeys: nil).sorted(by: {
     $0.path < $1.path
-  }) where url.pathExtension != "txt" {
+  }) where url.pathExtension == "png" {
     let image = try #require(CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil))
     let lines = try String(contentsOf: url.deletingPathExtension().appendingPathExtension("txt"), encoding: .utf8)
       .split(separator: "\n")
@@ -69,9 +71,10 @@ func readsRenderedTable(size: CGSize) {
     let read = Counts(Recognizer.tiles(in: image).map(\.tile))
     let missed = tiles(truth &- pointwiseMin(truth, read)), extra = tiles(read &- pointwiseMin(truth, read))
     wrong += missed.count + extra.count
-    print(url.deletingPathExtension().lastPathComponent, "missed", missed, "extra", extra)
+    print(url.deletingPathExtension().lastPathComponent, "missed", missed.count, missed, "extra", extra.count, extra)
   }
-  #expect(wrong <= 68)
+  print("wrong", wrong)
+  if captures == nil { #expect(wrong <= 65) }
 }
 
 func tiles(_ counts: Counts) -> [Tile] {

@@ -40,7 +40,10 @@ struct ContentView: View {
         motion.startDeviceMotionUpdates(to: .main) { data, _ in
           guard let gravity = data?.gravity else { return }
           // The back camera looks along the device's -z.
-          MainActor.assumeIsolated { game.tilt = asin(max(-1, min(1, -gravity.z))) * 180 / .pi }
+          MainActor.assumeIsolated {
+            game.gravity = [gravity.x, gravity.y, gravity.z]
+            game.tilt = asin(max(-1, min(1, -gravity.z))) * 180 / .pi
+          }
         }
         for await frame in camera.frames { await game.see(frame) }
       } else {
@@ -75,7 +78,7 @@ struct ContentView: View {
             if let tilt = game.tilt { Text("\(Int(tilt))°").font(.caption.monospacedDigit()) }
             if saved > 0 { Text("\(saved) saved").font(.caption) }
             Button("Capture", systemImage: justSaved ? "checkmark" : "camera.shutter.button") {
-              game.capture()
+              game.capture(camera: camera.settings)
               saved += 1
               justSaved = true
             }
@@ -87,6 +90,17 @@ struct ContentView: View {
               try? await Task.sleep(for: .seconds(1.5))
               justSaved = false
             }
+          }
+        }
+        if live {
+          HStack {
+            Picker("Layout", selection: $game.layout) {
+              ForEach(Game.Layout.allCases, id: \.self) { Text($0.rawValue) }
+            }
+            TextField("Light, surface, clutter", text: $game.notes)
+              .textFieldStyle(.roundedBorder)
+              .font(.caption)
+            Text("\(Int(game.readTime / .milliseconds(1))) ms").font(.caption.monospacedDigit())
           }
         }
         VStack(alignment: .leading) {

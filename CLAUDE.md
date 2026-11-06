@@ -19,7 +19,10 @@ What's next is in `TODO.md`.
   - `Recognizer.swift`: reading tiles from an image. It finds numerals, not tiles: blobs of ink with tile face all
     around, joined into numbers. Digits are matched against glyphs rendered in a few bold fonts and baked into
     `References.bin`, color comes from the
-    ink's hue, and each tile's frame is guessed from its numeral's size. The tile face color is the peak of a
+    ink's hue, and each tile's frame is guessed from its numeral's size. It reads all four quarter turns of the
+    image and keeps the closest match wherever readings overlap. Turns other than the frame's usual one lose ties by
+    .1 and count only matches closer than .3. The usual turn is voted by digits that look different upside down, so
+    not 1, 6, 8, 9 or 11. The tile face color is the peak of a
     saturation/value histogram, since white balance varies too much between photos for fixed thresholds. Vision's
     text recognition skips lone digits, both rendered and photographed, so it isn't used.
   - `Overlay.swift`: what to draw for each step of a play over the image: the tile to pick up, its target slot as a
@@ -80,11 +83,15 @@ reaches the table between rendered tiles.
 - Real photos: the two samples from rummikubsolver.com (a top-down board on wood, and a rack at a low angle) are not
   in the repo, since the site has no license; download them again from its sample images if needed. Their results
   are in `TODO.md`.
-- Captures from the phone: the app's shutter button saves `<ISO time>.png` and `<ISO time>.txt` (what it was looking
-  at, then the melds it read, one per line) to its Documents. PNG, so a fixture holds the pixels the phone read; the
-  first seven were JPEG, converted to PNG on the Mac. `devicectl device copy from` with `--source Documents` copies nothing, so list them with
-  `xcrun devicectl device info files --device Yam --domain-type appDataContainer --domain-identifier
-  com.visnup.Rummikub` and copy each with `--source Documents/<file> --destination <dir>/<file>`.
+- Captures from the phone: the app's shutter button saves three files to its Documents:
+  - `<ISO time>.png`. PNG, so a fixture holds the pixels the phone read; the first seven were JPEG, converted to PNG
+    on the Mac.
+  - `<ISO time>.txt`: what it was looking at and the tilt, then the truth, one meld per line. The truth is what was
+    read, unless the Layout picker names a known layout.
+  - `<ISO time>.json`: the layout, notes, gravity, camera settings, read time and every detection's box.
+
+  `make captures` copies the new ones into `Captures/`, which git ignores. It copies one file at a time, since
+  `devicectl device copy from` with `--source Documents` copies nothing.
 - Fixtures: captures in `RummikubKit/Tests/RummikubKitTests/Fixtures/`, each `.txt` rewritten with the true melds.
   `readsCaptures` prints each one's misses and extras and fails if the total rises above its count. Raise the bar
   as it drops.

@@ -11,7 +11,26 @@ import UniformTypeIdentifiers
     case table, rack
   }
 
+  /// What a capture writes as its truth: what was read, to be corrected by hand, or a layout set out on purpose.
+  enum Layout: String, CaseIterable {
+    case read = "As read", fullSet = "Full set", empty = "No tiles"
+
+    var melds: [String]? {
+      switch self {
+      case .read: nil
+      case .fullSet: "kkbboorr".map { color in (1...13).map { "\(color)\($0)" }.joined(separator: " ") } + ["j j"]
+      case .empty: []
+      }
+    }
+  }
+
   var looking = Looking.table
+  var layout = Layout.read
+  /// What's around the tiles, like "lamp glare, wood", saved with each capture.
+  var notes = ""
+  var gravity: [Double]?
+  /// How long the last frame took to read.
+  var readTime = Duration.zero
   /// How far the camera points below the horizon, in degrees. Looking down at the table it's steep; at the rack,
   /// nearly level. The gap between the two cutoffs keeps it from flipping back and forth.
   var tilt: Double? {
@@ -34,8 +53,13 @@ import UniformTypeIdentifiers
   var play: Play? { plays.indices.contains(choice) ? plays[choice] : nil }
 
   func see(_ image: CGImage) async {
-    let found = await Task.detached { Recognizer.tiles(in: image) }.value
+    let (found, time) = await Task.detached {
+      var found = [Detection]()
+      let time = ContinuousClock().measure { found = Recognizer.tiles(in: image) }
+      return (found, time)
+    }.value
     frame = image
+    readTime = time
     detections = found
     var next = scene
     if looking == .table {
@@ -63,9 +87,10 @@ import UniformTypeIdentifiers
     }
   }
 
-  /// Saves the last frame and what was read in it to Documents, as `<time>.png` and `<time>.txt`, to become test
-  /// fixtures. PNG, so the fixture is the same pixels the phone read.
-  func capture() {
+  /// Saves the last frame to Documents as `<time>.png`, its truth as `<time>.txt` (what it was looking at, then a meld
+  /// a line), and everything else known about it as `<time>.json`, to become test fixtures. PNG, so the fixture is the
+  /// same pixels the phone read.
+  func capture(camera: [String: Any]) {
     guard let frame else { return }
     let base = URL.documentsDirectory.appending(path: Date.now.formatted(.iso8601))
     let destination = CGImageDestinationCreateWithURL(
@@ -74,8 +99,17 @@ import UniformTypeIdentifiers
     CGImageDestinationFinalize(destination)
     let read = Recognizer.melds(detections).map { $0.map(\.tile.description).joined(separator: " ") }
     let tilt = tilt.map { " \(Int($0))°" } ?? ""
-    try? (looking.rawValue + tilt + "\n" + read.joined(separator: "\n") + "\n")
+    try? (looking.rawValue + tilt + "\n" + (layout.melds ?? read).map { $0 + "\n" }.joined())
       .write(to: base.appendingPathExtension("txt"), atomically: true, encoding: .utf8)
+    let info: [String: Any] = [
+      "looking": looking.rawValue, "layout": layout.rawValue, "notes": notes, "tilt": self.tilt ?? NSNull(),
+      "gravity": gravity ?? [], "readMilliseconds": readTime / .milliseconds(1), "camera": camera, "read": read,
+      "detections": detections.map {
+        ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]]
+      },
+    ]
+    try? JSONSerialization.data(withJSONObject: info, options: [.prettyPrinted, .sortedKeys])
+      .write(to: base.appendingPathExtension("json"))
   }
 
   func solve() async {

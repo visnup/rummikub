@@ -11,8 +11,50 @@ public struct Detection: Hashable, Sendable {
 /// is read by matching its ink against reference glyphs and colored by that ink, and its tile's frame is guessed from
 /// its size. Vision's text recognition skips most lone digits, so it's not used.
 public enum Recognizer {
+  /// Tiles at any quarter turn: each turn of the image is read, and where readings overlap the closest match wins.
+  /// Upside down, a 6 reads as well as a 9, so turns other than the one most tiles read at lose close calls.
   public static func tiles(in image: CGImage) -> [Detection] {
-    let pixels = Pixels(image)
+    let upright = Pixels(image)
+    let found = (0..<4).flatMap { turns in
+      read(turns == 0 ? upright : upright.turned(turns)).map {
+        Reading(
+          detection: Detection(tile: $0.detection.tile, frame: upright.unturn($0.detection.frame, turns)),
+          distance: $0.distance, turns: turns)
+      }
+    }
+    // 1, 8 and 11 read the same upside down, and 6 and 9 as each other, so they don't say which way is up.
+    let first = closest(found).filter { ![nil, 1, 6, 8, 9, 11].contains($0.detection.tile.value) }
+    // Ties go to upright.
+    let usual = (0..<4).reversed().max { a, b in first.count { $0.turns == a } < first.count { $0.turns == b } }!
+    // Other turns read only close matches, since four turns give non-tiles four chances to look like one.
+    return closest(found.compactMap {
+      $0.turns == usual ? $0 : $0.distance > 0.3 ? nil : Reading(detection: $0.detection, distance: $0.distance + 0.1, turns: $0.turns)
+    })
+      .map(\.detection)
+  }
+
+  struct Reading {
+    let detection: Detection
+    let distance: Float
+    var turns = 0
+  }
+
+  /// The closest matches whose tiles don't overlap.
+  static func closest(_ readings: [Reading]) -> [Reading] {
+    var kept = [Reading]()
+    for reading in readings.sorted(by: { $0.distance < $1.distance }) {
+      let frame = reading.detection.frame
+      if !kept.contains(where: {
+        let overlap = $0.detection.frame.intersection(frame)
+        return !overlap.isNull && overlap.width * overlap.height > 0.3 * min(frame.width * frame.height, $0.detection.frame.width * $0.detection.frame.height)
+      }) {
+        kept.append(reading)
+      }
+    }
+    return kept
+  }
+
+  static func read(_ pixels: Pixels) -> [Reading] {
     let numerals = pixels.numerals()
     let heights = numerals.map(\.box.height).sorted()
     return numerals.compactMap { numeral in
@@ -20,8 +62,9 @@ public enum Recognizer {
       guard let color = pixels.inkColor(in: box), let glyph = pixels.glyph(in: box) else { return nil }
       // A real joker's face is half again as tall as a numeral; a rendered one is the size of one.
       let big = box.height > heights[heights.count / 2] * 1.4 && (0.8...1.25).contains(box.width / box.height)
-      let whole = glyphs.min { glyph.distance(to: $0.glyph) < glyph.distance(to: $1.glyph) }!.value
-      let joker = Detection(tile: .joker, frame: frame(around: box, height: 0.45))
+      let best = glyphs.min { glyph.distance(to: $0.glyph) < glyph.distance(to: $1.glyph) }!
+      let distance = glyph.distance(to: best.glyph), whole = best.value
+      let joker = Reading(detection: Detection(tile: .joker, frame: frame(around: box, height: 0.45)), distance: distance)
       // A joker's face is a thin drawing in a square; other thin ink, like a keyboard's legends, isn't a tile.
       if pixels.stroke(in: box) < 0.1 { return (0.8...1.25).contains(box.width / box.height) ? joker : nil }
       guard !big, whole != nil else { return joker }
@@ -32,7 +75,7 @@ public enum Recognizer {
         return digits.min { glyph.distance(to: $0.glyph) < glyph.distance(to: $1.glyph) }!.digit
       }
       let value = Int(read.map(String.init).joined()).flatMap { (1...13).contains($0) ? $0 : nil } ?? whole!
-      return Detection(tile: .number(color, value), frame: frame(around: box, height: 0.3))
+      return Reading(detection: Detection(tile: .number(color, value), frame: frame(around: box, height: 0.3)), distance: distance)
     }
   }
 
@@ -121,6 +164,47 @@ struct Pixels {
     }
     self.rgba = rgba
     face = Self.face(rgba)
+  }
+
+  init(width: Int, height: Int, rgba: [UInt8], face: (s: Double, v: Double)) {
+    self.width = width
+    self.height = height
+    self.rgba = rgba
+    self.face = face
+  }
+
+  /// Turned clockwise a quarter turn `turns` times.
+  func turned(_ turns: Int) -> Pixels {
+    let odd = turns % 2 == 1
+    let w = odd ? height : width, h = odd ? width : height
+    var turned = [UInt8](repeating: 0, count: rgba.count)
+    for v in 0..<h {
+      for u in 0..<w {
+        let (x, y) =
+          switch turns {
+          case 1: (v, height - 1 - u)
+          case 2: (width - 1 - u, height - 1 - v)
+          default: (width - 1 - v, u)
+          }
+        let from = (y * width + x) * 4, to = (v * w + u) * 4
+        turned[to] = rgba[from]
+        turned[to + 1] = rgba[from + 1]
+        turned[to + 2] = rgba[from + 2]
+        turned[to + 3] = rgba[from + 3]
+      }
+    }
+    return Pixels(width: w, height: h, rgba: turned, face: face)
+  }
+
+  /// `rect` in these pixels, from the same pixels turned `turns` times.
+  func unturn(_ rect: CGRect, _ turns: Int) -> CGRect {
+    let w = CGFloat(width), h = CGFloat(height)
+    return switch turns {
+    case 1: CGRect(x: rect.minY, y: h - rect.maxX, width: rect.height, height: rect.width)
+    case 2: CGRect(x: w - rect.maxX, y: h - rect.maxY, width: rect.width, height: rect.height)
+    case 3: CGRect(x: w - rect.maxY, y: rect.minX, width: rect.height, height: rect.width)
+    default: rect
+    }
   }
 
   /// Hue in degrees, saturation and value, all from the pixel at top-left-origin `x`, `y`.

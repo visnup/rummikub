@@ -8,8 +8,20 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
   let frames: AsyncStream<CGImage>
   private let continuation: AsyncStream<CGImage>.Continuation
   private let context = CIContext()
+  private var device: AVCaptureDevice?
   /// Only touched on the capture queue.
   private var last = Date.distantPast
+
+  /// What the camera is set to right now, for a capture's notes.
+  var settings: [String: Any] {
+    guard let device else { return [:] }
+    let gains = device.deviceWhiteBalanceGains
+    return [
+      "iso": device.iso, "exposure": device.exposureDuration.seconds, "lensPosition": device.lensPosition,
+      "whiteBalanceGains": [gains.redGain, gains.greenGain, gains.blueGain],
+      "fieldOfView": device.activeFormat.videoFieldOfView, "zoom": device.videoZoomFactor,
+    ]
+  }
 
   override init() {
     (frames, continuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
@@ -24,6 +36,7 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
       guard let device = AVCaptureDevice.default(for: .video), await AVCaptureDevice.requestAccess(for: .video),
         let input = try? AVCaptureDeviceInput(device: device)
       else { return false }
+    self.device = device
     session.sessionPreset = .hd1920x1080
     session.addInput(input)
     let output = AVCaptureVideoDataOutput()

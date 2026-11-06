@@ -16,6 +16,18 @@ needs each color's run lengths so far (0, 1, 2, 3+), about 10. Next: an ILP over
 `rummikub-solver` (mjpieters, MIT) uses and solves in 3–15 ms with HiGHS or GLPK. "Kept" becomes variables for each
 old meld kept as-is, extended or trimmed at its ends.
 
+## App
+
+Not yet run on a device; only the simulator's rendered demo.
+
+- Rack steps can't point at the rack while looking at the table, so they only show the target. Looking at the rack
+  could highlight the tile to pick up instead.
+- Overlay positions are from the frame the play started on. If the camera moves mid-play they drift; re-anchor them
+  on the melds read in each frame.
+- The Table/Rack switch is manual. A rack is close, upright and at the bottom of the frame, which may be enough to
+  tell automatically.
+- New melds go in a row under the table, which may be off screen or on top of the rack.
+
 ## Rules not handled yet
 
 - The 30-point initial meld: a player who hasn't melded can only lay rack-only melds worth 30 or more, and can't

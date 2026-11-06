@@ -25,6 +25,14 @@ What's next is in `TODO.md`.
   - `Render.swift`: synthetic table images for tests, and drawing overlays onto images.
   - `scan` reads a photo and writes `<photo>.scan.png` with what it read drawn on.
 
+- `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
+  times a second; `Game` reads them, keeps the table and rack, solves, and tracks the step shown; `ContentView`
+  draws the step over the camera. A reading only replaces the last one once two frames in a row agree, so a missed
+  tile doesn't re-solve. While a play is being shown, readings don't re-solve; they advance the step instead
+  (`Play.stepsDone`). The simulator never uses a camera: it reads a rendered table and rack (`Demo`) once a second.
+  Build: `xcodebuild -scheme Rummikub -destination 'name=iPhone 18 Pro' -derivedDataPath DerivedData`.
+- `RummikubKit` builds with `-O` even in debug, since recognition's pixel loops take seconds a frame unoptimized.
+
 ## Tile notation
 
 `k` black, `b` blue, `o` orange, `r` red, then the value: `r5`, `b13`. `j` is a joker. Melds are space-separated,

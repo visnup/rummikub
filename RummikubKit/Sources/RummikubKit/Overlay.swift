@@ -29,6 +29,8 @@ public enum Mark: Hashable, Sendable {
   case arrow(from: CGPoint, to: CGPoint)
   /// "Step 2 of 5" and the like.
   case caption(String)
+  /// What a tile was read as.
+  case label(CGRect, Tile)
 }
 
 extension Play {

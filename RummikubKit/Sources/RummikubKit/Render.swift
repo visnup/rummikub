@@ -8,7 +8,9 @@ public enum Render {
 
   /// Table melds in rows from the top, then the rack along the bottom. Returns the image and each tile's frame in
   /// top-left-origin pixels, table tiles first in reading order, then the rack.
-  public static func table(_ melds: [[Tile]], rack: [Tile] = [], width: Int = 1200, height: Int = 900)
+  public static func table(
+    _ melds: [[Tile]], rack: [Tile] = [], width: Int = 1200, height: Int = 900, font: String = "Helvetica-Bold"
+  )
     -> (image: CGImage, frames: [CGRect])
   {
     let context = CGContext(
@@ -29,7 +31,7 @@ public enum Render {
       }
       for (i, tile) in meld.enumerated() {
         let frame = CGRect(origin: CGPoint(x: origin.x + CGFloat(i) * (tileSize.width + 2), y: origin.y), size: tileSize)
-        draw(tile, in: frame, context: context)
+        draw(tile, in: frame, context: context, font: font)
         frames.append(frame)
       }
       origin.x += meldWidth + gap
@@ -39,7 +41,7 @@ public enum Render {
     context.fill(CGRect(x: 0, y: rackY - 10, width: CGFloat(width), height: tileSize.height + 60))
     for (i, tile) in rack.enumerated() {
       let frame = CGRect(origin: CGPoint(x: 30 + CGFloat(i) * (tileSize.width + 4), y: rackY), size: tileSize)
-      draw(tile, in: frame, context: context)
+      draw(tile, in: frame, context: context, font: font)
       frames.append(frame)
     }
     return (context.makeImage()!, frames)
@@ -79,22 +81,34 @@ public enum Render {
           context.addLine(to: CGPoint(x: to.x - 24 * cos(angle + side * 0.5), y: to.y - 24 * sin(angle + side * 0.5)))
         }
         context.strokePath()
-      case .caption(let text):
-        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, 40, nil)
-        let line = CTLineCreateWithAttributedString(
-          NSAttributedString(
-            string: text,
-            attributes: [
-              NSAttributedString.Key(kCTFontAttributeName as String): font,
-              NSAttributedString.Key(kCTForegroundColorAttributeName as String): highlight,
-            ]))
-        context.saveGState()
-        context.translateBy(x: CGFloat(width) - CTLineGetTypographicBounds(line, nil, nil, nil) - 30, y: 60)
-        context.scaleBy(x: 1, y: -1)
-        context.textPosition = .zero
-        CTLineDraw(line, context)
-        context.restoreGState()
+      case .caption(let caption):
+        let line = line(caption, size: 40, color: highlight)
+        text(line, at: CGPoint(x: CGFloat(width) - CTLineGetTypographicBounds(line, nil, nil, nil) - 30, y: 60))
+      case .label(let rect, let tile):
+        context.setStrokeColor(highlight)
+        context.setLineWidth(3)
+        context.stroke(rect)
+        text(line(tile.description, size: rect.height / 4, color: highlight), at: CGPoint(x: rect.minX, y: rect.maxY + rect.height / 4))
+        context.setLineWidth(5)
       }
+    }
+    func line(_ string: String, size: CGFloat, color: CGColor) -> CTLine {
+      let font = CTFontCreateWithName("Helvetica-Bold" as CFString, size, nil)
+      return CTLineCreateWithAttributedString(
+        NSAttributedString(
+          string: string,
+          attributes: [
+            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
+          ]))
+    }
+    func text(_ line: CTLine, at point: CGPoint) {
+      context.saveGState()
+      context.translateBy(x: point.x, y: point.y)
+      context.scaleBy(x: 1, y: -1)
+      context.textPosition = .zero
+      CTLineDraw(line, context)
+      context.restoreGState()
     }
     return context.makeImage()!
   }
@@ -106,7 +120,7 @@ public enum Render {
     .red: CGColor(srgbRed: 0.82, green: 0.1, blue: 0.12, alpha: 1),
   ]
 
-  static func draw(_ tile: Tile, in frame: CGRect, context: CGContext) {
+  static func draw(_ tile: Tile, in frame: CGRect, context: CGContext, font: String = "Helvetica-Bold") {
     context.setFillColor(CGColor(srgbRed: 0.96, green: 0.93, blue: 0.85, alpha: 1))
     context.addPath(CGPath(roundedRect: frame, cornerWidth: 6, cornerHeight: 6, transform: nil))
     context.fillPath()
@@ -120,7 +134,7 @@ public enum Render {
       text = "☺"
       color = ink[.red]!
     }
-    let font = CTFontCreateWithName("Helvetica-Bold" as CFString, 36, nil)
+    let font = CTFontCreateWithName(font as CFString, 36, nil)
     var attributes: [NSAttributedString.Key: Any] = [
       NSAttributedString.Key(kCTFontAttributeName as String): font,
       NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,

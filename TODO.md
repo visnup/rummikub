@@ -9,8 +9,6 @@ heuristic for an early incumbent, or cuts.
 
 ## App
 
-Not yet run on a device; only the simulator's rendered demo.
-
 - Rack steps show only the target while looking at the table, and only the tile to pick up while looking at the
   rack.
 - The Table/Rack switch is manual. A rack is close, upright and at the bottom of the frame, which may be enough to

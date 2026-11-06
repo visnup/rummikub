@@ -31,7 +31,8 @@ What's next is in `TODO.md`.
   draws the step over the camera. A reading only replaces the last one once two frames in a row agree, so a missed
   tile doesn't re-solve. While a play is being shown, readings don't re-solve; they advance the step instead
   (`Play.stepsDone`). The simulator never uses a camera: it reads a rendered table and rack (`Demo`) once a second.
-  Build: `xcodebuild -scheme Rummikub -destination 'name=iPhone 18 Pro' -derivedDataPath DerivedData`.
+  `make` builds it and installs and launches it on the phone (an iPhone named Yam); `make sim`
+  builds the Simulator's; `make test` runs the package's tests.
 - `RummikubKit` builds with `-O` even in debug, since recognition's pixel loops take seconds a frame unoptimized.
 
 ## Tile notation

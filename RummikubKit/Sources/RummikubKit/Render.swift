@@ -45,6 +45,60 @@ public enum Render {
     return (context.makeImage()!, frames)
   }
 
+  /// `image` with `marks` drawn over it.
+  public static func overlay(_ image: CGImage, _ marks: [Mark]) -> CGImage {
+    let width = image.width, height = image.height
+    let context = CGContext(
+      data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+    context.translateBy(x: 0, y: CGFloat(height))
+    context.scaleBy(x: 1, y: -1)
+    let highlight = CGColor(srgbRed: 1, green: 0.85, blue: 0, alpha: 1)
+    context.setLineWidth(5)
+    for mark in marks {
+      switch mark {
+      case .source(let rect):
+        context.setStrokeColor(highlight)
+        context.stroke(rect.insetBy(dx: -4, dy: -4))
+      case .target(let rect, let tile):
+        context.setAlpha(0.6)
+        draw(tile, in: rect, context: context)
+        context.setAlpha(1)
+        context.setStrokeColor(highlight)
+        context.setLineDash(phase: 0, lengths: [10, 6])
+        context.stroke(rect.insetBy(dx: -4, dy: -4))
+        context.setLineDash(phase: 0, lengths: [])
+      case .arrow(let from, let to):
+        let angle = atan2(to.y - from.y, to.x - from.x)
+        context.setStrokeColor(highlight)
+        context.move(to: from)
+        context.addLine(to: to)
+        for side in [-1.0, 1.0] {
+          context.move(to: to)
+          context.addLine(to: CGPoint(x: to.x - 24 * cos(angle + side * 0.5), y: to.y - 24 * sin(angle + side * 0.5)))
+        }
+        context.strokePath()
+      case .caption(let text):
+        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, 40, nil)
+        let line = CTLineCreateWithAttributedString(
+          NSAttributedString(
+            string: text,
+            attributes: [
+              NSAttributedString.Key(kCTFontAttributeName as String): font,
+              NSAttributedString.Key(kCTForegroundColorAttributeName as String): highlight,
+            ]))
+        context.saveGState()
+        context.translateBy(x: CGFloat(width) - CTLineGetTypographicBounds(line, nil, nil, nil) - 30, y: 60)
+        context.scaleBy(x: 1, y: -1)
+        context.textPosition = .zero
+        CTLineDraw(line, context)
+        context.restoreGState()
+      }
+    }
+    return context.makeImage()!
+  }
+
   static let ink: [TileColor: CGColor] = [
     .black: CGColor(srgbRed: 0.08, green: 0.08, blue: 0.1, alpha: 1),
     .blue: CGColor(srgbRed: 0.1, green: 0.3, blue: 0.75, alpha: 1),
@@ -75,9 +129,9 @@ public enum Render {
       attributes[NSAttributedString.Key(kCTUnderlineStyleAttributeName as String)] = CTUnderlineStyle.thick.rawValue
     }
     let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
-    let bounds = CTLineGetImageBounds(line, context)
+    let width = CTLineGetTypographicBounds(line, nil, nil, nil)
     context.saveGState()
-    context.translateBy(x: frame.midX - bounds.midX, y: frame.minY + 50)
+    context.translateBy(x: frame.midX - width / 2, y: frame.minY + 50)
     context.scaleBy(x: 1, y: -1)
     context.textPosition = .zero
     CTLineDraw(line, context)

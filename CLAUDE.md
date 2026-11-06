@@ -90,8 +90,13 @@ reaches the table between rendered tiles.
     read, unless the Layout picker names a known layout.
   - `<ISO time>.json`: the layout, notes, gravity, camera settings, read time and every detection's box.
 
-  `make captures` copies the new ones into `Captures/`, which git ignores. It copies one file at a time, since
-  `devicectl device copy from` with `--source Documents` copies nothing.
+  `make captures` copies the new ones into `Captures/`, which git ignores since they're hundreds of MB. It copies
+  one file at a time, since `devicectl device copy from` with `--source Documents` copies nothing. Captures whose
+  truth isn't written yet go in `Captures/unlabeled/`. `make upload` sends them to the Hugging Face dataset
+  `visnup/rummikub-captures`, private for now and meant to go public. So before uploading, drop any capture that
+  shows readable personal text, like messages on a screen; a screen in frame is fine otherwise.
+  `Captures/README.md` is the dataset's card. `CAPTURES=$PWD/../Captures swift test --filter readsCaptures`,
+  run from `RummikubKit/`, scores the rest without failing.
 - Fixtures: captures in `RummikubKit/Tests/RummikubKitTests/Fixtures/`, each `.txt` rewritten with the true melds.
   `readsCaptures` prints each one's misses and extras and fails if the total rises above its count. Raise the bar
   as it drops.

@@ -49,13 +49,18 @@ both jokers, 106 tiles. Distance is by framing, not measured:
 Take three to five frames of each, moving the phone a little between them, and check off a shot once it's taken.
 Unless a shot says otherwise, it's top-down, close, with tiles upright in rows.
 
-2026-11-06's batches, 67 shots in all, were in window daylight: up to 29:16 on the gray cutting mat, and from 34:51
-on bare light wood. They're kept in `Captures/`. Times below are UTC, 22:xx. The orientations come from scoring each
-capture at all four rotations.
+2026-11-06's batches were in window daylight: up to 29:16 on the gray cutting mat, and from 34:51 on bare light
+wood. They're kept in `Captures/`, which git ignores. Times below are UTC, 22:xx. The orientations come from scoring
+each capture at all four rotations.
+
+Captures are meant to be fit for a public dataset. A screen in frame is fine, but not with readable personal text,
+like messages. On 2026-11-06, three shots were dropped for showing a chat (24:55, 51:15, 51:23), and two were
+cropped below the screen (13:31, 14:46; their JSON records the crop). `Captures/.removed` keeps `make captures`
+from copying the dropped ones back.
 
 25:03 and 25:09 were saved as "No tiles", but they show the full set, part of it hidden or out of frame. Their truth
-needs writing by hand, so they're in `Captures/unlabeled/`, with the early duplicates that have no fixture.
-`CAPTURES=$PWD/../Captures swift test --filter readsCaptures`, run from `RummikubKit/`, scores the rest. 25:18 was saved as "No tiles" too, and its truth is now fixed to the full set.
+needs writing by hand, so they're in `unlabeled/`, with the early duplicates that have no fixture. 25:18 was saved
+as "No tiles" too, and its truth is now fixed to the full set.
 
 - [x] Full set in daylight, upright, top-down: 12:06, 12:36, 15:14
 - Full set under each light:
@@ -85,17 +90,19 @@ needs writing by hand, so they're in `Captures/unlabeled/`, with the early dupli
     49:23, 49:32, 49:36 at an angle. Top-down, the best rotation still misses 45–55.
 - Full set at other distances and angles:
   - [x] middle, top-down: 25:18, 25:31, 25:35
-  - [x] middle at 45°, with a TV and screen text behind: 13:31, 14:46
+  - [x] middle at 45°: 13:31, 14:46, cropped below the TV
   - [x] far at 45°, with a keyboard and the rack tray: 14:37, 14:58
   - [x] far, top-down: 25:40, and 36:45 on wood, which reads 3 tiles
 - Full set in motion:
   - [x] with a hand moving through the frame: 25:03
   - [x] while panning: 25:09
 - No tiles:
-  - [x] the bare wood table: 51:09 top-down reads nothing, 51:15 and 51:23 at an angle read 2 each
-  - [x] the empty mat: 51:26, 51:30, which read nothing
+  - [x] the bare wood table, top-down: 51:09, which reads nothing
+  - [x] at an angle: the bare wood table at 23:21:18 and 23:21:30, which read 6 and 0; the empty mat at 23:21:09
+    and 23:21:43, which read 2 and 17
+  - [x] the empty mat, top-down: 51:26, 51:30, which read nothing
   - [x] a keyboard: 24:40, which reads 31 tiles
-  - [x] a TV with screen text: 24:50, 24:55
+  - [x] a TV with screen text: 24:50, which reads 3 tiles
   - [x] printed boxes: 26:26, game boxes on a shelf, which reads one k4
   - [x] playing cards beside 12 tiles and a keyboard, truth by hand: 58:47 top-down, 58:55 at an angle. Each reads
     about 40 tiles that aren't there, many of them jokers and black 7s.

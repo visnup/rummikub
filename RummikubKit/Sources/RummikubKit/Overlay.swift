@@ -62,6 +62,24 @@ extension Play {
     }
   }
 
+  /// How many steps the table, read as `table`, shows done. A step is done once some meld read there holds its tile
+  /// and everything already placed in its destination, and nothing that belongs in neither it nor the old meld it
+  /// stays in place of, whose leaving tiles may not have left yet.
+  public func stepsDone(_ table: [[Tile]], from old: [[Tile]]) -> Int {
+    let read = table.map(Counts.init)
+    let anchors = melds.map { $0.anchor.map { Counts(old[$0]) } ?? Counts() }
+    var placed = melds.indices.map { pointwiseMin(anchors[$0], Counts(melds[$0].tiles)) }
+    for (index, step) in steps.enumerated() {
+      let destination = Counts(melds[step.to].tiles)
+      let allowed = pointwiseMax(destination, anchors[step.to])
+      var expected = placed[step.to]
+      expected[step.tile.index] += 1
+      guard read.contains(where: { all($0 .<= allowed) && all(expected .<= $0) }) else { return index }
+      placed[step.to] = expected
+    }
+    return steps.count
+  }
+
   /// What to draw for step `index`: the tile to pick up, where it goes, and an arrow between.
   public func marks(in scene: Scene, step index: Int) -> [Mark] {
     let step = steps[index]

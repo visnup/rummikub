@@ -67,6 +67,17 @@ func options(_ table: String, _ rack: String) -> [[Int]] {
   #expect(play.steps.allSatisfy { $0.to == 2 })
 }
 
+@Test func stepsDoneFollowTheTable() throws {
+  let table = melds("r3 r4 r5 r6, k1 k2 k3")
+  let play = try #require(solve(table: table, rack: Tile.parse("b6 k6")).last)
+  #expect(play.steps.map(\.tile) == Tile.parse("r6 k6 b6"))
+  #expect(play.stepsDone(table, from: table) == 0)
+  #expect(play.stepsDone(melds("r3 r4 r5, k1 k2 k3, r6"), from: table) == 1)
+  #expect(play.stepsDone(melds("r3 r4 r5, k1 k2 k3, r6 k6"), from: table) == 2)
+  #expect(play.stepsDone(melds("r3 r4 r5, k1 k2 k3, k6 r6 b6"), from: table) == 3)
+  #expect(play.stepsDone(melds("r3 r4 r5 r6, k1 k2 k3, k6"), from: table) == 0)
+}
+
 @Test func midgame() {
   let table = """
     r1 r2 r3 r4, b5 b6 b7, k9 k10 k11 k12 k13, o2 o3 o4, r9 b9 o9, k7 b7 o7 r7, \

@@ -38,6 +38,14 @@ import RummikubKit
       next.rack = Recognizer.melds(found).flatMap { $0 }
     }
     together = rackY != nil
+    if let play, let step, rackY != nil || looking == .table {
+      let done = play.stepsDone(next.tableTiles, from: scene.tableTiles)
+      if done == play.steps.count {
+        self.step = nil
+      } else if done > step {
+        self.step = done
+      }
+    }
     if next.reads(like: scene) {
       // Frames follow the tiles as the camera moves, even mid-play.
       scene = next

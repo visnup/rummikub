@@ -57,10 +57,15 @@ struct ContentView: View {
         .buttonStyle(.bordered)
       } else {
         if live {
-          Picker("Looking at", selection: $game.looking) {
-            ForEach(Game.Looking.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+          HStack {
+            Picker("Looking at", selection: $game.looking) {
+              ForEach(Game.Looking.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+            }
+            .pickerStyle(.segmented)
+            Button("Capture", systemImage: "camera.shutter.button") { game.capture() }
+              .labelStyle(.iconOnly)
+              .buttonStyle(.bordered)
           }
-          .pickerStyle(.segmented)
         }
         Text("\(game.scene.table.joined().count) on the table, \(game.scene.rack.count) in your rack")
         ForEach(game.plays.indices, id: \.self) { i in

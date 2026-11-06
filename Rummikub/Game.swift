@@ -1,6 +1,9 @@
 import CoreGraphics
+import Foundation
+import ImageIO
 import Observation
 import RummikubKit
+import UniformTypeIdentifiers
 
 /// What the camera has read of the table and rack, the plays for them, and the step being shown.
 @Observable final class Game {
@@ -56,6 +59,20 @@ import RummikubKit
     } else if step == nil {
       pending = next
     }
+  }
+
+  /// Saves the last frame and what was read in it to Documents, as `<time>.jpg` and `<time>.txt`, to become test
+  /// fixtures.
+  func capture() {
+    guard let frame else { return }
+    let base = URL.documentsDirectory.appending(path: Date.now.formatted(.iso8601))
+    let destination = CGImageDestinationCreateWithURL(
+      base.appendingPathExtension("jpg") as CFURL, UTType.jpeg.identifier as CFString, 1, nil)!
+    CGImageDestinationAddImage(destination, frame, nil)
+    CGImageDestinationFinalize(destination)
+    let read = Recognizer.melds(detections).map { $0.map(\.tile.description).joined(separator: " ") }
+    try? (looking.rawValue + "\n" + read.joined(separator: "\n") + "\n")
+      .write(to: base.appendingPathExtension("txt"), atomically: true, encoding: .utf8)
   }
 
   func solve() async {

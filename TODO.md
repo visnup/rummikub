@@ -20,8 +20,8 @@ old meld kept as-is, extended or trimmed at its ends.
 
 Not yet run on a device; only the simulator's rendered demo.
 
-- Rack steps can't point at the rack while looking at the table, so they only show the target. Looking at the rack
-  could highlight the tile to pick up instead.
+- Rack steps show only the target while looking at the table, and only the tile to pick up while looking at the
+  rack.
 - The Table/Rack switch is manual. A rack is close, upright and at the bottom of the frame, which may be enough to
   tell automatically.
 - New melds go in a row under the table, which may be off screen or on top of the rack.

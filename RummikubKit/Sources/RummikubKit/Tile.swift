@@ -60,7 +60,5 @@ extension Counts {
 
   var total: Int { Int(wrappedSum()) }
 
-  var first: Int? { (0..<53).first { self[$0] > 0 } }
-
   func overlap(_ other: Counts) -> Int { pointwiseMin(self, other).total }
 }

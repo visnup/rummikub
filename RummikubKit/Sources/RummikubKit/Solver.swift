@@ -33,10 +33,8 @@ public struct Play: Sendable {
 /// The plays worth considering: for each number of tiles placed from the rack, the one that moves the fewest tiles
 /// already on the table. Ordered by tiles placed, so the first is always "place nothing" when `table` is valid.
 public func solve(table: [[Tile]], rack: [Tile]) -> [Play] {
-  let search = Search(old: table)
-  let start = Search.Key(table: Counts(table.joined()), rack: Counts(rack))
-  let plays = search.front(start)
-    .map { plan(table: table, rack: rack, old: search.old, moves: search.path(start, $0)) }
+  let plays = front(table: table, rack: rack)
+    .map { plan(table: table, rack: rack, melds: $0) }
     .sorted { ($0.placed, -$0.moved) > ($1.placed, -$1.moved) }
   var fewest = Int.max
   return plays.filter {
@@ -45,143 +43,122 @@ public func solve(table: [[Tile]], rack: [Tile]) -> [Play] {
   }.reversed()
 }
 
-struct Move {
-  /// Index into `Template.all`, or nil to leave a rack tile in the rack.
-  let template: Int?
-  let fromTable: Counts
-  let fromRack: Counts
+/// The final melds at each point of the Pareto front of tiles placed against tiles kept, from the integer program of
+/// Den Hertog and Hulshof (2006): how many of each candidate meld to lay out, using every table tile and any rack
+/// tiles. Candidates are `Template.all`, plus ways to keep most of each old meld, which count its tiles as kept.
+/// "Kept" steers toward few moves; `plan` counts the real ones.
+func front(table: [[Tile]], rack: [Tile]) -> [[[Tile]]] {
+  let onTable = Counts(table.joined())
+  let inRack = Counts(rack)
+  let available = onTable &+ inRack
+  var candidates = [(tiles: [Tile], counts: Counts, most: Int, old: Int?, kept: Int)]()
+  for template in Template.all where !any(template.counts .> available) {
+    candidates.append((template.tiles, template.counts, any(template.counts &* 2 .> available) ? 1 : 2, nil, 0))
+  }
+  for (k, meld) in table.enumerated() {
+    let old = Counts(meld)
+    for tiles in keeps(meld, available: available) {
+      let counts = Counts(tiles)
+      candidates.append((tiles, counts, 1, k, old.overlap(counts)))
+    }
+  }
+  let types = (0..<53).filter { available[$0] > 0 }
+  let held = types.filter { inRack[$0] > 0 }
+  let olds = Array(Set(candidates.compactMap(\.old))).sorted()
+  // Columns: tiles placed, tiles kept, candidates, rack tiles used, and slack for each old meld's "keep one" row.
+  // Rows: each tile, each old meld, then the sums for placed and kept.
+  let first = 2
+  let rows = types.count + olds.count + 2
+  let columns = first + candidates.count + held.count + olds.count
+  let placedRow = rows - 2, keptRow = rows - 1
+  var matrix = [Double](repeating: 0, count: rows * columns)
+  var row = [Int](repeating: 0, count: 53)
+  for (i, t) in types.enumerated() { row[t] = i }
+  matrix[placedRow * columns] = -1
+  matrix[keptRow * columns + 1] = -1
+  for (c, candidate) in candidates.enumerated() {
+    for t in types where candidate.counts[t] > 0 { matrix[row[t] * columns + first + c] = Double(candidate.counts[t]) }
+    if let old = candidate.old {
+      matrix[(types.count + olds.firstIndex(of: old)!) * columns + first + c] = 1
+      matrix[keptRow * columns + first + c] = Double(candidate.kept)
+    }
+  }
+  for (h, t) in held.enumerated() {
+    matrix[row[t] * columns + first + candidates.count + h] = -1
+    matrix[placedRow * columns + first + candidates.count + h] = 1
+  }
+  for o in olds.indices { matrix[(types.count + o) * columns + first + candidates.count + held.count + o] = 1 }
+  let tiles = Double(onTable.total)
+  var lp = LP(
+    matrix: matrix,
+    b: types.map { Double(onTable[$0]) } + olds.map { _ in 1 } + [0, 0],
+    cost: [-(tiles + 1), -1] + Array(repeating: 0, count: columns - first),
+    lower: Array(repeating: 0, count: columns),
+    upper: [Double(inRack.total), tiles] + candidates.map { Double($0.most) } + held.map { Double(inRack[$0]) }
+      + olds.map { _ in 1 }
+  )
+  // Each point places the most it can while keeping more than the last.
+  var front = [[[Tile]]]()
+  while let x = lp.minimize(integers: first + candidates.count, leading: first) {
+    front.append(candidates.indices.flatMap { repeatElement(candidates[$0].tiles, count: Int(x[first + $0].rounded())) })
+    let kept = x[1].rounded() + 1
+    guard kept <= tiles else { break }
+    lp.bound(1, kept, tiles)
+  }
+  return front
 }
 
-/// Exhaustive search over ways to cover every table tile and any rack tiles with melds, memoized on what's left.
-/// It keeps a Pareto front of tiles placed against tiles kept, where a meld keeps the tiles it shares with an old
-/// meld it has most of, or with an old run of the same color (a piece of a long run). It's a heuristic for
-/// steering the search: duplicates can overcount, so `plan` counts the real moves.
-final class Search {
-  struct Key: Hashable {
-    let table: Counts
-    let rack: Counts
-
-    func after(_ move: Move) -> Key { Key(table: table &- move.fromTable, rack: rack &- move.fromRack) }
-
-    // SIMD's own hash combines each lane separately.
-    func hash(into hasher: inout Hasher) {
-      withUnsafeBytes(of: self) { hasher.combine(bytes: $0) }
-    }
+/// Ways to keep part of the old meld `tiles`: itself, then every run or group that shares at least two of its tiles,
+/// with runs reaching up to three values past its own. Jokers stand in for tiles that aren't available, or anywhere
+/// the old meld didn't have a real tile.
+func keeps(_ tiles: [Tile], available: Counts) -> [[Tile]] {
+  guard isMeld(tiles) else { return [] }
+  let old = Counts(tiles)
+  var seen: Set = [old]
+  var keeps = [tiles]
+  func add(_ tiles: [Tile]) {
+    let counts = Counts(tiles)
+    if old.overlap(counts) >= 2 && seen.insert(counts).inserted { keeps.append(tiles) }
   }
-
-  struct Entry: Equatable {
-    let placed: Int
-    let kept: Int
-  }
-
-  /// Templates by their lowest tile, since `moves` only ever settles the lowest tile left.
-  static let byTile = (0..<53).map { tile in Template.all.indices.filter { Template.all[$0].counts.first == tile } }
-  static let counts = Template.all.map(\.counts)
-  static let colors = Template.all.map(\.color)
-  /// Each template's distinct tiles, five apiece, padded with a lane that's always zero.
-  static let support = Template.all.flatMap { template in
-    let tiles = (0..<53).filter { template.counts[$0] > 0 }
-    return tiles + Array(repeating: 63, count: 5 - tiles.count)
-  }
-
-  let old: [Counts]
-  let oldTotals: [Int]
-  let oldColors: [TileColor?]
-  var memo = [Key: [Entry]]()
-  /// `kept`, by template and how many of each of its tiles come from the table, two bits apiece.
-  var keptCache: [Int8]
-
-  init(old: [[Tile]]) {
-    self.old = old.map(Counts.init)
-    oldTotals = old.map(\.count)
-    oldColors = old.map(runColor)
-    keptCache = Array(repeating: -1, count: Template.all.count << 10)
-  }
-
-  /// Every way to settle the lowest tile left: the melds it could go in and, for a rack tile, keeping it. Going in
-  /// value order means everything below the lowest tile is settled, so the states left are few, as in a DP by value.
-  /// Stops when `body` returns false.
-  func moves(_ key: Key, _ body: (Move) -> Bool) {
-    let available = key.table &+ key.rack
-    guard let tile = available.first else { return }
-    if key.table[tile] == 0 {
-      var counts = Counts()
-      counts[tile] = 1
-      if !body(Move(template: nil, fromTable: .zero, fromRack: counts)) { return }
-    }
-    for template in Self.byTile[tile] {
-      let counts = Self.counts[template]
-      if any(counts .> available) { continue }
-      let fromTable = pointwiseMin(counts, key.table)
-      if !body(Move(template: template, fromTable: fromTable, fromRack: counts &- fromTable)) { return }
-    }
-  }
-
-  func gain(_ move: Move) -> Entry {
-    guard let template = move.template else { return Entry(placed: 0, kept: 0) }
-    var code = template << 10
-    for i in 0..<5 { code |= Int(move.fromTable[Self.support[template * 5 + i]]) << (2 * i) }
-    if keptCache[code] < 0 {
-      let color = Self.colors[template]
-      var kept = 0
-      for k in old.indices {
-        let overlap = old[k].overlap(move.fromTable)
-        if overlap > kept && (2 * overlap > oldTotals[k] || (color != nil && color == oldColors[k])) { kept = overlap }
+  let jokers = min(Int(available[Tile.joker.index]), 2)
+  let hasJoker = tiles.contains(.joker)
+  for color in TileColor.allCases {
+    let values = Set(tiles.compactMap { $0.color == color ? $0.value : nil })
+    guard let lo = values.min(), let hi = values.max(), values.count >= 2 || hasJoker else { continue }
+    for low in max(1, lo - 3)...min(hi, 11) {
+      for high in max(low + 2, lo)...min(13, hi + 3) {
+        let free = (low...high).filter { !values.contains($0) }
+        let missing = free.filter { available[Tile.number(color, $0).index] == 0 }
+        guard missing.count <= jokers else { continue }
+        for mask in 0..<(jokers == 0 ? 1 : 1 << free.count) where mask.nonzeroBitCount <= jokers {
+          let wild = free.indices.filter { mask & 1 << $0 != 0 }.map { free[$0] }
+          guard missing.allSatisfy(wild.contains) else { continue }
+          add((low...high).map { wild.contains($0) ? .joker : .number(color, $0) })
+        }
       }
-      keptCache[code] = Int8(kept)
     }
-    return Entry(placed: move.fromRack.total, kept: Int(keptCache[code]))
   }
-
-  func front(_ key: Key) -> [Entry] {
-    if key.table == .zero && key.rack == .zero { return [Entry(placed: 0, kept: 0)] }
-    if let front = memo[key] { return front }
-    var front = [Entry]()
-    moves(key) { move in
-      let rests = self.front(key.after(move))
-      if rests.isEmpty { return true }
-      let gain = gain(move)
-      for rest in rests {
-        let entry = Entry(placed: rest.placed + gain.placed, kept: rest.kept + gain.kept)
-        if front.contains(where: { $0.placed >= entry.placed && $0.kept >= entry.kept }) { continue }
-        front.removeAll { $0.placed <= entry.placed && $0.kept <= entry.kept }
-        front.append(entry)
+  for value in Set(tiles.compactMap(\.value)) {
+    for mask in 1..<16 {
+      let group = TileColor.allCases.filter { mask & 1 << $0.rawValue != 0 }.map { Tile.number($0, value) }
+      guard group.allSatisfy({ available[$0.index] > 0 }) else { continue }
+      for wild in 0...jokers where (3...4).contains(group.count + wild) {
+        add(group + repeatElement(.joker, count: wild))
       }
-      return true
     }
-    memo[key] = front
-    return front
   }
-
-  func path(_ key: Key, _ target: Entry) -> [Move] {
-    if key.table == .zero && key.rack == .zero { return [] }
-    var path: [Move]?
-    moves(key) { move in
-      let gain = gain(move)
-      let rest = Entry(placed: target.placed - gain.placed, kept: target.kept - gain.kept)
-      guard front(key.after(move)).contains(rest) else { return true }
-      path = [move] + self.path(key.after(move), rest)
-      return false
-    }
-    guard let path else { preconditionFailure("\(target) isn't on the front") }
-    return path
-  }
+  return keeps
 }
 
-/// Assigns physical tiles to the melds `moves` makes. Old and new melds pair up greedily by overlap; a new meld stays
-/// where its old one was and keeps its tiles, and takes the rest from elsewhere on the table or from the rack.
-func plan(table: [[Tile]], rack: [Tile], old: [Counts], moves: [Move]) -> Play {
-  struct Made {
-    var tiles: [Tile]
-    var fromTable: Counts
-    var fromRack: Counts
-  }
-  var made = moves.compactMap { move in
-    move.template.map { Made(tiles: Template.all[$0].tiles, fromTable: move.fromTable, fromRack: move.fromRack) }
-  }
-  // Rejoin runs the search split up, unless the pieces stay with different old melds.
-  func closest(_ counts: Counts) -> Int? {
-    old.indices.filter { old[$0].overlap(counts) > 0 }.max { old[$0].overlap(counts) < old[$1].overlap(counts) }
+/// Assigns physical tiles to `melds`. Old and new melds pair up greedily by overlap; a new meld stays where its old
+/// one was and keeps its tiles, and takes the rest from elsewhere on the table or from the rack.
+func plan(table: [[Tile]], rack: [Tile], melds: [[Tile]]) -> Play {
+  let old = table.map(Counts.init)
+  var made = melds
+  // Rejoin runs the templates split up, unless the pieces stay with different old melds.
+  func closest(_ tiles: [Tile]) -> Int? {
+    let counts = Counts(tiles)
+    return old.indices.filter { old[$0].overlap(counts) > 0 }.max { old[$0].overlap(counts) < old[$1].overlap(counts) }
   }
   func plainRun(_ tiles: [Tile]) -> (color: TileColor, first: Int, last: Int)? {
     guard !tiles.contains(.joker), let color = tiles[0].color, tiles[1].color == color else { return nil }
@@ -189,14 +166,12 @@ func plan(table: [[Tile]], rack: [Tile], old: [Counts], moves: [Move]) -> Play {
   }
   joining: while true {
     for i in made.indices {
-      guard let a = plainRun(made[i].tiles) else { continue }
+      guard let a = plainRun(made[i]) else { continue }
       for j in made.indices where j != i {
-        guard let b = plainRun(made[j].tiles), a.color == b.color, a.last + 1 == b.first else { continue }
-        let x = closest(made[i].fromTable), y = closest(made[j].fromTable)
+        guard let b = plainRun(made[j]), a.color == b.color, a.last + 1 == b.first else { continue }
+        let x = closest(made[i]), y = closest(made[j])
         guard x == nil || y == nil || x == y else { continue }
-        made[i].tiles += made[j].tiles
-        made[i].fromTable &+= made[j].fromTable
-        made[i].fromRack &+= made[j].fromRack
+        made[i] += made[j]
         made.remove(at: j)
         continue joining
       }
@@ -205,14 +180,14 @@ func plan(table: [[Tile]], rack: [Tile], old: [Counts], moves: [Move]) -> Play {
   }
   var anchors = [(meld: Int, overlap: Int)?](repeating: nil, count: made.count)
   var anchored = Set<Int>()
-  let pairs = made.indices.flatMap { n in old.indices.map { (n, $0, old[$0].overlap(made[n].fromTable)) } }
+  let pairs = made.indices.flatMap { n in old.indices.map { (n, $0, old[$0].overlap(Counts(made[n]))) } }
   for (n, meld, overlap) in pairs.sorted(by: { $0.2 > $1.2 }) where overlap > 0 {
     if anchors[n] == nil && anchored.insert(meld).inserted { anchors[n] = (meld, overlap) }
   }
   let order = made.indices.sorted { (anchors[$0]?.meld ?? .max) < (anchors[$1]?.meld ?? .max) }
   made = order.map { made[$0] }
   anchors = order.map { anchors[$0] }
-  var need = made.map(\.fromTable)
+  var need = made.map(Counts.init)
   var claimed = Array(repeating: [Play.Source](), count: made.count)
   let sources = table.indices.flatMap { meld in table[meld].indices.map { (meld, $0) } }
   var unclaimed = Set(sources.map { Play.Source.table(meld: $0.0, index: $0.1) })
@@ -237,14 +212,14 @@ func plan(table: [[Tile]], rack: [Tile], old: [Counts], moves: [Move]) -> Play {
       steps.append(Play.Step(tile: table[meld][index], from: .table(meld: meld, index: index), to: n))
     }
     for tile in 0..<53 {
-      for _ in 0..<made[n].fromRack[tile] {
+      for _ in 0..<need[n][tile] {
         let i = rackLeft.firstIndex { rack[$0].index == tile }!
         steps.append(Play.Step(tile: rack[rackLeft[i]], from: .rack(rackLeft.remove(at: i)), to: n))
       }
     }
   }
   return Play(
-    melds: made.indices.map { Play.Meld(tiles: made[$0].tiles, anchor: anchors[$0]?.meld) },
+    melds: made.indices.map { Play.Meld(tiles: made[$0], anchor: anchors[$0]?.meld) },
     steps: steps
   )
 }

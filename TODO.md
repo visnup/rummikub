@@ -2,19 +2,10 @@
 
 ## Solver speed
 
-The memoized search (`Search` in `Solver.swift`) is fast midgame and slow late. Release build on an M-series Mac,
-measured 2026-11-06:
-
-| board | states | time |
-| --- | --- | --- |
-| 12 melds, 45 tiles, 13-tile rack | 17k | 70 ms |
-| same, plus a joker in the rack | 70k | 250 ms |
-| 19 melds, 65 tiles, joker on the table | 835k | 3.9 s |
-
-Its states record which tiles ahead of the cursor runs have already used, about 3^4 per color. A DP by value only
-needs each color's run lengths so far (0, 1, 2, 3+), about 10. Next: an ILP over the templates, the formulation
-`rummikub-solver` (mjpieters, MIT) uses and solves in 3–15 ms with HiGHS or GLPK. "Kept" becomes variables for each
-old meld kept as-is, extended or trimmed at its ends.
+The integer program solves the benchmark boards in 5–27 ms, and 800 random boards of up to 16 melds average 2–4 ms.
+A few take longer: the slowest seen, 16 melds with two jokers on the table and a 10-tile rack, took 0.29 s and about
+a thousand branch-and-bound nodes, nearly all proving the most "kept" for a front point. Ideas: a rounding
+heuristic for an early incumbent, or cuts.
 
 ## App
 

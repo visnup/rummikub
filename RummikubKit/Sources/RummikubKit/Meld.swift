@@ -1,17 +1,15 @@
 /// Every distinct valid meld, as tile counts plus one way to lay it out. Runs stop at five: any longer one splits into
-/// these, which keeps the search small, and `plan` joins them back up.
+/// these, which keeps the program small, and `plan` joins them back up.
 struct Template: Sendable {
   let counts: Counts
   let tiles: [Tile]
-  /// The color, when it could be a run.
-  let color: TileColor?
 
   static let all: [Template] = {
     var seen = Set<Counts>()
     var all = [Template]()
     func add(_ tiles: [Tile]) {
       let counts = Counts(tiles)
-      if seen.insert(counts).inserted { all.append(Template(counts: counts, tiles: tiles, color: runColor(tiles))) }
+      if seen.insert(counts).inserted { all.append(Template(counts: counts, tiles: tiles)) }
     }
     for color in TileColor.allCases {
       for start in 1...11 {
@@ -39,12 +37,6 @@ struct Template: Sendable {
     }
     return all
   }()
-}
-
-/// The color of a meld whose tiles are all one color.
-func runColor(_ tiles: some Collection<Tile>) -> TileColor? {
-  let colors = Set(tiles.compactMap(\.color))
-  return colors.count == 1 ? colors.first : nil
 }
 
 /// Whether `tiles` form a group or a run, in any order.

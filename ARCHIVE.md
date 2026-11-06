@@ -2,6 +2,27 @@
 
 What was tried and dropped, so nobody repeats it.
 
+## Recognition
+
+- **Vision's text recognition** (`RecognizeTextRequest`, 2026-11-06). On rendered tables it skipped most lone digits
+  (1–4 and the 1s of a group), and per-tile `regionOfInterest` passes found nothing. On the real board photo it still
+  missed every lone 1, 3 and 9, and its first call took 54 s while the model loaded.
+- **Finding tiles first**: tile-face blobs split into tile-width pieces by aspect ratio. On the real photo blobs ran
+  into the wood and the splits fell between digits. Finding numerals and guessing each tile's frame from the numeral's
+  size replaced it.
+- **Matching whole numbers** against rendered 1–13: real "10"–"13" all read as 11 or 13. Each digit is now matched on
+  its own against 0–9, in several fonts, with glyphs scaled to unit length so boldness matters less.
+- **Fixed tile-face thresholds.** The board photo's faces are bluish (saturation up to .24, value ~.95) and the rack
+  photo's are warm and dark (value .66–.76). Any fixed cut that took both let light wood in. The face color is now the
+  peak of a saturation/value histogram.
+- **White balance from the brightest near-gray pixels**: on the rack photo those were floor glare, not tiles, and on
+  the board photo the brightest were blown out, so it found nothing.
+- **A median-height filter on numerals**: background tiles on the rack photo are a third the size of the rack's, so
+  the rack's own were dropped. Only an absolute minimum (shorter side / 80) is left.
+- **A median-saturation check on the ring around a numeral**, to reject wood: the board photo's bluish faces failed it.
+- **A wider value margin for the face** (peak − .3) to catch the rack photo's shaded green 7: it let wood grain in on
+  the board photo and still missed the 7.
+
 ## Solver
 
 - **Memoized search over melds by value** (`Search`, replaced 2026-11-06 by the integer program). It settled the

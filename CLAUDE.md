@@ -35,6 +35,48 @@ What's next is in `TODO.md`.
   builds the Simulator's; `make test` runs the package's tests.
 - `RummikubKit` builds with `-O` even in debug, since recognition's pixel loops take seconds a frame unoptimized.
 
+## Design
+
+What the app is for, as the user put it: pan the camera over the table and your own rack, it keeps the state current
+whenever the camera's open again, and it shows where to place your tiles. The open question was how to show large
+rearrangements. What we settled on:
+
+- Disruption is part of the solver's objective, not an afterthought: among plays that place as many tiles, prefer
+  the one that moves the fewest table tiles.
+- Offer the trade-off, not one answer: "Place 3, move 0" … "Place 7, move 4". Turns are often timed.
+- A play is a numbered list of steps ("Step 2 of 5"), shown one at a time over the camera: the tile to pick up, an
+  arrow, and a ghost where it goes. The camera advances them as it sees each done, and can catch a wrong move.
+- Not built yet: for a rebuild of most of the table, a flat diagram of the finished table, each meld marked kept,
+  changed or new, may beat step-by-step AR.
+
+## Recognition thresholds
+
+All in `Pixels` in `Recognizer.swift`. Face: within .1 saturation of the histogram peak and value above peak − .2.
+Ink: value under .35 or saturation over .5. Color: saturated pixels brighter than .3 vote by hue (red under 15° or
+over 330°, orange 15–60°, blue 150–270°, which takes in the green-teal of real tiles); the rest under .35 are black.
+A numeral needs three quarters of the ring a fifth of its height around it to be face. Digits join when they overlap
+vertically by half and sit within .7 of their height; a flat blob under a digit is a 6 or 9's underline.
+`ARCHIVE.md` has what loosening each of these broke.
+
+## Testing
+
+- `make test` runs everything in the package; recognition tests run in milliseconds because the package always
+  builds with `-O`. `RENDER_DIR=<dir> swift test` also writes the rendered tables and step overlays there as PNGs.
+- `swift run -c release scan photo.jpg` prints the melds it reads and writes `photo.scan.png` with them drawn on.
+- `swift run -c release bench "<table>" "<rack>"` times one solve. The benchmark boards are in `SolverTests`
+  (`midgame`, `lateGame`).
+- Real photos: the two samples from rummikubsolver.com (a top-down board on wood, and a rack at a low angle) are not
+  in the repo, since the site has no license; download them again from its sample images if needed. Their results
+  are in `TODO.md`.
+- Captures from the phone: the app's shutter button saves `<ISO time>.jpg` and `<ISO time>.txt` (what it was looking
+  at, then the melds it read, one per line) to its Documents. Copy them off with
+  `xcrun devicectl device copy from --device Yam --domain-type appDataContainer --domain-identifier
+  com.visnup.Rummikub --source Documents --destination <dir>`. The plan is to keep them as fixtures with the right
+  reading written down, under `RummikubKit/Tests/RummikubKitTests/Fixtures/`.
+- At a real table, the recognizer does best with a plain dark surface, even light, tiles face up and upright in rows
+  with gaps between melds, and the camera close to top-down from 30–50 cm. Light wood grain is its main source of
+  false reads, and shaded tile edges its main source of misses.
+
 ## Tile notation
 
 `k` black, `b` blue, `o` orange, `r` red, then the value: `r5`, `b13`. `j` is a joker. Melds are space-separated,

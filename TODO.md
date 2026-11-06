@@ -1,5 +1,12 @@
 # TODO
 
+## Now
+
+The app was first installed on the phone 2026-11-06, with a capture button, and hasn't been tried at a real table
+yet. Next: set up a table, try it, capture misreads and a few good readings, copy the captures off (see "Testing" in
+`CLAUDE.md`), write down the true tiles for each, and make them fixtures. Then tune the recognizer against them all
+at once, not one photo at a time.
+
 ## Solver speed
 
 The integer program solves the benchmark boards in 5–27 ms, and 800 random boards of up to 16 melds average 2–4 ms.
@@ -14,6 +21,9 @@ heuristic for an early incumbent, or cuts.
 - The Table/Rack switch is manual. A rack is close, upright and at the bottom of the frame, which may be enough to
   tell automatically.
 - New melds go in a row under the table, which may be off screen or on top of the rack.
+- A flat diagram of the finished table for plays that rebuild most of it (see "Design" in `CLAUDE.md`).
+- The demo's joker renders as Apple's color emoji (☺ falls back to it), unlike a real joker. Recognition still reads
+  it, by glyph match.
 
 ## Rules not handled yet
 

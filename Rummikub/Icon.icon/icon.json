@@ -1,7 +1,5 @@
 {
-  "fill" : {
-    "automatic-gradient" : "srgb:0.15686,0.36863,0.76863,1.00000"
-  },
+  "fill" : "none",
   "groups" : [
     {
       "layers" : [

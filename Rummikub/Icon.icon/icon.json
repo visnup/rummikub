@@ -7,18 +7,6 @@
       "layers" : [
         {
           "glass" : true,
-          "image-name" : "seven.svg",
-          "name" : "seven",
-          "position" : {
-            "scale" : 1,
-            "translation-in-points" : [
-              -60,
-              0
-            ]
-          }
-        },
-        {
-          "glass" : true,
           "image-name" : "tile.svg",
           "name" : "tile",
           "position" : {

@@ -1,3 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <rect fill="#ffffff" x="327" y="232" width="370" height="540" rx="60" transform="rotate(-8 512 512)"/>
+  <path fill="#ffffff" fill-rule="evenodd" transform="rotate(-8 512 512)" d="
+    M 387 232 H 637 A 60 60 0 0 1 697 292 V 712 A 60 60 0 0 1 637 772 H 387 A 60 60 0 0 1 327 712 V 292 A 60 60 0 0 1 387 232 Z
+    M 417 340 H 612 V 398 L 512 640 H 438 L 535 402 H 417 Z"/>
 </svg>

@@ -13,7 +13,7 @@ let package = Package(
     .target(name: "RummikubKit", resources: [.copy("References.bin")], swiftSettings: [.unsafeFlags(["-O"])]),
     .executableTarget(name: "bench", dependencies: ["RummikubKit"]),
     .executableTarget(name: "label", dependencies: ["RummikubKit"]),
-    .executableTarget(name: "train"),
+    .executableTarget(name: "train", dependencies: ["RummikubKit"]),
     .executableTarget(name: "scan", dependencies: ["RummikubKit"]),
     .testTarget(name: "RummikubKitTests", dependencies: ["RummikubKit"], resources: [.copy("Fixtures")]),
   ]

@@ -26,7 +26,7 @@ struct ContentView: View {
         }
         if let frame = game.frame {
           Overlay(
-            detections: game.detections, marks: game.marks,
+            boxes: game.boxes, detections: game.detections, marks: game.marks,
             fit: Fit(image: CGSize(width: frame.width, height: frame.height), view: size))
         }
       }
@@ -100,7 +100,8 @@ struct ContentView: View {
             TextField("Light, surface, clutter", text: $game.notes)
               .textFieldStyle(.roundedBorder)
               .font(.caption)
-            Text("\(Int(game.readTime / .milliseconds(1))) ms").font(.caption.monospacedDigit())
+            Text("\(Int(game.readTime / .milliseconds(1))) / \(Int(game.findTime / .milliseconds(1))) ms")
+              .font(.caption.monospacedDigit())
           }
         }
         VStack(alignment: .leading) {
@@ -159,12 +160,18 @@ struct Fit {
 }
 
 struct Overlay: View {
+  let boxes: [CGRect]
   let detections: [Detection]
   let marks: [Mark]
   let fit: Fit
 
   var body: some View {
     Canvas { context, _ in
+      for box in boxes {
+        context.stroke(
+          Path(roundedRect: fit(box), cornerRadius: 4), with: .color(.cyan.opacity(0.6)),
+          style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+      }
       for detection in detections {
         let rect = fit(detection.frame)
         context.stroke(Path(roundedRect: rect, cornerRadius: 4), with: .color(.white.opacity(0.4)))

@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreML
 import Foundation
 import ImageIO
 import Observation
@@ -31,6 +32,18 @@ import UniformTypeIdentifiers
   var gravity: [Double]?
   /// How long the last frame took to read.
   var readTime = Duration.zero
+  /// How long the finder took on the last frame, beside the reader.
+  var findTime = Duration.zero
+  /// The tiles the finder saw in the last frame.
+  var boxes = [CGRect]()
+  private let finder = Bundle.main.url(forResource: "Tiles", withExtension: "mlmodelc").flatMap { url in
+    let configuration = MLModelConfiguration()
+    #if targetEnvironment(simulator)
+      // Else Vision can't create an inference context.
+      configuration.computeUnits = .cpuOnly
+    #endif
+    return try? Finder(model: MLModel(contentsOf: url, configuration: configuration))
+  }
   /// How far the camera points below the horizon, in degrees. Looking down at the table it's steep; at the rack,
   /// nearly level. The gap between the two cutoffs keeps it from flipping back and forth.
   var tilt: Double? {
@@ -53,13 +66,24 @@ import UniformTypeIdentifiers
   var play: Play? { plays.indices.contains(choice) ? plays[choice] : nil }
 
   func see(_ image: CGImage) async {
-    let (found, time) = await Task.detached {
+    let finder = finder
+    async let reading = Task.detached {
       var found = [Detection]()
       let time = ContinuousClock().measure { found = Recognizer.tiles(in: image) }
       return (found, time)
     }.value
+    async let finding = Task.detached {
+      var boxes: [CGRect]?
+      let time = ContinuousClock().measure { boxes = try? finder?.tiles(in: image).map(\.box) }
+      return (boxes, time)
+    }.value
+    let ((read, time), (boxes, findTime)) = await (reading, finding)
+    // The reader's false reads, like wood grain, mostly fall outside every tile the finder sees.
+    let found = boxes.map { boxes in read.filter { d in boxes.contains { $0.intersects(d.frame) } } } ?? read
     frame = image
     readTime = time
+    self.findTime = findTime
+    self.boxes = boxes ?? []
     detections = found
     var next = scene
     if looking == .table {
@@ -103,7 +127,9 @@ import UniformTypeIdentifiers
       .write(to: base.appendingPathExtension("txt"), atomically: true, encoding: .utf8)
     let info: [String: Any] = [
       "looking": looking.rawValue, "layout": layout.rawValue, "notes": notes, "tilt": self.tilt ?? NSNull(),
-      "gravity": gravity ?? [], "readMilliseconds": readTime / .milliseconds(1), "camera": camera, "read": read,
+      "gravity": gravity ?? [], "readMilliseconds": readTime / .milliseconds(1),
+      "findMilliseconds": findTime / .milliseconds(1), "camera": camera, "read": read,
+      "boxes": boxes.map { [$0.minX, $0.minY, $0.width, $0.height] },
       "detections": detections.map {
         ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]]
       },

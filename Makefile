@@ -33,9 +33,10 @@ labels:
 	cd RummikubKit && swift run -c release label ../$(dir)
 	uv run Labeler/server.py
 
-# Trains the tile finder on captures whose boxes are done, then pre-draws boxes on the rest.
+# Trains the tile finder on captures whose boxes are done, pre-draws boxes on the rest, and gives the app the model.
 train:
 	cd RummikubKit && swift run -c release train ../$(dir)
+	cp $(dir)/Tiles.mlmodel Rummikub/
 
 # The same, with christophrus/rummikub's 828 boxed photos too, for while ours are few. GPL-3.0, so its model stays
 # in Bootstrap/ and only pre-labels.

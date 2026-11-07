@@ -2,6 +2,7 @@
   import CreateML
   import Foundation
   import ImageIO
+  import RummikubKit
   import Vision
 
   // Trains a tile detector on the captures whose boxes are done (`boxed.txt`), writes it to `Tiles.mlmodel` beside
@@ -39,7 +40,7 @@
     try FileManager.default.createSymbolicLink(at: training.appending(path: file), withDestinationURL: source)
     annotations.append(annotation(file, boxes))
     let image = CGImageSourceCreateWithURL(source as CFURL, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }!
-    for (i, crop) in crops(width: image.width, height: image.height, overlap: false).enumerated() {
+    for (i, crop) in Finder.crops(width: image.width, height: image.height, overlap: false).enumerated() {
       let inside = boxes.filter { crop.contains($0) }.map { $0.offsetBy(dx: -crop.minX, dy: -crop.minY) }
       guard !inside.isEmpty else { continue }
       let name = "\(file)-\(i).jpg"
@@ -103,39 +104,10 @@
   let detector = try result!.get()
   let modelURL = (extra ?? captures).appending(path: "Tiles.mlmodel")
   try detector.write(to: modelURL)
-  // Through Vision, as the app will: MLObjectDetector.prediction's boxes are skewed on portrait images.
-  let request = VNCoreMLRequest(model: try VNCoreMLModel(for: MLModel(contentsOf: MLModel.compileModel(at: modelURL))))
-  request.imageCropAndScaleOption = .scaleFill
-
-  /// The model's boxes in pixels from the top left.
-  @MainActor func detect(_ url: URL) throws -> [(box: CGRect, confidence: Float)] {
-    let size = CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) }
-      as? [CFString: Any]
-    let (w, h) = (size?[kCGImagePropertyPixelWidth] as! Int, size?[kCGImagePropertyPixelHeight] as! Int)
-    let handler = VNImageRequestHandler(url: url)
-    var found = [(box: CGRect, confidence: Float)]()
-    let image = CGRect(x: 0, y: 0, width: w, height: h)
-    for region in [image] + crops(width: w, height: h, overlap: true) {
-      request.regionOfInterest = VNNormalizedRectForImageRect(
-        CGRect(x: region.minX, y: Double(h) - region.maxY, width: region.width, height: region.height), w, h)
-      try handler.perform([request])
-      for o in request.results as? [VNRecognizedObjectObservation] ?? [] where o.confidence > 0.9 {
-        let n = VNImageRectForNormalizedRect(o.boundingBox, Int(region.width), Int(region.height))
-        let box = CGRect(x: region.minX + n.minX, y: region.maxY - n.maxY, width: n.width, height: n.height)
-        // A tile cut by a crop's edge is whole in a neighboring crop.
-        let inner = region.insetBy(dx: 2, dy: 2)
-        let cut =
-          box.minX < inner.minX && region.minX > 0 || box.maxX > inner.maxX && region.maxX < image.maxX
-          || box.minY < inner.minY && region.minY > 0 || box.maxY > inner.maxY && region.maxY < image.maxY
-        if !cut { found.append((box, o.confidence)) }
-      }
-    }
-    // Most confident first, dropping any that overlap one already kept.
-    var kept = [(box: CGRect, confidence: Float)]()
-    for f in found.sorted(by: { $0.confidence > $1.confidence }) where !kept.contains(where: { overlap($0.box, f.box) > 0.1 }) {
-      kept.append(f)
-    }
-    return kept
+  // Through Vision, as the app does: MLObjectDetector.prediction's boxes are skewed on portrait images.
+  let finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: modelURL)))
+  func detect(_ url: URL) throws -> [(box: CGRect, confidence: Float)] {
+    try finder.tiles(in: CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }!)
   }
 
   var (total, hits, extras) = (0, 0, 0)
@@ -192,25 +164,10 @@
     print(name, current.count, "→", merged.count, "boxes")
   }
 
-  /// Squares half the short side, side by side or overlapping by half.
-  func crops(width: Int, height: Int, overlap: Bool) -> [CGRect] {
-    let side = min(width, height) / 2
-    let step = overlap ? side / 2 : side
-    return stride(from: 0, through: height - side, by: step).flatMap { y in
-      stride(from: 0, through: width - side, by: step).map { x in CGRect(x: x, y: y, width: side, height: side) }
-    }
-  }
-
   func frame(_ tile: [String: Any]) -> CGRect {
     let f = tile["frame"] as! [Double]
     return CGRect(x: f[0], y: f[1], width: f[2], height: f[3])
   }
 
-  /// Intersection over union.
-  func overlap(_ a: CGRect, _ b: CGRect) -> Double {
-    let i = a.intersection(b)
-    guard !i.isNull else { return 0 }
-    let shared = i.width * i.height
-    return shared / (a.width * a.height + b.width * b.height - shared)
-  }
+  func overlap(_ a: CGRect, _ b: CGRect) -> Double { Finder.overlap(a, b) }
 #endif

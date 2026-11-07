@@ -158,6 +158,7 @@
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "Rummikub" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = Icon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2GR4447TCG;
@@ -180,6 +181,7 @@
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "Rummikub" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = Icon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2GR4447TCG;

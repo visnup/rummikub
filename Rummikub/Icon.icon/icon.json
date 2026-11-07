@@ -1,0 +1,72 @@
+{
+  "fill" : {
+    "automatic-gradient" : "srgb:0.15686,0.36863,0.76863,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name" : "seven.svg",
+          "name" : "seven",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -60,
+              0
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "image-name" : "tile.svg",
+          "name" : "tile",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -60,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.5
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.2
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name" : "back.svg",
+          "name" : "back",
+          "opacity" : 0.6,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -60,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}

@@ -25,8 +25,10 @@
   let training = FileManager.default.temporaryDirectory.appending(path: "rummikub-training")
   try? FileManager.default.removeItem(at: training)
   try FileManager.default.createDirectory(at: training, withIntermediateDirectories: true)
+  // Every fifth done capture is held out to score the model.
+  let held = Set(done.sorted().enumerated().filter { $0.offset % 5 == 4 }.map(\.element))
   var annotations = [[String: Any]]()
-  for name in done.sorted() {
+  for name in done.subtracting(held).sorted() {
     let boxes = tiles(name).compactMap { $0["frame"] as? [Double] }
     guard !boxes.isEmpty else { continue }
     let file = name.replacingOccurrences(of: "/", with: "-") + ".png"
@@ -89,6 +91,37 @@
   let request = VNCoreMLRequest(model: try VNCoreMLModel(for: MLModel(contentsOf: MLModel.compileModel(at: modelURL))))
   request.imageCropAndScaleOption = .scaleFill
 
+  /// The model's boxes in pixels from the top left.
+  @MainActor func detect(_ url: URL) throws -> [(box: CGRect, confidence: Float)] {
+    try VNImageRequestHandler(url: url).perform([request])
+    let size = CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) }
+      as? [CFString: Any]
+    let (w, h) = (size?[kCGImagePropertyPixelWidth] as! Int, size?[kCGImagePropertyPixelHeight] as! Int)
+    return (request.results as? [VNRecognizedObjectObservation] ?? []).filter { $0.confidence > 0.5 }.map {
+      let n = VNImageRectForNormalizedRect($0.boundingBox, w, h)
+      return (CGRect(x: n.minX, y: Double(h) - n.maxY, width: n.width, height: n.height), $0.confidence)
+    }
+  }
+
+  var (total, hits, extras) = (0, 0, 0)
+  for name in held.sorted() {
+    var truth = tiles(name).map(frame)
+    var extra = 0
+    for (box, _) in try detect(captures.appending(path: name + ".png")) {
+      if let i = truth.indices.max(by: { overlap(truth[$0], box) < overlap(truth[$1], box) }),
+        overlap(truth[i], box) > 0.5
+      {
+        truth.remove(at: i)
+      } else {
+        extra += 1
+      }
+    }
+    let count = tiles(name).count
+    print("held out", name, "found", count - truth.count, "of", count, "with", extra, "extra")
+    (total, hits, extras) = (total + count, hits + count - truth.count, extras + extra)
+  }
+  print("held out: found", hits, "of", total, "tiles, with", extras, "extra boxes")
+
   let pngs = try FileManager.default.contentsOfDirectory(at: captures, includingPropertiesForKeys: nil)
     + ((try? FileManager.default.contentsOfDirectory(at: captures.appending(path: "unlabeled"), includingPropertiesForKeys: nil)) ?? [])
   for url in pngs.filter({ $0.pathExtension == "png" }).sorted(by: { $0.path < $1.path }) {
@@ -100,25 +133,25 @@
     guard !done.contains(name), !current.contains(where: { $0["source"] as? String == "hand" }), truth != "" else {
       continue
     }
-    try VNImageRequestHandler(url: url).perform([request])
-    let found = (request.results as? [VNRecognizedObjectObservation] ?? []).filter { $0.confidence > 0.5 }
-    let size = CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) }
-      as? [CFString: Any]
-    let (w, h) = (size?[kCGImagePropertyPixelWidth] as! Int, size?[kCGImagePropertyPixelHeight] as! Int)
-    // The model's box wins, but a value already read for it is kept. Confirmed tiles stay even when the model misses
-    // them; unconfirmed ones go.
+    let found = try detect(url)
+    // The model's box wins, but a value already read for it is kept. Confirmed tiles stay where the model found
+    // nothing; unconfirmed ones go. The reader's boxes are guessed from the numeral, so any overlap is a match.
     var unmatched = current
-    var merged = found.map { object -> [String: Any] in
-      let n = VNImageRectForNormalizedRect(object.boundingBox, w, h)
-      let b = CGRect(x: n.minX, y: Double(h) - n.maxY, width: n.width, height: n.height)
+    var merged = found.map { (b, confidence) -> [String: Any] in
       var tile: [String: Any] = ["tile": "?", "turns": 0, "confirmed": false]
-      if let i = unmatched.firstIndex(where: { overlap(frame($0), b) > 0.5 }) { tile = unmatched.remove(at: i) }
+      if let i = unmatched.indices.max(by: { overlap(frame(unmatched[$0]), b) < overlap(frame(unmatched[$1]), b) }),
+        overlap(frame(unmatched[i]), b) > 0
+      {
+        tile = unmatched.remove(at: i)
+      }
       tile["frame"] = [b.minX, b.minY, b.width, b.height]
       tile["source"] = "model"
-      tile["confidence"] = object.confidence
+      tile["confidence"] = confidence
       return tile
     }
-    merged += unmatched.filter { $0["confirmed"] as? Bool == true }
+    merged += unmatched.filter { t in
+      t["confirmed"] as? Bool == true && !found.contains { overlap(frame(t), $0.box) > 0 }
+    }
     try JSONSerialization.data(withJSONObject: merged, options: [.prettyPrinted, .sortedKeys])
       .write(to: captures.appending(path: name + ".tiles.json"))
     print(name, current.count, "→", merged.count, "boxes")

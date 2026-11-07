@@ -28,27 +28,42 @@
   // Every fifth done capture is held out to score the model.
   let held = Set(done.sorted().enumerated().filter { $0.offset % 5 == 4 }.map(\.element))
   var annotations = [[String: Any]]()
+  /// Adds the image and its crops, so tiles small in a photo are large in some crop. A crop keeps only the tiles
+  /// wholly inside it.
+  @MainActor func add(_ source: URL, as file: String, boxes: [CGRect]) throws {
+    func annotation(_ file: String, _ boxes: [CGRect]) -> [String: Any] {
+      let coordinates = boxes.map { ["x": $0.minX, "y": $0.minY, "width": $0.width, "height": $0.height] }
+      return ["image": file, "annotations": coordinates.map { ["label": "tile", "coordinates": $0] }]
+    }
+    try FileManager.default.createSymbolicLink(at: training.appending(path: file), withDestinationURL: source)
+    annotations.append(annotation(file, boxes))
+    let image = CGImageSourceCreateWithURL(source as CFURL, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }!
+    for (i, crop) in crops(width: image.width, height: image.height, overlap: false).enumerated() {
+      let inside = boxes.filter { crop.contains($0) }.map { $0.offsetBy(dx: -crop.minX, dy: -crop.minY) }
+      guard !inside.isEmpty else { continue }
+      let name = "\(file)-\(i).jpg"
+      let destination = CGImageDestinationCreateWithURL(
+        training.appending(path: name) as CFURL, "public.jpeg" as CFString, 1, nil)!
+      CGImageDestinationAddImage(destination, image.cropping(to: crop)!, nil)
+      CGImageDestinationFinalize(destination)
+      annotations.append(annotation(name, inside))
+    }
+  }
   for name in done.subtracting(held).sorted() {
-    let boxes = tiles(name).compactMap { $0["frame"] as? [Double] }
+    let boxes = tiles(name).map(frame)
     guard !boxes.isEmpty else { continue }
-    let file = name.replacingOccurrences(of: "/", with: "-") + ".png"
-    try FileManager.default.createSymbolicLink(
-      at: training.appending(path: file), withDestinationURL: captures.appending(path: name + ".png"))
-    annotations.append([
-      "image": file,
-      "annotations": boxes.map { f in
-        ["label": "tile", "coordinates": ["x": f[0], "y": f[1], "width": f[2], "height": f[3]]]
-      },
-    ])
+    try add(
+      captures.appending(path: name + ".png"), as: name.replacingOccurrences(of: "/", with: "-") + ".png", boxes: boxes)
   }
   if let extra {
     let data = try Data(contentsOf: extra.appending(path: "annotations.json"))
-    for var entry in try JSONSerialization.jsonObject(with: data) as! [[String: Any]] {
-      let file = "extra-" + (entry["image"] as! String)
-      try FileManager.default.createSymbolicLink(
-        at: training.appending(path: file), withDestinationURL: extra.appending(path: entry["image"] as! String))
-      entry["image"] = file
-      annotations.append(entry)
+    for entry in try JSONSerialization.jsonObject(with: data) as! [[String: Any]] {
+      let image = entry["image"] as! String
+      let boxes = (entry["annotations"] as! [[String: Any]]).map {
+        let c = $0["coordinates"] as! [String: Double]
+        return CGRect(x: c["x"]!, y: c["y"]!, width: c["width"]!, height: c["height"]!)
+      }
+      try add(extra.appending(path: image), as: "extra-" + image, boxes: boxes)
     }
   }
   let annotationFile = training.appending(path: "annotations.json")
@@ -93,14 +108,33 @@
 
   /// The model's boxes in pixels from the top left.
   @MainActor func detect(_ url: URL) throws -> [(box: CGRect, confidence: Float)] {
-    try VNImageRequestHandler(url: url).perform([request])
     let size = CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) }
       as? [CFString: Any]
     let (w, h) = (size?[kCGImagePropertyPixelWidth] as! Int, size?[kCGImagePropertyPixelHeight] as! Int)
-    return (request.results as? [VNRecognizedObjectObservation] ?? []).filter { $0.confidence > 0.5 }.map {
-      let n = VNImageRectForNormalizedRect($0.boundingBox, w, h)
-      return (CGRect(x: n.minX, y: Double(h) - n.maxY, width: n.width, height: n.height), $0.confidence)
+    let handler = VNImageRequestHandler(url: url)
+    var found = [(box: CGRect, confidence: Float)]()
+    let image = CGRect(x: 0, y: 0, width: w, height: h)
+    for region in [image] + crops(width: w, height: h, overlap: true) {
+      request.regionOfInterest = VNNormalizedRectForImageRect(
+        CGRect(x: region.minX, y: Double(h) - region.maxY, width: region.width, height: region.height), w, h)
+      try handler.perform([request])
+      for o in request.results as? [VNRecognizedObjectObservation] ?? [] where o.confidence > 0.9 {
+        let n = VNImageRectForNormalizedRect(o.boundingBox, Int(region.width), Int(region.height))
+        let box = CGRect(x: region.minX + n.minX, y: region.maxY - n.maxY, width: n.width, height: n.height)
+        // A tile cut by a crop's edge is whole in a neighboring crop.
+        let inner = region.insetBy(dx: 2, dy: 2)
+        let cut =
+          box.minX < inner.minX && region.minX > 0 || box.maxX > inner.maxX && region.maxX < image.maxX
+          || box.minY < inner.minY && region.minY > 0 || box.maxY > inner.maxY && region.maxY < image.maxY
+        if !cut { found.append((box, o.confidence)) }
+      }
     }
+    // Most confident first, dropping any that overlap one already kept.
+    var kept = [(box: CGRect, confidence: Float)]()
+    for f in found.sorted(by: { $0.confidence > $1.confidence }) where !kept.contains(where: { overlap($0.box, f.box) > 0.1 }) {
+      kept.append(f)
+    }
+    return kept
   }
 
   var (total, hits, extras) = (0, 0, 0)
@@ -155,6 +189,15 @@
     try JSONSerialization.data(withJSONObject: merged, options: [.prettyPrinted, .sortedKeys])
       .write(to: captures.appending(path: name + ".tiles.json"))
     print(name, current.count, "→", merged.count, "boxes")
+  }
+
+  /// Squares half the short side, side by side or overlapping by half.
+  func crops(width: Int, height: Int, overlap: Bool) -> [CGRect] {
+    let side = min(width, height) / 2
+    let step = overlap ? side / 2 : side
+    return stride(from: 0, through: height - side, by: step).flatMap { y in
+      stride(from: 0, through: width - side, by: step).map { x in CGRect(x: x, y: y, width: side, height: side) }
+    }
   }
 
   func frame(_ tile: [String: Any]) -> CGRect {

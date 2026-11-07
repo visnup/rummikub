@@ -148,7 +148,16 @@ Scores, on the Mac and in the Simulator:
    - Next: references from the confirmed tiles, scored against the font ones.
 4. **The detector**: Create ML object detection on real and synthetic scenes, run through Vision. It replaces
    numeral-finding, and with it the false reads on printed text and the rack tray, and tiles joined in glare.
+   - In the app since 2026-11-07, filtering the reader: readings outside every box are dropped. On the fixtures
+     that's 59 wrong against 65 (bootstrap model). Its boxes show faintly, and its time shows beside the read time.
+   - Held-out score (every fifth done capture): trained on whole photos it found 58%. On crops, half the short side,
+     it finds 92% with 44 extra boxes with the bootstrap set, 83% with 129 extra on ours alone (29 captures). The app
+     ships ours alone, since the bootstrap set is GPL.
+   - Next: its milliseconds per frame on the phone. It runs 16 passes a frame (the whole frame and 15 crops).
 5. **The classifier**, if glyph matching on clean crops still confuses values.
+   - Tried 2026-11-07 on about 2000 confirmed crops, fixtures' captures left out: on the reader's frames filtered by
+     the finder, fixtures went from 59 wrong to 49. It changes 32 values, so it breaks some right ones; k6 often
+     reads as k5. It had 100 sixes and 2 jokers. Cropping by the finder's box instead was worse (53).
 6. **ARKit** planes, raycasts and voting. The tilt switch goes away.
 7. **Speed**: read ARKit's YCbCr buffer directly, skip unchanged frames, and read only unsettled crops.
 

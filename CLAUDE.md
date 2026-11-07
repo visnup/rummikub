@@ -25,6 +25,10 @@ What's next is in `TODO.md`.
     not 1, 6, 8, 9 or 11. The tile face color is the peak of a
     saturation/value histogram, since white balance varies too much between photos for fixed thresholds. Vision's
     text recognition skips lone digits, both rendered and photographed, so it isn't used.
+  - `Finder.swift`: finds tiles, not values, with the detector `train` makes, through Vision. It runs on the whole
+    image and on overlapping crops half its short side, since small tiles are missed whole; a box cut by a crop's
+    edge is left to the neighboring crop. It keeps boxes over .9 confidence and drops any that overlap a kept one.
+    On the Simulator the model must run on the CPU, or Vision can't create an inference context.
   - `Overlay.swift`: what to draw for each step of a play over the image: the tile to pick up, its target slot as a
     ghost, and an arrow.
   - `Render.swift`: synthetic table images for tests, and drawing overlays onto images.
@@ -38,8 +42,11 @@ What's next is in `TODO.md`.
   - `train` (macOS only) trains a Create ML object detector, one "tile" class, on the captures whose boxes are done.
     Done captures are listed in `Captures/boxed.txt`. It writes `Captures/Tiles.mlmodel`, then pre-draws boxes on
     every capture not yet edited by hand, keeping any values already confirmed. Each round of fixing boxes leaves
-    less for the next. `make train` runs it. It stops after `MINUTES` (60) with its last checkpoint, and predicts
-    through Vision, since `MLObjectDetector.prediction`'s boxes are skewed on portrait images.
+    less for the next. `make train` runs it and copies the model to `Rummikub/`. It trains on each image and its
+    side-by-side crops, holds out every fifth done capture and prints how many of their tiles it finds. It stops
+    after `MINUTES` (60) with its last checkpoint, and predicts through `Finder`, since
+    `MLObjectDetector.prediction`'s boxes are skewed on portrait images. It waits on the run loop: sleeping the
+    main thread hung a run at 0% CPU.
 
 - `Labeler/`: a page for checking boxes by hand, and a stdlib server that saves to the same `.tiles.json`.
   - `make labels` runs `label`, then serves the page at http://localhost:8765 (also `labeler` in
@@ -53,7 +60,7 @@ What's next is in `TODO.md`.
     `Bootstrap/` and only pre-labels; the app's model is trained on ours alone.
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
-  times a second; `Game` reads them, keeps the table and rack, solves, and tracks the step shown; `ContentView`
+  times a second; `Game` reads them, drops readings outside every box `Finder` sees (`Tiles.mlmodel`), keeps the table and rack, solves, and tracks the step shown; `ContentView`
   draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table
   and rack as text once two frames agree. A reading only replaces the last one once two frames in a row agree, so a missed
   tile doesn't re-solve. While a play is being shown, readings don't re-solve; they advance the step instead

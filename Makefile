@@ -2,7 +2,7 @@ app := DerivedData/Build/Products
 
 files := --device Yam --domain-type appDataContainer --domain-identifier com.visnup.Rummikub
 
-.PHONY: all sim test captures upload
+.PHONY: all sim test captures upload labels train bootstrap
 
 all:
 	xcodebuild -scheme Rummikub -destination generic/platform=iOS -derivedDataPath DerivedData \
@@ -27,6 +27,21 @@ captures:
 	    grep -qxF "$${f#Documents/}" $(dir)/.removed 2>/dev/null || \
 	    xcrun devicectl device copy from $(files) --source "$$f" --destination "$(dir)/$${f#Documents/}" > /dev/null; \
 	done
+
+# Labels what the reader agrees with, then serves the page for the rest at http://localhost:8765.
+labels:
+	cd RummikubKit && swift run -c release label ../$(dir)
+	uv run Labeler/server.py
+
+# Trains the tile finder on captures whose boxes are done, then pre-draws boxes on the rest.
+train:
+	cd RummikubKit && swift run -c release train ../$(dir)
+
+# The same, with christophrus/rummikub's 828 boxed photos too, for while ours are few. GPL-3.0, so its model stays
+# in Bootstrap/ and only pre-labels.
+bootstrap:
+	[ -e Bootstrap/annotations.json ] || uv run Labeler/bootstrap.py
+	cd RummikubKit && swift run -c release train ../$(dir) ../Bootstrap
 
 # Look through new captures for personal text on screens first: the dataset is meant to go public.
 upload:

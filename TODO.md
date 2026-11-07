@@ -141,6 +141,11 @@ Scores, on the Mac and in the Simulator:
      use it to find which way is up.
 3. **Crops from the fixtures**: cut out each labeled tile. That gives better references (for 5/6 and 11/8) and the
    boxes and crops to train on.
+   - On 2026-11-06, `label` agreed with 3362 of 5185 true tiles and confirmed 2207. Clean rows confirm 60–100 of 106.
+     Scattered tiles, low and far angles, the loose rows and the cards confirm few or none, so they're labeled by
+     hand in `Labeler/`.
+   - The boxes are still guessed from the numeral's size. The page fixes them where they're off.
+   - Next: references from the confirmed tiles, scored against the font ones.
 4. **The detector**: Create ML object detection on real and synthetic scenes, run through Vision. It replaces
    numeral-finding, and with it the false reads on printed text and the rack tray, and tiles joined in glare.
 5. **The classifier**, if glyph matching on clean crops still confuses values.

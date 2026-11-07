@@ -29,6 +29,28 @@ What's next is in `TODO.md`.
     ghost, and an arrow.
   - `Render.swift`: synthetic table images for tests, and drawing overlays onto images.
   - `scan` reads a photo and writes `<photo>.scan.png` with what it read drawn on.
+  - `label` writes each capture's `<capture>.tiles.json`. It holds every tile the reader read that agrees with the
+    truth, with its box, its turns and whether it's confirmed. Agreeing with a full set's truth proves little, since
+    that truth holds every tile. So in full sets a tile is confirmed only when the tile beside it continues its run
+    in its color and one above or below has its value. Elsewhere, agreeing is enough. Files with hand labels are
+    left alone.
+
+  - `train` (macOS only) trains a Create ML object detector, one "tile" class, on the captures whose boxes are done.
+    Done captures are listed in `Captures/boxed.txt`. It writes `Captures/Tiles.mlmodel`, then pre-draws boxes on
+    every capture not yet edited by hand, keeping any values already confirmed. Each round of fixing boxes leaves
+    less for the next. `make train` runs it. It stops after `MINUTES` (60) with its last checkpoint, and predicts
+    through Vision, since `MLObjectDetector.prediction`'s boxes are skewed on portrait images.
+
+- `Labeler/`: a page for checking boxes by hand, and a stdlib server that saves to the same `.tiles.json`.
+  - `make labels` runs `label`, then serves the page at http://localhost:8765 (also `labeler` in
+    `.claude/launch.json`).
+  - In the page, every tile needs a box and nothing else may have one. Enter marks a capture done. Values are
+    optional.
+  - `bootstrap.py` turns [christophrus/rummikub](https://huggingface.co/datasets/christophrus/rummikub) into a
+    Create ML set in `Bootstrap/`, which git ignores. The set is 828 photos of a similar tile set, every tile boxed
+    and shrunk to 1920 px.
+  - `make bootstrap` trains on it as well as on our done captures. That dataset is GPL-3.0, so its model stays in
+    `Bootstrap/` and only pre-labels; the app's model is trained on ours alone.
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
   times a second; `Game` reads them, keeps the table and rack, solves, and tracks the step shown; `ContentView`

@@ -5,20 +5,23 @@ public struct Detection: Hashable, Sendable {
   public let tile: Tile
   /// In top-left-origin pixels.
   public let frame: CGRect
+  /// How many quarter turns clockwise the image was turned to read it upright.
+  public var turns = 0
 }
 
 /// Finds tiles in a photo by their numerals: blobs of ink with tile face all around them, joined into numbers. Each
 /// is read by matching its ink against reference glyphs and colored by that ink, and its tile's frame is guessed from
 /// its size. Vision's text recognition skips most lone digits, so it's not used.
 public enum Recognizer {
-  /// Tiles at any quarter turn: each turn of the image is read, and where readings overlap the closest match wins.
+  /// Tiles at any quarter turn, closest matches first: each turn of the image is read, and where readings overlap the
+  /// closest match wins.
   /// Upside down, a 6 reads as well as a 9, so turns other than the one most tiles read at lose close calls.
   public static func tiles(in image: CGImage) -> [Detection] {
     let upright = Pixels(image)
     let found = (0..<4).flatMap { turns in
       read(turns == 0 ? upright : upright.turned(turns)).map {
         Reading(
-          detection: Detection(tile: $0.detection.tile, frame: upright.unturn($0.detection.frame, turns)),
+          detection: Detection(tile: $0.detection.tile, frame: upright.unturn($0.detection.frame, turns), turns: turns),
           distance: $0.distance, turns: turns)
       }
     }

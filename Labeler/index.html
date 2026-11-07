@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tile labeler</title>
+<style>
+  :root { --bg: #fff; --fg: #111; --muted: #666; --line: #ddd; --pick: #e0e7ff; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #eee; --muted: #999; --line: #333; --pick: #2a2f4a; } }
+  body { margin: 0; display: flex; height: 100vh; font: 13px/1.4 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  nav { width: 230px; overflow: auto; border-right: 1px solid var(--line); flex: none; }
+  nav button { display: flex; justify-content: space-between; width: 100%; border: 0; background: none; color: inherit; font: inherit; padding: 4px 10px; cursor: pointer; text-align: left; }
+  nav button.current { background: var(--pick); }
+  nav button .done { color: #2a2; }
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  header { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+  header b { font-size: 14px; }
+  #missing { color: var(--muted); }
+  #missing .extra { color: #d33; }
+  #view { flex: 1; overflow: auto; position: relative; }
+  canvas { display: block; cursor: crosshair; }
+  #typed { position: absolute; background: #111; color: #fff; font: bold 16px ui-monospace, monospace; padding: 2px 6px; border-radius: 4px; pointer-events: none; display: none; }
+  details { color: var(--muted); }
+  kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; font: 11px ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<nav id="list"></nav>
+<main>
+  <header>
+    <b id="name"></b>
+    <span id="count"></span>
+    <span id="missing"></span>
+    <details><summary>Keys</summary>
+      Every tile needs a box and nothing else does. Drag on empty space to add a box; click one and <kbd>⌫</kbd> to
+      delete it; drag a box to move it, its corner to resize. <kbd>Enter</kbd> marks the capture done and opens the next.
+      Values are optional: click a box, type its tile (<kbd>r12</kbd>, <kbd>j</kbd>) and <kbd>Enter</kbd>.
+      <kbd>←</kbd><kbd>→</kbd> turn which way is up. <kbd>+</kbd><kbd>−</kbd> zoom. <kbd>[</kbd><kbd>]</kbd> previous and next capture.
+    </details>
+  </header>
+  <div id="view"><canvas id="canvas"></canvas><div id="typed"></div></div>
+</main>
+<script>
+const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d"), view = document.getElementById("view");
+const typedEl = document.getElementById("typed");
+let captures = [], current = 0, image = new Image(), tiles = [], selected = null, typed = "", scale = 0.6, drag = null;
+const valid = /^([kbor](1[0-3]|[1-9])|j)$/;
+const arrows = ["↑", "←", "↓", "→"];
+
+async function load() {
+  captures = await (await fetch("/api/captures")).json();
+  // Closest to done first, so the first rounds of training come soonest.
+  captures.sort((a, b) => a.boxed - b.boxed || need(a) - need(b));
+  open(0);
+}
+const need = c => c.truth ? Math.abs(c.truth.length - c.boxes) : 1000;
+
+async function open(i) {
+  current = (i + captures.length) % captures.length;
+  const c = captures[current];
+  tiles = await (await fetch(`/api/tiles/${encodeURIComponent(c.name)}`)).json();
+  selected = null; typed = "";
+  image = new Image();
+  image.onload = draw;
+  image.src = `/captures/${encodeURIComponent(c.name).replace("%2F", "/")}.png`;
+  list();
+}
+
+function list() {
+  document.getElementById("list").replaceChildren(...captures.map((c, i) => {
+    const b = document.createElement("button");
+    b.className = i === current ? "current" : "";
+    b.innerHTML = `<span>${c.name.replace("2026-11-06T", "")}</span><span class="${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</span>`;
+    b.onclick = () => open(i);
+    return b;
+  }));
+}
+
+function summary() {
+  const c = captures[current];
+  c.boxes = tiles.length;
+  c.confirmed = tiles.filter(t => t.confirmed).length;
+  document.getElementById("name").textContent = c.name;
+  document.getElementById("count").textContent = `${tiles.length} boxes${c.truth ? ` for ${c.truth.length} tiles` : ""}${c.boxed ? ", done" : ""}`;
+  const missing = document.getElementById("missing");
+  if (!c.truth) { missing.textContent = "truth unknown: box every tile"; list(); return; }
+  const left = {};
+  for (const t of c.truth) left[t] = (left[t] || 0) + 1;
+  const extra = [];
+  for (const t of tiles.filter(t => t.confirmed)) left[t.tile] ? left[t.tile]-- : extra.push(t.tile);
+  const names = Object.entries(left).filter(([, n]) => n).map(([t, n]) => n > 1 ? `${t}×${n}` : t);
+  missing.innerHTML = (names.length ? `values not yet confirmed: ${names.join(" ")}` : "all values confirmed") +
+    (extra.length ? ` <span class="extra">not in truth ${extra.join(" ")}</span>` : "");
+  list();
+}
+
+function draw() {
+  canvas.width = image.width * scale;
+  canvas.height = image.height * scale;
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  ctx.font = "bold 13px ui-monospace, monospace";
+  tiles.forEach((t, i) => {
+    const [x, y, w, h] = t.frame.map(v => v * scale);
+    ctx.lineWidth = i === selected ? 3 : 2;
+    ctx.strokeStyle = i === selected ? "#f0f" : t.confirmed ? "#2c2" : "#fc0";
+    ctx.strokeRect(x, y, w, h);
+    const label = `${t.tile}${arrows[t.turns || 0]}`;
+    ctx.fillStyle = "rgba(0,0,0,.7)";
+    ctx.fillRect(x, y - 16, ctx.measureText(label).width + 6, 16);
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fillText(label, x + 3, y - 4);
+  });
+  if (drag?.mode === "create") {
+    const [x, y, w, h] = rect(drag).map(v => v * scale);
+    ctx.strokeStyle = "#f0f";
+    ctx.strokeRect(x, y, w, h);
+  }
+  typedEl.style.display = typed && selected !== null ? "block" : "none";
+  if (typed && selected !== null) {
+    const [x, y, , h] = tiles[selected].frame.map(v => v * scale);
+    typedEl.textContent = typed;
+    typedEl.style.left = `${x}px`;
+    typedEl.style.top = `${y + h + 4}px`;
+  }
+  summary();
+}
+
+const point = e => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / scale, (e.clientY - r.top) / scale]; };
+const rect = d => [Math.min(d.x0, d.x1), Math.min(d.y0, d.y1), Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0)];
+const inside = (t, x, y) => x >= t.frame[0] && y >= t.frame[1] && x <= t.frame[0] + t.frame[2] && y <= t.frame[1] + t.frame[3];
+
+canvas.onmousedown = e => {
+  const [x, y] = point(e);
+  const s = tiles[selected];
+  if (s && Math.hypot(x - s.frame[0] - s.frame[2], y - s.frame[1] - s.frame[3]) < 12 / scale) {
+    drag = { mode: "resize", x0: x, y0: y, frame: [...s.frame] };
+    return;
+  }
+  const hits = tiles.map((t, i) => [t, i]).filter(([t]) => inside(t, x, y)).sort((a, b) => a[0].frame[2] * a[0].frame[3] - b[0].frame[2] * b[0].frame[3]);
+  if (hits.length) {
+    selected = hits[0][1]; typed = "";
+    drag = { mode: "move", x0: x, y0: y, frame: [...tiles[selected].frame] };
+  } else {
+    drag = { mode: "create", x0: x, y0: y, x1: x, y1: y };
+  }
+  draw();
+};
+window.onmousemove = e => {
+  if (!drag) return;
+  const [x, y] = point(e);
+  if (drag.mode === "create") { drag.x1 = x; drag.y1 = y; }
+  const [fx, fy, fw, fh] = drag.frame || [];
+  if (drag.mode === "move") tiles[selected].frame = [fx + x - drag.x0, fy + y - drag.y0, fw, fh];
+  if (drag.mode === "resize") tiles[selected].frame = [fx, fy, Math.max(8, fw + x - drag.x0), Math.max(8, fh + y - drag.y0)];
+  drag.moved = Math.hypot(x - drag.x0, y - drag.y0) > 3;
+  draw();
+};
+window.onmouseup = () => {
+  if (!drag) return;
+  if (drag.mode === "create" && drag.moved) {
+    const frame = rect(drag), cx = frame[0] + frame[2] / 2, cy = frame[1] + frame[3] / 2;
+    const near = [...tiles].sort((a, b) => dist(a, cx, cy) - dist(b, cx, cy))[0];
+    tiles.push({ tile: "?", frame, turns: near ? near.turns : 0, source: "hand", confirmed: false });
+    selected = tiles.length - 1;
+    save();
+  } else if (drag.moved) {
+    tiles[selected].source = "hand";
+    save();
+  }
+  drag = null;
+  draw();
+};
+const dist = (t, x, y) => Math.hypot(t.frame[0] + t.frame[2] / 2 - x, t.frame[1] + t.frame[3] / 2 - y);
+
+window.onkeydown = e => {
+  if (e.metaKey || e.ctrlKey) return;
+  const s = tiles[selected];
+  if (/^[kborj0-9]$/.test(e.key) && s) typed += e.key;
+  else if (e.key === "Enter" && typed) {
+    if (!valid.test(typed) || !s) return flash();
+    s.tile = typed; s.confirmed = true; s.source = "hand";
+    typed = ""; selected = null; save();
+  } else if (e.key === "Enter") return finish();
+  else if (e.key === "Backspace" || e.key === "Delete") {
+    if (typed) typed = typed.slice(0, -1);
+    else if (s) { tiles.splice(selected, 1); selected = null; save(); }
+  } else if (e.key === "Escape") { typed ? typed = "" : selected = null; }
+  else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && s) {
+    s.turns = ((s.turns || 0) + (e.key === "ArrowLeft" ? 1 : 3)) % 4; s.source = "hand"; save();
+  } else if (e.key === "Tab") selectNext(e.shiftKey ? -1 : 1, true);
+  else if (e.key === "+" || e.key === "=") scale = Math.min(2, scale * 1.25);
+  else if (e.key === "-") scale = Math.max(0.2, scale / 1.25);
+  else if (e.key === "]") return open(current + 1);
+  else if (e.key === "[") return open(current - 1);
+  else return;
+  e.preventDefault();
+  draw();
+};
+/** Marks this capture's boxes done and opens the next one that isn't. */
+async function finish() {
+  const c = captures[current];
+  await save();
+  await fetch(`/api/boxed/${encodeURIComponent(c.name)}`, { method: "POST" });
+  c.boxed = true;
+  const next = captures.findIndex((d, i) => i > current && !d.boxed);
+  open(next < 0 ? captures.findIndex(d => !d.boxed) : next);
+}
+const flash = () => { typedEl.style.background = "#d33"; setTimeout(() => typedEl.style.background = "#111", 300); };
+
+/** The next unconfirmed box in reading order after the selected one. */
+function selectNext(step = 1, wrap = false) {
+  const order = tiles.map((t, i) => i).sort((a, b) => tiles[a].frame[1] - tiles[b].frame[1] || tiles[a].frame[0] - tiles[b].frame[0]);
+  const todo = order.filter(i => !tiles[i].confirmed);
+  if (!todo.length) { selected = null; return; }
+  const at = order.indexOf(selected);
+  const after = step > 0 ? todo.find(i => order.indexOf(i) > at) : [...todo].reverse().find(i => order.indexOf(i) < at);
+  selected = after ?? (wrap || selected === null ? todo[step > 0 ? 0 : todo.length - 1] : todo[0]);
+  const [x, y, w, h] = tiles[selected].frame.map(v => v * scale);
+  if (y < view.scrollTop || y + h > view.scrollTop + view.clientHeight || x < view.scrollLeft || x + w > view.scrollLeft + view.clientWidth)
+    view.scrollTo({ left: x - view.clientWidth / 2, top: y - view.clientHeight / 2 });
+}
+
+async function save() {
+  const c = captures[current];
+  // Any change by hand keeps `label` and model predictions from overwriting the file.
+  for (const t of tiles) if (t.source !== "hand") t.source = "hand";
+  await fetch(`/api/tiles/${encodeURIComponent(c.name)}`, { method: "PUT", body: JSON.stringify(tiles) });
+}
+
+load();
+</script>
+</body>
+</html>

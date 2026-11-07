@@ -73,10 +73,12 @@ public enum Recognizer {
       guard !big, whole != nil else { return joker }
       // A joker's face has its features close around it; a number stands alone on its tile, unlike printed text.
       guard pixels.crowding(around: box) < 0.08 else { return nil }
-      let read = numeral.digits.map { part in
-        let glyph = pixels.glyph(in: part)!
-        return digits.min { glyph.distance(to: $0.glyph) < glyph.distance(to: $1.glyph) }!.digit
+      let read = numeral.digits.compactMap { part in
+        pixels.glyph(in: part).map { glyph in
+          digits.min { glyph.distance(to: $0.glyph) < glyph.distance(to: $1.glyph) }!.digit
+        }
       }
+      guard read.count == numeral.digits.count else { return nil }
       let value = Int(read.map(String.init).joined()).flatMap { (1...13).contains($0) ? $0 : nil } ?? whole!
       return Reading(detection: Detection(tile: .number(color, value), frame: frame(around: box, height: 0.3)), distance: distance)
     }

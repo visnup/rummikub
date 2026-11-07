@@ -9,6 +9,7 @@
   // round of checking boxes leaves less for the next. With another set (images and a Create ML `annotations.json`),
   // trains on that too and writes the model there instead, since it isn't ours to ship.
   //   train <captures> [<set>]
+  setvbuf(stdout, nil, _IOLBF, 0)
   let captures = URL(filePath: CommandLine.arguments[1])
   let extra = CommandLine.arguments.dropFirst(2).first.map { URL(filePath: $0) }
   let done = Set(
@@ -86,7 +87,7 @@
     job.checkpoints.sink { @Sendable in checkpoint = $0 },
   ]
   while result == nil {
-    Thread.sleep(forTimeInterval: 30)
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 30))
     if let p = MLProgress(progress: job.progress) {
       print(
         p.phase, p.itemCount, "of", p.totalItemCount.map(String.init) ?? "?",

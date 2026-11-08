@@ -49,7 +49,18 @@ What's next is in `TODO.md`.
   - `score` (`make score`) runs the finder and the reader on the held-out done captures, through `Finder`, since
     `MLObjectDetector.prediction`'s boxes are skewed on portrait images: tiles found (a box
     overlapping a true one by half) and extra boxes, then tiles read right and extra against the written truth,
-    with and without the app's filter. Not against `tiles.json`'s values, which are mostly the reader's own.
+    with and without the app's filter, and the finder's boxes read by `Values.mlmodel` when it's beside the captures.
+    Not against `tiles.json`'s values, which are mostly the reader's own.
+  - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles. `make values` builds
+    two with `crops.py` and the `values` tool: `Values` for tables, from our confirmed crops at all four quarter turns
+    plus the outside sets as they lie, and `RackValues` for racks, upright, ours alone. On the held-out captures the
+    finder plus `Values`, over .7 sure, read 426–435 of 580 right with 79–99 extras, where the reader got 341 with 97.
+    Through a Create ML session with no augmentation: `MLImageClassifier(trainingData:)` failed past a few thousand
+    images with "Failed to create CVPixelBufferPool", and the default flips took validation from 96% to 78%.
+    Orienting the outside crops with an upright classifier first turned many upside down, so `Values` reads any turn.
+  - `make scene` trains `RackOrTable` on whole frames labeled in `Captures/scene.txt`: by eye between 30° and 55°,
+    else by tilt (two low ones were tables). Tilt alone can't say: racks were shot at 24–48°, tables from 35° up, and
+    box shape doesn't separate them either. 21 of 24 held-out frames right, two of the misses judgment calls.
 
 - `Labeler/`: a page for checking boxes by hand, and a stdlib server that saves to the same `.tiles.json`.
   - `make labels` runs `label`, then `prelabel.py`, then serves the page at http://localhost:8765 (also `labeler`
@@ -87,13 +98,17 @@ What's next is in `TODO.md`.
     top-down melds; arthurvanmeerbeeck, 538), which need a Roboflow account to export.
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
-  times a second; `Game` reads them, drops readings outside every box `Finder` sees (`Tiles.mlmodel`), keeps the table and rack, solves, and tracks the step shown; `ContentView`
+  times a second; `Game` decides rack or table (`RackOrTable`), finds the tiles (`Tiles`), reads each box
+  (`Values` or `RackValues`), or falls back to the reader without the models, keeps the table and rack, solves, and
+  tracks the step shown; `ContentView`
   draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table
   and rack as text once two frames agree. A reading only replaces the last one once two frames in a row agree, so a missed
   tile doesn't re-solve. While a play is being shown, readings don't re-solve; they advance the step instead
   (`Play.stepsDone`). The simulator never uses a camera: it reads a fixture photo of whichever the Table/Rack switch says
-  (`Demo`), straight off the Mac's disk. On the phone, Table/Rack follows the tilt from CoreMotion (`Game.tilt`), shown in degrees
-  in the top pill and written into each capture.
+  (`Demo`), straight off the Mac's disk. On the phone, Table/Rack follows `RackOrTable` when it's .8 sure, or
+  without it the tilt from CoreMotion (`Game.tilt`), shown in degrees in the top pill and written into each capture.
+  A pick by hand holds until the phone tilts past 30° or 70°. In the Simulator, Vision requests are pinned to the
+  CPU, else it can't create an inference context; the finder's boxes there still come out wrong, so check on the phone.
   - Two tabs. Capture's controls are one row in the tab bar's accessory (`tabViewBottomAccessory`), which the system
     places above the tab bar, or level with it on the iPhone Duo, whose tab bar is at the side; hand-placed panels
     were off on one device or the other. Notes are typed in an alert, since the accessory stays behind the keyboard.

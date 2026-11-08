@@ -2,7 +2,7 @@ app := DerivedData/Build/Products
 
 files := --device Yam --domain-type appDataContainer --domain-identifier com.visnup.Rummikub
 
-.PHONY: all sim test captures watch timing upload labels train score
+.PHONY: all sim test captures watch timing upload labels train values scene score
 
 all:
 	xcodebuild -scheme Rummikub -destination generic/platform=iOS -derivedDataPath DerivedData \
@@ -61,6 +61,20 @@ train:
 	cd RummikubKit && ITERATIONS=3000 swift run -c release train ../$(dir) $(addprefix ../,$(wildcard Outside/*-train))
 	cp $(dir)/Tiles.mlmodel Rummikub/
 	$(MAKE) score
+
+# Trains the value classifiers on tile crops and gives the app them: Values for tables, at any quarter turn, with
+# the outside sets; RackValues for racks, upright, ours alone.
+values:
+	uv run Labeler/crops.py $(dir) $(dir)/.crops $(wildcard Outside/*-train)
+	cd RummikubKit && swift run -c release values ../$(dir)/.crops/any ../$(dir)/Values.mlmodel
+	cd RummikubKit && swift run -c release values ../$(dir)/.crops/upright ../$(dir)/RackValues.mlmodel
+	cp $(dir)/Values.mlmodel $(dir)/RackValues.mlmodel Rummikub/
+
+# Trains the scene classifier, rack or table, on whole frames labeled in scene.txt, and gives the app it.
+scene:
+	uv run Labeler/scene.py $(dir) $(dir)/.scene
+	cd RummikubKit && swift run -c release values ../$(dir)/.scene ../$(dir)/RackOrTable.mlmodel
+	cp $(dir)/RackOrTable.mlmodel Rummikub/
 
 # Scores the finder and the reader on the held-out captures, a fifth of the done ones, which training never sees.
 score:

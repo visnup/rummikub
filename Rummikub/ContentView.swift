@@ -147,7 +147,7 @@ struct ContentView: View {
   }
 
   var looking: some View {
-    Picker("Looking at", selection: $game.looking) {
+    Picker("Looking at", selection: Binding(get: { game.looking }, set: { game.pick($0) })) {
       ForEach(Game.Looking.allCases, id: \.self) { Text($0.rawValue.capitalized) }
     }
     .pickerStyle(.segmented)

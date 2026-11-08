@@ -6,26 +6,36 @@
 
   // Scores the finder and the reader on the held-out captures whose boxes are done, which training never sees. A
   // tile is found when a box overlaps its true box by half. Reads with and without dropping readings outside the
-  // finder's boxes, as the app does.
+  // finder's boxes, as the app does, and with a `Values.mlmodel` beside the captures, by classifying the boxes.
   //   score <captures>
   setvbuf(stdout, nil, _IOLBF, 0)
   let captures = URL(filePath: CommandLine.arguments[1])
   let finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: captures.appending(path: "Tiles.mlmodel"))))
+  let values = captures.appending(path: "Values.mlmodel")
+  let classifier = FileManager.default.fileExists(atPath: values.path)
+    ? try Classifier(model: MLModel(contentsOf: MLModel.compileModel(at: values))) : nil
   let done = ((try? String(contentsOf: captures.appending(path: "boxed.txt"), encoding: .utf8)) ?? "")
     .split(separator: "\n").map(String.init)
 
   struct Score {
     var tiles = 0, found = 0, extraBoxes = 0, valued = 0, read = 0, filtered = 0, extraReads = 0, extraFiltered = 0
+    var classified = 0, extraClassified = 0
 
     static func += (a: inout Score, b: Score) {
       a = Score(
         tiles: a.tiles + b.tiles, found: a.found + b.found, extraBoxes: a.extraBoxes + b.extraBoxes,
         valued: a.valued + b.valued, read: a.read + b.read, filtered: a.filtered + b.filtered,
-        extraReads: a.extraReads + b.extraReads, extraFiltered: a.extraFiltered + b.extraFiltered)
+        extraReads: a.extraReads + b.extraReads, extraFiltered: a.extraFiltered + b.extraFiltered,
+        classified: a.classified + b.classified, extraClassified: a.extraClassified + b.extraClassified)
+    }
+
+    var columns: [String] {
+      ["\(found)/\(tiles) +\(extraBoxes)", "\(read)/\(valued) +\(extraReads)", "\(filtered)/\(valued) +\(extraFiltered)",
+        "\(classified)/\(valued) +\(extraClassified)"]
     }
   }
   var total = Score()
-  print("capture", "found/tiles +extra", "read/valued +extra", "with finder +extra", separator: "\t")
+  print("capture", "found/tiles +extra", "read/valued +extra", "with finder +extra", "classified +extra", separator: "\t")
   for name in done.filter(Finder.isHeldOut).sorted() {
     let truth = try (JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
       as! [[String: Any]]).map { t in
@@ -66,12 +76,11 @@
     }
     (s.read, s.extraReads) = score(readings)
     (s.filtered, s.extraFiltered) = score(filtered)
-    print(
-      name, "\(s.found)/\(s.tiles) +\(s.extraBoxes)", "\(s.read)/\(s.valued) +\(s.extraReads)",
-      "\(s.filtered)/\(s.valued) +\(s.extraFiltered)", separator: "\t")
+    if let classifier {
+      (s.classified, s.extraClassified) = score(try classifier.tiles(in: image, boxes: boxes))
+    }
+    print(([name] + s.columns).joined(separator: "\t"))
     total += s
   }
-  print(
-    "total", "\(total.found)/\(total.tiles) +\(total.extraBoxes)", "\(total.read)/\(total.valued) +\(total.extraReads)",
-    "\(total.filtered)/\(total.valued) +\(total.extraFiltered)", separator: "\t")
+  print((["total"] + total.columns).joined(separator: "\t"))
 #endif

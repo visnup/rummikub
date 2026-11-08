@@ -30,27 +30,52 @@ import UniformTypeIdentifiers
   /// What's around the tiles, like "lamp glare, wood", saved with each capture.
   var notes = ""
   var gravity: [Double]?
-  /// How long the last frame took to read.
+  /// How long the last frame took to read: classifying the finder's boxes, or the reader without them.
   var readTime = Duration.zero
-  /// How long the finder took on the last frame, beside the reader.
+  /// How long the finder took on the last frame.
   var findTime = Duration.zero
   /// The tiles the finder saw in the last frame.
   var boxes = [CGRect]()
-  private let finder = Bundle.main.url(forResource: "Tiles", withExtension: "mlmodelc").flatMap { url in
+  private let finder = Game.model("Tiles").flatMap { try? Finder(model: $0) }
+  /// What reads the finder's boxes: on the table at any quarter turn; on a rack, upright.
+  private let classifiers = [Looking.table: "Values", .rack: "RackValues"].compactMapValues {
+    Game.model($0).flatMap { try? Classifier(model: $0) }
+  }
+  /// Whether a frame shows a rack or the table, from the whole picture: tilt alone can't say, since racks were shot at
+  /// 24–48° and tables from 35° up. On held-out frames it got 21 of 24, two of them judgment calls.
+  private let rackOrTable = Game.model("RackOrTable").flatMap { try? Classifier(model: $0) }
+
+  private static func model(_ name: String) -> MLModel? {
     let configuration = MLModelConfiguration()
     #if targetEnvironment(simulator)
       // Else Vision can't create an inference context.
       configuration.computeUnits = .cpuOnly
     #endif
-    return try? Finder(model: MLModel(contentsOf: url, configuration: configuration))
+    return Bundle.main.url(forResource: name, withExtension: "mlmodelc").flatMap {
+      try? MLModel(contentsOf: $0, configuration: configuration)
+    }
   }
   /// How far the camera points below the horizon, in degrees. Looking down at the table it's steep; at the rack,
-  /// nearly level. The gap between the two cutoffs keeps it from flipping back and forth.
+  /// nearly level. Without the rack-or-table model, it decides: the cutoffs leave a gap that keeps it from flipping
+  /// back and forth. Either way, a pick by hand holds until the phone goes well past the other cutoff.
   var tilt: Double? {
     didSet {
       guard let tilt else { return }
-      if tilt > 50 { looking = .table } else if tilt < 35 { looking = .rack }
+      if tilt > (picked == .rack ? 70 : 55) {
+        if picked != nil || rackOrTable == nil { looking = .table }
+        picked = nil
+      } else if tilt < (picked == .table ? 30 : 45) {
+        if picked != nil || rackOrTable == nil { looking = .rack }
+        picked = nil
+      }
     }
+  }
+  /// What was picked by hand, until the tilt overrides it.
+  private var picked: Looking?
+
+  func pick(_ looking: Looking) {
+    self.looking = looking
+    picked = looking
   }
   /// The last frame read, and what was read in it.
   var frame: CGImage?
@@ -75,20 +100,29 @@ import UniformTypeIdentifiers
   var play: Play? { plays.indices.contains(choice) ? plays[choice] : nil }
 
   func see(_ image: CGImage) async {
-    let finder = finder
-    async let reading = Task.detached {
-      var found = [Detection]()
-      let time = ContinuousClock().measure { found = Recognizer.tiles(in: image) }
-      return (found, time)
-    }.value
-    async let finding = Task.detached {
+    if picked == nil, let rackOrTable,
+      let (label, confidence) = await Task.detached(operation: { try? rackOrTable.label(of: image) }).value,
+      confidence >= 0.8, let seen = Looking(rawValue: label)
+    {
+      looking = seen
+    }
+    let finder = finder, classifier = classifiers[looking]
+    // The finder's boxes read by a classifier: on the held-out captures 435 of 572 tiles right with 79 extras, where
+    // the reader got 345 with 93. Without the models, the reader.
+    let (found, boxes, findTime, time) = await Task.detached {
+      let clock = ContinuousClock()
       var boxes: [CGRect]?
-      let time = ContinuousClock().measure { boxes = try? finder?.tiles(in: image) }
-      return (boxes, time)
+      let findTime = clock.measure { boxes = try? finder?.tiles(in: image) }
+      var found = [Detection]()
+      let time = clock.measure {
+        if let boxes, let classifier, let read = try? classifier.tiles(in: image, boxes: boxes) {
+          found = read
+        } else {
+          found = Recognizer.tiles(in: image)
+        }
+      }
+      return (found, boxes, findTime, time)
     }.value
-    let ((read, time), (boxes, findTime)) = await (reading, finding)
-    // The reader's false reads, like wood grain, mostly fall outside every tile the finder sees.
-    let found = boxes.map { boxes in read.filter { d in boxes.contains { $0.intersects(d.frame) } } } ?? read
     frame = image
     readTime = time
     self.findTime = findTime
@@ -96,7 +130,7 @@ import UniformTypeIdentifiers
     detections = found
     _ = try? timing?.seekToEnd()
     try? timing?.write(contentsOf: Data(
-      "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(read.count),\(boxes?.count ?? -1)\n".utf8))
+      "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(found.count),\(boxes?.count ?? -1)\n".utf8))
     var next = scene
     if looking == .table {
       next.table = Recognizer.melds(found)

@@ -9,6 +9,7 @@ public struct Finder: @unchecked Sendable {
   public init(model: MLModel) throws {
     request = VNCoreMLRequest(model: try VNCoreMLModel(for: model))
     request.imageCropAndScaleOption = .scaleFill
+    request.onCPUInSimulator()
   }
 
   /// Boxes in top-left-origin pixels, most confident first. A box cut by a crop's edge is left to the neighboring crop

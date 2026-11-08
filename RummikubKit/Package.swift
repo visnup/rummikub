@@ -17,6 +17,7 @@ let package = Package(
     .executableTarget(name: "scan", dependencies: ["RummikubKit"]),
     .executableTarget(name: "score", dependencies: ["RummikubKit"]),
     .executableTarget(name: "words"),
+    .executableTarget(name: "values"),
     .testTarget(name: "RummikubKitTests", dependencies: ["RummikubKit"], resources: [.copy("Fixtures")]),
   ]
 )

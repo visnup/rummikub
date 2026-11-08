@@ -5,10 +5,12 @@
   import RummikubKit
 
   // Trains a tile detector on the captures whose boxes are done (`boxed.txt`), except the held-out ones, and writes it
-  // to `Tiles.mlmodel` beside them.
-  //   train <captures>
+  // to `Tiles.mlmodel` beside them. Other folders add every photo (.jpg) in them that has a `.tiles.json`, like the
+  // outside sets `Labeler/outside.py` converts.
+  //   train <captures> [<folder>...]
   setvbuf(stdout, nil, _IOLBF, 0)
   let captures = URL(filePath: CommandLine.arguments[1])
+  let outside = CommandLine.arguments.dropFirst(2).map { URL(filePath: $0) }
   let done = Set(
     ((try? String(contentsOf: captures.appending(path: "boxed.txt"), encoding: .utf8)) ?? "").split(separator: "\n")
       .map(String.init))
@@ -54,6 +56,14 @@
     try add(
       captures.appending(path: name + ".png"), as: name.replacingOccurrences(of: "/", with: "-") + ".png", boxes: boxes)
   }
+  for folder in outside {
+    for url in try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+    where url.pathExtension == "jpg" {
+      let labels = url.deletingPathExtension().appendingPathExtension("tiles.json")
+      let boxes = try (JSONSerialization.jsonObject(with: Data(contentsOf: labels)) as! [[String: Any]]).map(frame)
+      try add(url, as: folder.lastPathComponent + "-" + url.lastPathComponent, boxes: boxes)
+    }
+  }
   let annotationFile = training.appending(path: "annotations.json")
   try JSONSerialization.data(withJSONObject: annotations).write(to: annotationFile)
   print("training on", annotations.count, "captures,", annotations.reduce(0) { $0 + ($1["annotations"] as! [Any]).count }, "tiles")
@@ -64,7 +74,10 @@
     trainingData: .directoryWithImages(at: training, annotationFile: annotationFile),
     annotationType: .boundingBox(units: .pixel, origin: .topLeft, anchor: .topLeft),
     parameters: .init(validation: .none, algorithm: .transferLearning(.objectPrint(revision: 1))),
-    sessionParameters: .init(sessionDirectory: training.appending(path: "session"), reportInterval: 10, checkpointInterval: 50))
+    // ITERATIONS (default 1000, Create ML's own) for more data than ours alone.
+    sessionParameters: .init(
+      sessionDirectory: training.appending(path: "session"), reportInterval: 10, checkpointInterval: 50,
+      iterations: Int(ProcessInfo.processInfo.environment["ITERATIONS"] ?? "") ?? 1000))
   nonisolated(unsafe) var result: Result<MLObjectDetector, Error>?
   nonisolated(unsafe) var checkpoint: MLCheckpoint?
   let subscriptions = [

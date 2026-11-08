@@ -4,7 +4,8 @@
 DerivedData/
 .DS_Store
 Captures/
-Bootstrap/
 Timing/
+Outside/
+tmp/
 xcuserdata/
 *.xcodeproj/project.xcworkspace/

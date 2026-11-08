@@ -78,6 +78,13 @@ What's next is in `TODO.md`.
     before `make upload`; `make watch` runs it. Vision's text recognition, so tile numerals and key legends don't
     count. On the first 101 captures it flagged 8: a Messages thread, this project's own chat on a laptop, a
     business card, game boxes.
+  - Outside data goes in `Outside/`, which git ignores, and only under licenses a closed app can ship: CC0, CC BY
+    (credited), MIT, Apache. `outside.py` converts [sverrela/rummikub](https://www.kaggle.com/datasets/sverrela/rummikub)
+    (Kaggle, CC0; from arXiv 2411.18172, KU Leuven): 382 phone photos of melds, 4,434 tiles boxed with value and
+    color, 378 of them jokers. Download it by hand (it needs a Kaggle account), unzip into `Outside/sverrela`, then
+    `uv run Labeler/outside.py Outside/sverrela Outside/sverrela-train`; `make train` adds every `Outside/*-train`.
+    Not christophrus/rummikub, which is GPL-3.0. Roboflow Universe has CC BY 4.0 sets too (rummikub-3gqr9, 386
+    top-down melds; arthurvanmeerbeeck, 538), which need a Roboflow account to export.
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
   times a second; `Game` reads them, drops readings outside every box `Finder` sees (`Tiles.mlmodel`), keeps the table and rack, solves, and tracks the step shown; `ContentView`

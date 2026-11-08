@@ -162,7 +162,10 @@ Scores, on the Mac and in the Simulator:
    - Data: 75 captures boxed by 2026-11-07, but most are full sets from two sessions at one table. Learning curve
      (`QUARTERS`) on the 581 held-out tiles: a quarter found 392 (67%) with 274 extras, half 446 (77%) with 194,
      three quarters 446 with 201, all 477 (82%) with 124. Still rising, so more captures pay off; varied ones most:
-     real games, racks, other surfaces, light and angles. The app ships the model trained on all of them.
+     real games, racks, other surfaces, light and angles.
+   - With sverrela's CC0 Kaggle set (382 photos, 4,434 tiles) too: 468 with 88 extras at Create ML's 1,000
+     iterations, 486 (84%) with 106 at 3,000, against 477 with 124 on ours alone. Repeat runs move about ten tiles,
+     so it's a modest gain. The app ships the 3,000-iteration model (2026-11-07).
    - On 12 game captures (220 tiles, values written by hand, tilted 31–77°) the reader got 58 right, missed 106 and
      misread 55, many at the wrong quarter turn. Finding numerals at an angle is the gap, not reading them. A value
      classifier given the true box, turned upright, got 177; it mostly reads 6 as 5. Next: finder boxes plus the

@@ -174,6 +174,8 @@ struct ContentView: View {
         }
       } label: {
         Label(game.layout.rawValue, systemImage: game.layout.icon).labelStyle(.iconOnly)
+          .frame(minWidth: 44, minHeight: 44)
+          .contentShape(.rect)
       }
       // The accessory stays behind the keyboard, so notes are typed in an alert, which rises above it.
       Button { editingNotes = true } label: {

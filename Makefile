@@ -55,9 +55,10 @@ labels:
 	uv run Labeler/prelabel.py
 	uv run Labeler/server.py
 
-# Trains the tile finder on captures whose boxes are done, gives the app the model, and scores it.
+# Trains the tile finder on captures whose boxes are done and the outside sets, gives the app the model, and scores
+# it. Three times Create ML's default iterations, since the outside set quadruples the data.
 train:
-	cd RummikubKit && swift run -c release train ../$(dir)
+	cd RummikubKit && ITERATIONS=3000 swift run -c release train ../$(dir) $(addprefix ../,$(wildcard Outside/*-train))
 	cp $(dir)/Tiles.mlmodel Rummikub/
 	$(MAKE) score
 

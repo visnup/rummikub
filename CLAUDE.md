@@ -71,7 +71,7 @@ What's next is in `TODO.md`.
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - The app pushes each capture to `server.py` (`PUT /api/capture/<file>`, notes before the photo), which keeps one
     already there or in `.removed` and moves "As read" ones to `unlabeled/`. It retries what didn't get through on
-    the next capture or launch (`Sync.swift`, `Documents/.sent`); the Mac is `box.local`, and the server listens on
+    the next capture or launch (`Sync.swift`, `Documents/.sent`); the Mac is `box.localdomain`, which also resolves over the phone's VPN, and the server listens on
     the local network for it. `make captures` still copies by cable.
   - `words` flags captures with readable words, a line of three or more, into `Captures/review.txt` for a look
     before `make upload`; `make watch` runs it. Vision's text recognition, so tile numerals and key legends don't

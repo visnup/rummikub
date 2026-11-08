@@ -15,6 +15,8 @@ struct ContentView: View {
   @State private var topInset: CGFloat = 0
   @State private var editingNotes = false
   @State private var zoom = 1.0
+  @State private var unsent: Int?
+  @Environment(\.scenePhase) private var scenePhase
 
   var body: some View {
     // Tab content is opaque, so each tab draws the camera behind itself; only the selected one, since a session
@@ -39,7 +41,10 @@ struct ContentView: View {
           .safeAreaBar(edge: .top) {
             HStack {
               if let tilt = game.tilt { Text("\(Int(tilt))°") }
-              if saved > 0 { Text("\(saved) saved") }
+              // Captures not yet on the Mac, or a check once they all are.
+              if let unsent {
+                if unsent > 0 { Label("\(unsent)", systemImage: "arrow.up.circle") } else { Image(systemName: "checkmark.circle") }
+              }
               Text("\(Int(game.readTime / .milliseconds(1))) / \(Int(game.findTime / .milliseconds(1))) ms")
             }
             .font(.caption.monospacedDigit())
@@ -78,12 +83,13 @@ struct ContentView: View {
     // The system's place for a row of controls: above the tab bar, or level with it where the tab bar is at the side.
     .tabViewBottomAccessory(isEnabled: tab == 0 && !pressing) { capture }
     .sensoryFeedback(.success, trigger: saved)
+    .onChange(of: scenePhase) { if scenePhase == .active { send() } }
     .task(id: saved) {
       try? await Task.sleep(for: .seconds(1.5))
       justSaved = false
     }
     .task {
-      Task { await Sync.push() }
+      send()
       live = await camera.start()
       if live {
         zoom = camera.zooms[0]
@@ -148,11 +154,16 @@ struct ContentView: View {
     .pickerStyle(.segmented)
   }
 
+  /// Pushes captures to the Mac; one already under way keeps the count.
+  func send() {
+    Task { if let left = await Sync.push() { unsent = left } }
+  }
+
   func shoot() {
     game.capture(camera: camera.settings)
     saved += 1
     justSaved = true
-    Task { await Sync.push() }
+    send()
   }
 
   var capture: some View {

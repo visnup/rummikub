@@ -87,8 +87,6 @@ import UniformTypeIdentifiers
   var choice = 0
   /// The step shown, or nil before starting a play. While stepping, new readings don't re-solve.
   var step: Int?
-  /// A reading that differs from `scene`, kept until a second frame agrees with it.
-  private var pending: Scene?
   /// Every frame's timing, a file a launch in Documents/timing, for `make timing`.
   private let timing: FileHandle? = {
     let directory = URL.documentsDirectory.appending(path: "timing")
@@ -134,49 +132,85 @@ import UniformTypeIdentifiers
     _ = try? timing?.seekToEnd()
     try? timing?.write(contentsOf: Data(
       "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(found.count),\(boxes?.count ?? -1)\n".utf8))
+    let part = looking
+    readings[part] = Array(((readings[part] ?? []) + [part == .rack ? onRack(found) : found]).suffix(5))
+    let voted = vote(readings[part]!)
     var next = scene
-    if looking == .table {
-      next.table = Recognizer.melds(found)
+    if part == .table {
+      next.table = Recognizer.melds(voted)
     } else {
-      next.rack = rack(found)
+      next.rack = voted
     }
-    if let play, let step, looking == .table {
+
+    if let play, let step, part == .table {
       let done = play.stepsDone(next.tableTiles, from: scene.tableTiles)
       if done == play.steps.count {
+        // The play is on the table: take the table as it now reads, and the rack without what came from it.
+        let used = Set(play.steps.compactMap { if case .rack(let i) = $0.from { i } else { nil } })
+        scene = Scene(table: next.table, rack: scene.rack.indices.filter { !used.contains($0) }.map { scene.rack[$0] })
         self.step = nil
+        await solve()
       } else if done > step {
         self.step = done
       }
+      return
     }
-    if next.reads(like: scene) {
-      // Frames follow the tiles as the camera moves, even mid-play.
+
+    let same = next.tiles(part) == scene.tiles(part)
+    if same {
+      changedSince[part] = nil
+      // Frames follow the tiles as the camera moves, but a reordering would break a play's indices.
+      if next.reads(like: scene) { scene = next }
+      let since = steadySince[part] ?? .now
+      steadySince[part] = since
+      if !locked.contains(part), Date.now.timeIntervalSince(since) >= 2,
+        part == .table || !voted.isEmpty
+      {
+        locked.insert(part)
+        await solve()
+      }
+    } else if locked.contains(part) {
+      changedSince[part] = changedSince[part] ?? .now
+    } else {
       scene = next
-    } else if step == nil, let pending, next.reads(like: pending) {
-      scene = next
-      self.pending = nil
-      await solve()
-    } else if step == nil {
-      pending = next
+      steadySince[part] = .now
     }
   }
 
-  /// The last few frames' rack readings, newest last.
-  private var racks = [[Detection]]()
+  /// Each part's last few frames' readings, newest last.
+  private var readings = [Looking: [[Detection]]]()
+  /// When each part's reading last changed while scanning.
+  private var steadySince = [Looking: Date]()
+  /// When a locked part's reading started disagreeing with it.
+  private var changedSince = [Looking: Date]()
+  /// The parts whose reading has held for two seconds; frames no longer change them, until `rescan`.
+  var locked = Set<Looking>()
 
-  /// The rack by vote over the last five frames: each tile as many times as the median frame read it. Waiting for two
-  /// frames to agree exactly never settled, since a frame often misses or misreads a tile or two of 14. Tiles under a
-  /// third of the tallest one's height are the table behind it: in rack captures those were 18–37 px tall, and the rack's
-  /// 52 and up, but for one mostly hidden behind another. And the rack's two rows lie within a tile or so of its five
-  /// tallest tiles, so anything farther above or below is something else.
-  private func rack(_ found: [Detection]) -> [Detection] {
-    racks = Array((racks + [onRack(found)]).suffix(5))
-    return Set(racks.joined().map(\.tile)).sorted { $0.description < $1.description }.flatMap { tile in
-      let counts = racks.map { $0.count { $0.tile == tile } }.sorted()
+  /// Whether a locked part has read differently for three seconds, as after someone's turn.
+  func changed(_ part: Looking) -> Bool { changedSince[part].map { Date.now.timeIntervalSince($0) >= 3 } ?? false }
+
+  /// Scans a part again, from scratch.
+  func rescan(_ part: Looking) {
+    locked.remove(part)
+    readings[part] = nil
+    changedSince[part] = nil
+    steadySince[part] = .now
+  }
+
+  /// Readings by vote: each tile as many times as the median frame read it, since a frame often misses or misreads a
+  /// tile or two of 14, and two frames rarely agree exactly.
+  private func vote(_ readings: [[Detection]]) -> [Detection] {
+    Set(readings.joined().map(\.tile)).sorted { $0.description < $1.description }.flatMap { tile in
+      let counts = readings.map { $0.count { $0.tile == tile } }.sorted()
       let copies = counts[counts.count / 2]
-      let seen = racks.last { $0.count { $0.tile == tile } >= copies } ?? []
+      let seen = readings.last { $0.count { $0.tile == tile } >= copies } ?? []
       return seen.filter { $0.tile == tile }.prefix(copies)
     }
   }
+
+  /// The rack's tiles. Tiles under a third of the tallest one's height are the table behind it: in rack captures those
+  /// were 18–37 px tall, and the rack's 52 and up, but for one mostly hidden behind another. And the rack's two rows
+  /// lie within a tile or so of its five tallest tiles, so anything farther above or below is something else.
 
   private func onRack(_ found: [Detection]) -> [Detection] {
     let tall = found.sorted { $0.frame.height > $1.frame.height }.prefix(5)
@@ -266,4 +300,9 @@ private func finite(_ value: Any) -> Any {
 
 extension Scene {
   func reads(like other: Scene) -> Bool { tableTiles == other.tableTiles && rackTiles == other.rackTiles }
+
+  /// A part's tiles in no order.
+  func tiles(_ part: Game.Looking) -> [String] {
+    (part == .table ? tableTiles.flatMap { $0 } : rackTiles).map(\.description).sorted()
+  }
 }

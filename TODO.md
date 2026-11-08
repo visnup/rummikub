@@ -215,6 +215,12 @@ heuristic for an early incumbent, or cuts.
   rack.
 - New melds go in a row under the table, which may be off screen or on top of the rack.
 - A flat diagram of the finished table for plays that rebuild most of it (see "Design" in `CLAUDE.md`).
+- A big table read across a slow pan, not one frame. It needs to know a tile seen in two frames is one tile, by its
+  place on the table, since there are two of each. ARKit world tracking would give each detection a fixed point on
+  the table plane (a raycast from the camera pose), and keep a play's arrows pinned as the phone moves. It means
+  moving the camera from AVCaptureSession to an ARSession: check first whether ARKit's video formats include the
+  ultra wide, else a whole table takes more panning. Stitching frames by `Scene.following`'s shift and scale needs
+  no ARKit but drifts, and breaks when the angle changes mid-pan.
 
 ## Rules not handled yet
 

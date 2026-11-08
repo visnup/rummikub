@@ -130,15 +130,25 @@ key = hashlib.sha256("".join(sorted(done)).encode() + b"".join(
     (captures / f"{name}.tiles.json").read_bytes() for name in sorted(done))).hexdigest()
 cache = captures / ".probe.pt"
 saved = torch.load(cache) if cache.exists() else {}
-if saved.get("key") == key:
-    probe = torch.nn.Linear(saved["state"]["weight"].shape[1], 1).to(device)
-    probe.load_state_dict(saved["state"])
-else:
+
+
+def retrain():
     probe = train(*examples())
     positives, negatives = examples(probe)
     print("learning from", len(positives), "tiles and", len(negatives), "others in", len(done), "captures", flush=True)
     probe = train(positives, negatives)
     torch.save({"key": key, "state": probe.state_dict()}, cache)
+    return probe
+
+
+# With --new, a stale probe boxes the new captures first and is retrained after: retraining takes minutes, and
+# captures pushed meanwhile waited on it.
+stale = saved.get("key") != key
+if saved and (not stale or new_only):
+    probe = torch.nn.Linear(saved["state"]["weight"].shape[1], 1).to(device)
+    probe.load_state_dict(saved["state"])
+else:
+    probe, stale = retrain(), False
 
 
 @torch.no_grad()
@@ -178,3 +188,5 @@ for png in todo:
     merged += [t for t in unmatched if t.get("confirmed") and not any(iou(t["frame"], b) > 0 for b, _ in found)]
     (captures / f"{name}.tiles.json").write_text(json.dumps(merged, indent=2, sort_keys=True))
     print(name, len(current), "→", len(merged), "boxes", flush=True)
+if stale:
+    retrain()

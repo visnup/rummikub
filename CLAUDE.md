@@ -74,7 +74,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     in `.claude/launch.json`).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
     round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet, and the probe is
-    cached in `Captures/.probe.pt` until the done captures' boxes change. `make watch` runs it every 30 s while
+    cached in `Captures/.probe.pt` until the done captures' boxes change; with `--new` a stale one boxes the new
+    captures first and is retrained after. `make watch` runs it every 30 s while
     capturing, beside `make labels`, which takes the app's pushes. A second probe pass learns from the patches the first wrongly calls tiles, but
     keyboard keys still get boxed: the done captures rarely show one. It's OWLv2, frozen, run on the same overlapping crops as
     `Finder`, with a linear probe trained on the done captures' boxes; patches that fit a tile badly are its
@@ -119,9 +120,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   (`Values` or `RackValues`), or falls back to the reader without the models, keeps the table and rack, solves, and
   tracks the step shown; `ContentView`
   draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table
-  and rack as text once two frames agree. A reading only replaces the last one once two frames in a row agree, so a missed
-  tile doesn't re-solve. The rack is first voted over the last five frames (each tile as often as the median frame
-  read it), since two frames rarely read all of a rack alike. While a play is being shown, readings don't re-solve; they advance the step instead
+  and rack as text once two frames agree. The table and rack are each voted over their last five frames (each tile as often as the median frame read it),
+  and lock once the vote holds for two seconds: then frames stop changing them and the plays are solved once. A locked
+  part that reads differently for three seconds shows "changed?"; its chip in the Solver panel scans it again. While a play is being shown, readings don't re-solve; they advance the step instead
   (`Play.stepsDone`). The simulator never uses a camera: it reads a fixture photo of whichever the Table/Rack switch says
   (`Demo`), straight off the Mac's disk. On the phone, Table/Rack follows `RackOrTable` when it's .8 sure, or
   without it the tilt from CoreMotion (`Game.tilt`), shown in degrees in the top pill and written into each capture.

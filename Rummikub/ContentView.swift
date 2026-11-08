@@ -76,7 +76,11 @@ struct ContentView: View {
           }
       }
       Tab("Solver", systemImage: "square.grid.3x3.fill", value: 1) {
-        panel { solver }.background { if tab == 1 { preview } }
+        panel { solver }
+          .safeAreaBar(edge: .top) {
+            looking.fixedSize().padding(4).glassEffect().padding(.top, topInset == 0 ? 8 : 0)
+          }
+          .background { if tab == 1 { preview } }
       }
     }
     // The system's place for a row of controls: above the tab bar, or level with it where the tab bar is at the side.
@@ -205,7 +209,18 @@ struct ContentView: View {
       }
       .buttonStyle(.bordered)
     } else {
-      looking
+      HStack {
+        chip(.table, count: game.scene.tableTiles.joined().count)
+        chip(.rack, count: game.scene.rack.count)
+      }
+      VStack(alignment: .leading, spacing: 4) {
+        game.scene.tableTiles.enumerated().reduce(Text("")) { text, meld in
+          Text("\(text)\(meld.offset == 0 ? "" : "  ·  ")\(numbers(meld.element))")
+        }
+        numbers(game.scene.rackTiles)
+      }
+      .font(.callout.bold().monospacedDigit())
+      .frame(maxWidth: .infinity, alignment: .leading)
       ForEach(Array(game.plays.enumerated()), id: \.offset) { i, play in
         Button {
           game.choice = i
@@ -218,6 +233,38 @@ struct ContentView: View {
         .disabled(play.placed == 0)
       }
     }
+  }
+
+  /// Tiles as their numbers in their colors, black as the text color so it shows on dark glass.
+  func numbers(_ tiles: [Tile]) -> Text {
+    tiles.enumerated().reduce(Text("")) { text, tile in
+      let number = Text(tile.element.value.map(String.init) ?? "☺")
+        .foregroundStyle(tile.element.color == .black ? .primary : Overlay.color(tile.element))
+      return Text("\(text)\(tile.offset == 0 ? "" : " ")\(number)")
+    }
+  }
+
+  /// A part's state: scanning, locked, or locked but reading differently; tapping scans it again.
+  func chip(_ part: Game.Looking, count: Int) -> some View {
+    Button {
+      game.rescan(part)
+    } label: {
+      HStack(spacing: 6) {
+        if !game.locked.contains(part) {
+          ProgressView().controlSize(.mini)
+        } else if game.changed(part) {
+          Image(systemName: "exclamationmark.arrow.circlepath")
+        } else {
+          Image(systemName: "checkmark.circle.fill")
+        }
+        Text("\(part.rawValue.capitalized) \(count)").monospacedDigit()
+        if game.changed(part) { Text("changed?") }
+      }
+      .font(.caption.bold())
+      .frame(maxWidth: .infinity)
+    }
+    .buttonStyle(.bordered)
+    .tint(game.changed(part) ? .orange : game.locked.contains(part) ? .green : .secondary)
   }
 
   func source(_ source: Play.Source) -> String {
@@ -279,7 +326,7 @@ struct Overlay: View {
         context.stroke(Path(roundedRect: rect, cornerRadius: 4), with: .color(.white.opacity(0.4)))
         let label = context.resolve(
           Text(detection.tile.value.map(String.init) ?? "☺").font(.system(size: max(12, rect.width * 0.35), weight: .bold))
-            .foregroundStyle(color(detection.tile)))
+            .foregroundStyle(Self.color(detection.tile)))
         let size = label.measure(in: rect.size)
         let chip = CGRect(x: rect.midX - size.width / 2 - 4, y: rect.minY - size.height - 4, width: size.width + 8,
           height: size.height + 2)
@@ -298,7 +345,7 @@ struct Overlay: View {
             style: StrokeStyle(lineWidth: 4, dash: [8, 5]))
           context.draw(
             Text(tile == .joker ? "☺" : "\(tile.value!)").font(.system(size: rect.height * 0.4, weight: .bold))
-              .foregroundStyle(color(tile)),
+              .foregroundStyle(Self.color(tile)),
             at: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.4))
         case .arrow(let from, let to):
           let from = fit(from), to = fit(to)
@@ -319,7 +366,7 @@ struct Overlay: View {
     .allowsHitTesting(false)
   }
 
-  func color(_ tile: Tile) -> Color {
+  static func color(_ tile: Tile) -> Color {
     switch tile.color {
     case .black: .black
     case .blue: .blue

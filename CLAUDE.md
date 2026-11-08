@@ -27,7 +27,7 @@ What's next is in `TODO.md`.
     text recognition skips lone digits, both rendered and photographed, so it isn't used.
   - `Finder.swift`: finds tiles, not values, with the detector `train` makes, through Vision. It runs on the whole
     image and on overlapping crops half its short side, since small tiles are missed whole; a box cut by a crop's
-    edge is left to the neighboring crop. It keeps boxes over .9 confidence and drops any that overlap a kept one.
+    edge is left to the neighboring crop. It keeps boxes over .9 confidence and drops any that overlap a kept one by over a tenth (IoU).
     On the Simulator the model must run on the CPU, or Vision can't create an inference context.
   - `Overlay.swift`: what to draw for each step of a play over the image: the tile to pick up, its target slot as a
     ghost, and an arrow.
@@ -70,9 +70,10 @@ What's next is in `TODO.md`.
   - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - The app pushes each capture to `server.py` (`PUT /api/capture/<file>`, notes before the photo), which keeps one
-    already there or in `.removed` and moves "As read" ones to `unlabeled/`. It retries what didn't get through on
-    the next capture or launch (`Sync.swift`, `Documents/.sent`); the Mac is `box.localdomain`, which also resolves over the phone's VPN, and the server listens on
-    the local network for it. `make captures` still copies by cable.
+    already there or in `.removed` and moves "As read" ones to `unlabeled/`. The phone deletes each file once the
+    server has it, so Documents holds only what hasn't gone; that's retried on the next capture, launch or return to
+    the app (`Sync.swift`). The Mac is `box.localdomain`, which also resolves over the phone's VPN, and the server
+    listens on the local network for it. `make captures` still copies by cable.
   - `words` flags captures with readable words, a line of three or more, into `Captures/review.txt` for a look
     before `make upload`; `make watch` runs it. Vision's text recognition, so tile numerals and key legends don't
     count. On the first 101 captures it flagged 8: a Messages thread, this project's own chat on a laptop, a
@@ -139,17 +140,17 @@ reaches the table between rendered tiles.
 - Real photos: the two samples from rummikubsolver.com (a top-down board on wood, and a rack at a low angle) are not
   in the repo, since the site has no license; download them again from its sample images if needed. Their results
   are in `TODO.md`.
-- Captures from the phone: the app's shutter button saves three files to its Documents:
+- Captures from the phone: each capture saves three files to the app's Documents, and pushes them to the labeler:
   - `<ISO time>.png`. PNG, so a fixture holds the pixels the phone read; the first seven were JPEG, converted to PNG
     on the Mac.
   - `<ISO time>.txt`: what it was looking at and the tilt, then the truth, one meld per line. The truth is what was
     read, unless the Layout picker names a known layout.
   - `<ISO time>.json`: the layout, notes, gravity, camera settings, read time and every detection's box.
 
-  `make captures` copies the new ones into `Captures/`, which git ignores since they're hundreds of MB. It copies
-  one file at a time, since `devicectl device copy from` with `--source Documents` copies nothing. Captures whose
-  truth isn't written yet go in `Captures/unlabeled/`; `make captures` moves new "As read" ones there itself. It
-  skips the per-frame timing logs, which `make timing` pulls into `Timing/`. `make upload` sends them to the Hugging Face dataset
+  They land in `Captures/`, which git ignores since they're hundreds of MB. By cable, `make captures` copies them
+  one file at a time, since `devicectl device copy from` with `--source Documents` copies nothing, and skips the
+  per-frame timing logs, which `make timing` pulls into `Timing/`. Captures whose truth isn't written yet go in
+  `Captures/unlabeled/`; both paths move new "As read" ones there. `make upload` sends them to the Hugging Face dataset
   `visnup/rummikub-captures`, private for now and meant to go public. So before uploading, drop any capture that
   shows readable personal text, like messages on a screen; a screen in frame is fine otherwise.
   `Captures/README.md` is the dataset's card. `CAPTURES=$PWD/../Captures swift test --filter readsCaptures`,

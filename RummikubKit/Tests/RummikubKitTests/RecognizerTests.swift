@@ -18,7 +18,7 @@ func save(_ image: CGImage, _ name: String) {
 @Test(arguments: [CGSize(width: 1200, height: 900), CGSize(width: 804, height: 1748)])
 func readsRenderedTable(size: CGSize) {
   let table = melds("r1 r2 r3 r4, b5 b6 b7, j k4 k5, o5 o6 o7 o8, k1 b1 o1, r9 b9 o9, k10 k11 k12 k13, r13 b13 k13 o13")
-  let (image, _) = Render.table(table, width: Int(size.width), height: Int(size.height))
+  let image = Render.table(table, width: Int(size.width), height: Int(size.height))
   save(image, "table\(Int(size.width))")
   let read = Recognizer.melds(Recognizer.tiles(in: image)).map { $0.map(\.tile) }
   #expect(read == table)
@@ -31,7 +31,7 @@ func readsRenderedTable(size: CGSize) {
     let tiles = (1...13).map { Tile.number(.black, $0) } + [.joker]
     var references = [(label: Int, glyph: Glyph)]()
     for font in ["Helvetica-Bold", "Arial-BoldMT", "Futura-Bold", "AvenirNext-Heavy", "Verdana-Bold"] {
-      let pixels = Pixels(Render.table([tiles], height: 300, font: font).image)
+      let pixels = Pixels(Render.table([tiles], height: 300, font: font))
       for (tile, numeral) in zip(tiles, pixels.numerals().sorted { $0.box.minX < $1.box.minX }) {
         references.append((tile.value ?? 0, pixels.glyph(in: numeral.box)!))
         for (digit, part) in zip(String(tile.value ?? 0), numeral.digits) where tile.value != nil {
@@ -85,7 +85,7 @@ func tiles(_ counts: Counts) -> [Tile] {
 
 @Test func liftsSlotsThatCoverAnotherMeld() throws {
   let table = melds("k1 k2 k3, b9 b10 b11")
-  let (image, _) = Render.table(table)
+  let image = Render.table(table)
   let scene = Scene(table: Recognizer.melds(Recognizer.tiles(in: image)), rack: [])
   let play = try #require(solve(table: scene.tableTiles, rack: Tile.parse("k4")).last)
   let k4 = play.slots(in: scene)[0][3]
@@ -95,8 +95,8 @@ func tiles(_ counts: Counts) -> [Tile] {
 
 @Test func followsTheCamera() {
   let table = melds("r3 r4 r5 r6, k1 k2 k3, b9 b10 b11, o12 r12 b12")
-  let before = Scene(table: Recognizer.melds(Recognizer.tiles(in: Render.table(table).image)), rack: [])
-  let after = Recognizer.tiles(in: Render.table(table, top: 130).image)
+  let before = Scene(table: Recognizer.melds(Recognizer.tiles(in: Render.table(table))), rack: [])
+  let after = Recognizer.tiles(in: Render.table(table, top: 130))
   let moved = before.following(after).table.joined().map(\.frame)
   let expected = Recognizer.melds(after).joined().map(\.frame)
   #expect(zip(moved, expected).allSatisfy { abs($0.midX - $1.midX) < 2 && abs($0.midY - $1.midY) < 2 })
@@ -105,7 +105,7 @@ func tiles(_ counts: Counts) -> [Tile] {
 @Test func walksThroughSteps() throws {
   let table = melds("r3 r4 r5 r6, k1 k2 k3, b9 b10 b11, o12 r12 b12")
   let rack = Tile.parse("b6 k6 k4 o5 b13 o9 j")
-  let (image, _) = Render.table(table, rack: rack)
+  let image = Render.table(table, rack: rack)
   let scene = Scene(Recognizer.tiles(in: image), rackY: CGFloat(image.height) - 150)
   #expect(scene.tableTiles == table)
   #expect(scene.rackTiles == rack)

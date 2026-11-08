@@ -41,7 +41,6 @@ struct ContentView: View {
           .safeAreaBar(edge: .top) {
             HStack {
               if let tilt = game.tilt { Text("\(Int(tilt))°") }
-              // Captures not yet on the Mac, or a check once they all are.
               if let unsent {
                 if unsent > 0 { Label("\(unsent)", systemImage: "arrow.up.circle") } else { Image(systemName: "checkmark.circle") }
               }

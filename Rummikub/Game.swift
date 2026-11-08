@@ -83,7 +83,7 @@ import UniformTypeIdentifiers
     }.value
     async let finding = Task.detached {
       var boxes: [CGRect]?
-      let time = ContinuousClock().measure { boxes = try? finder?.tiles(in: image).map(\.box) }
+      let time = ContinuousClock().measure { boxes = try? finder?.tiles(in: image) }
       return (boxes, time)
     }.value
     let ((read, time), (boxes, findTime)) = await (reading, finding)

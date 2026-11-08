@@ -3,8 +3,7 @@
 # dependencies = ["transformers", "torch", "pillow", "scipy"]
 # ///
 """Draws boxes on every capture not yet edited by hand, with OWLv2 and a linear probe trained on the done captures'
-boxes: uv run Labeler/prelabel.py [--new]. On the held-out captures it found 248 of 263 tiles with 14 extra boxes, where
-`train`'s detector found 199 with 110. Too big for the phone, so it only pre-labels.
+boxes: uv run Labeler/prelabel.py [--new]. Too big for the phone, so it only pre-labels.
 
 A box takes the value of the tile already there it overlaps most; confirmed tiles stay where no box overlaps them."""
 
@@ -24,21 +23,21 @@ threshold = 0.8
 new_only = "--new" in sys.argv
 
 
+def shared(a, b):
+    w = max(0, min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0]))
+    h = max(0, min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1]))
+    return w * h
+
+
 def iou(a, b):
-    ax, ay, aw, ah = a
-    bx, by, bw, bh = b
-    w = max(0, min(ax + aw, bx + bw) - max(ax, bx))
-    h = max(0, min(ay + ah, by + bh) - max(ay, by))
-    i = w * h
-    return i / (aw * ah + bw * bh - i) if i else 0
+    i = shared(a, b)
+    return i / (a[2] * a[3] + b[2] * b[3] - i) if i else 0
 
 
 def contained(a, b):
     """How much of the smaller box lies in the other: a numeral's box inside its tile's has a low IoU but a high
     overlap here."""
-    w = max(0, min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0]))
-    h = max(0, min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1]))
-    return w * h / min(a[2] * a[3], b[2] * b[3])
+    return shared(a, b) / min(a[2] * a[3], b[2] * b[3])
 
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"

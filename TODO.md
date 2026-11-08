@@ -9,7 +9,8 @@ another (`ARCHIVE.md`).
 
 Reading is five stages, each scored on its own and replaceable without touching the others:
 
-1. **Find** each tile's box. Today: numerals from ink blobs ringed by face. Next: a learned detector.
+1. **Find** each tile's box. Today: numerals from ink blobs ringed by face, kept only inside a learned detector's
+   boxes. Next: the detector's boxes alone.
 2. **Normalize** each tile into an upright crop of one size, at any angle including upside down. Create ML's
    object detector gives axis-aligned boxes with no angle (from memory, unchecked), so orientation belongs here.
 3. **Read** value and color from the crop: glyph matching against references cut from real tiles, and a Core ML
@@ -36,7 +37,7 @@ Each capture saves `<time>.png`, `<time>.txt` (what it looked at with the tilt, 
 - the read time;
 - every detection with its box.
 
-Pick the layout before shooting and type the scene into notes; `make captures` copies new ones into `Captures/`.
+Pick the layout before shooting and type the scene into notes; the app pushes each one to `Captures/`.
 
 ### Captures
 
@@ -124,7 +125,8 @@ Scores, on the Mac and in the Simulator:
 - detection precision and recall;
 - read accuracy on correct boxes;
 - end-to-end misses plus extras (`readsCaptures`);
-- the phone's milliseconds per frame, which show on screen and go into each capture's first line.
+- the phone's milliseconds per frame, which show on screen, go into each capture's JSON and every frame's into
+  `make timing`'s logs.
 
 ### Order
 
@@ -148,14 +150,12 @@ Scores, on the Mac and in the Simulator:
    - Next: references from the confirmed tiles, scored against the font ones.
 4. **The detector**: Create ML object detection on real and synthetic scenes, run through Vision. It replaces
    numeral-finding, and with it the false reads on printed text and the rack tray, and tiles joined in glare.
-   - In the app since 2026-11-07, filtering the reader: readings outside every box are dropped. On the fixtures
-     that's 59 wrong against 65 (bootstrap model). Its boxes show faintly, and its time shows beside the read time.
-   - Held-out score (every fifth done capture then): trained on whole photos it found 58%. On crops, half the short
-     side, it finds 92% with 44 extra boxes with the bootstrap set, 83% with 129 extra on ours alone (29 captures).
-     The app ships ours alone, since the bootstrap set is GPL.
+   - In the app since 2026-11-07, filtering the reader: readings outside every box are dropped. Its boxes show
+     faintly, and its time shows beside the read time. Trained on whole photos it found 58% of held-out tiles; on
+     crops, half the short side, 83% (29 captures). Earlier models are in `ARCHIVE.md`.
    - Since 2026-11-07 the held-out fifth is picked by a hash of the name, and `make score` scores it. With 39 done
      captures it found 269 of 369 held-out tiles (73%) with 131 extras; the set had grown to include a low-angle
-     shot. OWLv2 with a probe, now the pre-labeler, found 248 of 263 with 14 extras.
+     shot.
    - On the reader: against written truth, the held-out captures read 257 of 360 right with 61 extras, and the
      finder's filter barely changes that (255, 61). It drops false reads off the tiles, but most held-out errors
      are misread values on real tiles.

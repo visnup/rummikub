@@ -7,16 +7,22 @@
   // Scores the finder and the reader on the held-out captures whose boxes are done, which training never sees. A
   // tile is found when a box overlaps its true box by half. Reads with and without dropping readings outside the
   // finder's boxes, as the app does.
-  //   score <captures> [<model>]
+  //   score <captures>
   setvbuf(stdout, nil, _IOLBF, 0)
   let captures = URL(filePath: CommandLine.arguments[1])
-  let model = CommandLine.arguments.dropFirst(2).first.map { URL(filePath: $0) } ?? captures.appending(path: "Tiles.mlmodel")
-  let finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: model)))
+  let finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: captures.appending(path: "Tiles.mlmodel"))))
   let done = ((try? String(contentsOf: captures.appending(path: "boxed.txt"), encoding: .utf8)) ?? "")
     .split(separator: "\n").map(String.init)
 
   struct Score {
     var tiles = 0, found = 0, extraBoxes = 0, valued = 0, read = 0, filtered = 0, extraReads = 0, extraFiltered = 0
+
+    static func += (a: inout Score, b: Score) {
+      a = Score(
+        tiles: a.tiles + b.tiles, found: a.found + b.found, extraBoxes: a.extraBoxes + b.extraBoxes,
+        valued: a.valued + b.valued, read: a.read + b.read, filtered: a.filtered + b.filtered,
+        extraReads: a.extraReads + b.extraReads, extraFiltered: a.extraFiltered + b.extraFiltered)
+    }
   }
   var total = Score()
   print("capture", "found/tiles +extra", "read/valued +extra", "with finder +extra", separator: "\t")
@@ -28,7 +34,7 @@
       }
     let url = captures.appending(path: name + ".png")
     let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
-    let boxes = try finder.tiles(in: image).map(\.box)
+    let boxes = try finder.tiles(in: image)
     let readings = Recognizer.tiles(in: image)
     let filtered = readings.filter { d in boxes.contains { $0.intersects(d.frame) } }
 
@@ -63,14 +69,7 @@
     print(
       name, "\(s.found)/\(s.tiles) +\(s.extraBoxes)", "\(s.read)/\(s.valued) +\(s.extraReads)",
       "\(s.filtered)/\(s.valued) +\(s.extraFiltered)", separator: "\t")
-    total.tiles += s.tiles
-    total.found += s.found
-    total.extraBoxes += s.extraBoxes
-    total.valued += s.valued
-    total.read += s.read
-    total.filtered += s.filtered
-    total.extraReads += s.extraReads
-    total.extraFiltered += s.extraFiltered
+    total += s
   }
   print(
     "total", "\(total.found)/\(total.tiles) +\(total.extraBoxes)", "\(total.read)/\(total.valued) +\(total.extraReads)",

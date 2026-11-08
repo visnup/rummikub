@@ -4,16 +4,13 @@ import Foundation
 
 /// Draws tiles flat on a table, for testing recognition without a camera.
 public enum Render {
-  public static let tileSize = CGSize(width: 60, height: 84)
+  static let tileSize = CGSize(width: 60, height: 84)
 
-  /// Table melds in rows from `top` down, then the rack `bottom` up from the bottom edge. Returns the image and each
-  /// tile's frame in top-left-origin pixels, table tiles first in reading order, then the rack.
+  /// Table melds in rows from `top` down, then the rack `bottom` up from the bottom edge.
   public static func table(
     _ melds: [[Tile]], rack: [Tile] = [], width: Int = 1200, height: Int = 900, top: CGFloat = 30,
     bottom: CGFloat = 50, font: String = "Helvetica-Bold"
-  )
-    -> (image: CGImage, frames: [CGRect])
-  {
+  ) -> CGImage {
     let context = CGContext(
       data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
       space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -22,7 +19,6 @@ public enum Render {
     context.setFillColor(CGColor(srgbRed: 0.13, green: 0.35, blue: 0.22, alpha: 1))
     context.fill(CGRect(x: 0, y: 0, width: width, height: height))
 
-    var frames = [CGRect]()
     var origin = CGPoint(x: 30, y: top)
     let gap: CGFloat = 40
     for meld in melds {
@@ -33,7 +29,6 @@ public enum Render {
       for (i, tile) in meld.enumerated() {
         let frame = CGRect(origin: CGPoint(x: origin.x + CGFloat(i) * (tileSize.width + 2), y: origin.y), size: tileSize)
         draw(tile, in: frame, context: context, font: font)
-        frames.append(frame)
       }
       origin.x += meldWidth + gap
     }
@@ -43,9 +38,8 @@ public enum Render {
     for (i, tile) in rack.enumerated() {
       let frame = CGRect(origin: CGPoint(x: 30 + CGFloat(i) * (tileSize.width + 4), y: rackY), size: tileSize)
       draw(tile, in: frame, context: context, font: font)
-      frames.append(frame)
     }
-    return (context.makeImage()!, frames)
+    return context.makeImage()!
   }
 
   /// `image` with `marks` drawn over it.

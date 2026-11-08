@@ -12,8 +12,8 @@ public struct Finder: @unchecked Sendable {
   }
 
   /// Boxes in top-left-origin pixels, most confident first. A box cut by a crop's edge is left to the neighboring crop
-  /// it's whole in, and one that overlaps a more confident box at all is dropped.
-  public func tiles(in image: CGImage) throws -> [(box: CGRect, confidence: Float)] {
+  /// it's whole in, and one that overlaps a more confident box by over a tenth (IoU) is dropped.
+  public func tiles(in image: CGImage) throws -> [CGRect] {
     let (w, h) = (image.width, image.height)
     let whole = CGRect(x: 0, y: 0, width: w, height: h)
     let handler = VNImageRequestHandler(cgImage: image)
@@ -37,7 +37,7 @@ public struct Finder: @unchecked Sendable {
     where !kept.contains(where: { Self.overlap($0.box, f.box) > 0.1 }) {
       kept.append(f)
     }
-    return kept
+    return kept.map(\.box)
   }
 
   /// Squares half the short side, side by side or overlapping by half.

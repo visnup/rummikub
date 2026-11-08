@@ -38,7 +38,6 @@ def summary(png: Path) -> dict:
         "truth": truth(png),
         "boxes": len(tiles),
         "boxed": name in done(),
-        "confirmed": sum(1 for t in tiles if t.get("confirmed")),
     }
 
 

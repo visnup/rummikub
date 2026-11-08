@@ -22,16 +22,18 @@ public enum Recognizer {
       read(turns == 0 ? upright : upright.turned(turns)).map {
         Reading(
           detection: Detection(tile: $0.detection.tile, frame: upright.unturn($0.detection.frame, turns), turns: turns),
-          distance: $0.distance, turns: turns)
+          distance: $0.distance)
       }
     }
     // 1, 8 and 11 read the same upside down, and 6 and 9 as each other, so they don't say which way is up.
     let first = closest(found).filter { ![nil, 1, 6, 8, 9, 11].contains($0.detection.tile.value) }
     // Ties go to upright.
-    let usual = (0..<4).reversed().max { a, b in first.count { $0.turns == a } < first.count { $0.turns == b } }!
+    let usual = (0..<4).reversed().max { a, b in
+      first.count { $0.detection.turns == a } < first.count { $0.detection.turns == b }
+    }!
     // Other turns read only close matches, since four turns give non-tiles four chances to look like one.
     return closest(found.compactMap {
-      $0.turns == usual ? $0 : $0.distance > 0.3 ? nil : Reading(detection: $0.detection, distance: $0.distance + 0.1, turns: $0.turns)
+      $0.detection.turns == usual ? $0 : $0.distance > 0.3 ? nil : Reading(detection: $0.detection, distance: $0.distance + 0.1)
     })
       .map(\.detection)
   }
@@ -39,7 +41,6 @@ public enum Recognizer {
   struct Reading {
     let detection: Detection
     let distance: Float
-    var turns = 0
   }
 
   /// The closest matches whose tiles don't overlap.
@@ -83,7 +84,6 @@ public enum Recognizer {
       return Reading(detection: Detection(tile: .number(color, value), frame: frame(around: box, height: 0.3)), distance: distance)
     }
   }
-
 
   /// A tile around a numeral that takes up `height` of it, centered a bit above the middle.
   static func frame(around box: CGRect, height fraction: CGFloat) -> CGRect {
@@ -237,7 +237,7 @@ struct Pixels {
     var counts = [Int](repeating: 0, count: 20 * 20)
     for i in stride(from: 0, to: rgba.count, by: 4 * 7) {
       let high = Int(max(rgba[i], rgba[i + 1], rgba[i + 2])), low = Int(min(rgba[i], rgba[i + 1], rgba[i + 2]))
-      guard high > 127, high > 0 else { continue }
+      guard high > 127 else { continue }
       let s = Double(high - low) / Double(high), v = Double(high) / 255
       guard s < 0.4 else { continue }
       counts[Int(s * 50) * 20 + min(19, Int(v * 20))] += 1

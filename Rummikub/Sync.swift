@@ -9,14 +9,12 @@ enum Sync {
 
   /// Sends every capture file, photos last, so the labeler has a capture's notes when its photo arrives. Stops at the
   /// first failure, and returns how many captures are still to send.
-  @discardableResult static func push() async -> Int? {
+  static func push() async -> Int? {
     // Two pushes at once send the same files twice and each slows the other.
     guard !pushing else { return nil }
     pushing = true
     defer { pushing = false }
     let documents = URL.documentsDirectory
-    // From before files were deleted once sent.
-    try? FileManager.default.removeItem(at: documents.appending(path: ".sent"))
     let files = ((try? FileManager.default.contentsOfDirectory(atPath: documents.path)) ?? [])
       .filter { ["png", "txt", "json"].contains(($0 as NSString).pathExtension) }
       .sorted { ($0.hasSuffix(".png") ? 1 : 0, $0) < ($1.hasSuffix(".png") ? 1 : 0, $1) }

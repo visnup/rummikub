@@ -82,10 +82,16 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
 struct CameraPreview: UIViewRepresentable {
   let session: AVCaptureSession
 
+  /// One view, moved between the tabs: attaching the session to a new preview layer on every switch locked up the
+  /// app for a moment.
+  private static var shared: PreviewView?
+
   func makeUIView(context: Context) -> PreviewView {
+    if let view = Self.shared { return view }
     let view = PreviewView()
     view.preview.session = session
     view.preview.videoGravity = .resizeAspectFill
+    Self.shared = view
     return view
   }
 

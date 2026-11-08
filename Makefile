@@ -71,7 +71,7 @@ train:
 # the outside sets; RackValues for racks, upright, ours alone. Over Vision's feature prints, kept by crop in
 # `.crops/*.features`, so a rerun only reads new crops.
 values:
-	uv run Labeler/crops.py $(dir) $(dir)/.crops $(wildcard Outside/*-train)
+	uv run Labeler/crops.py $(dir) $(dir)/.crops $(wildcard Outside/*-train Outside/*-values)
 	cd RummikubKit && swift run -c release values ../$(dir)/.crops/any ../$(dir)/Values.mlmodel
 	cd RummikubKit && swift run -c release values ../$(dir)/.crops/upright ../$(dir)/RackValues.mlmodel
 	cp $(dir)/Values.mlmodel $(dir)/RackValues.mlmodel Rummikub/
@@ -90,4 +90,5 @@ score:
 # go public.
 upload:
 	uvx --from huggingface_hub hf upload visnup/rummikub-captures $(dir) . --repo-type dataset --exclude .files.json \
-	  --exclude .removed --exclude .DS_Store --exclude .probe.pt --exclude .words.txt --exclude review.txt
+	  --exclude .removed --exclude .DS_Store --exclude .probe.pt --exclude .words.txt --exclude review.txt \
+	  --exclude ".crops/*" --exclude ".scene/*" --exclude "*.mlmodel"

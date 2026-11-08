@@ -38,6 +38,7 @@ def summary(png: Path) -> dict:
         "truth": truth(png),
         "boxes": len(tiles),
         "boxed": name in done(),
+        "modified": png.stat().st_mtime,
     }
 
 

@@ -63,7 +63,7 @@ async function open(i) {
   selected = null; typed = ""; many.clear();
   image = new Image();
   image.onload = draw;
-  image.src = `/captures/${encodeURIComponent(c.name).replace("%2F", "/")}.png`;
+  image.src = `/captures/${encodeURIComponent(c.name).replace("%2F", "/")}.png?${c.modified}`;
   list();
 }
 

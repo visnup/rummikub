@@ -138,7 +138,7 @@ import UniformTypeIdentifiers
     if looking == .table {
       next.table = Recognizer.melds(found)
     } else {
-      next.rack = Recognizer.melds(found).flatMap { $0 }
+      next.rack = rack(found)
     }
     if let play, let step, looking == .table {
       let done = play.stepsDone(next.tableTiles, from: scene.tableTiles)
@@ -157,6 +157,43 @@ import UniformTypeIdentifiers
       await solve()
     } else if step == nil {
       pending = next
+    }
+  }
+
+  /// The last few frames' rack readings, newest last.
+  private var racks = [[Detection]]()
+
+  /// The rack by vote over the last five frames: each tile as many times as the median frame read it. Waiting for two
+  /// frames to agree exactly never settled, since a frame often misses or misreads a tile or two of 14. Tiles under a
+  /// third of the tallest one's height are the table behind it: in rack captures those were 18–37 px tall, and the rack's
+  /// 52 and up, but for one mostly hidden behind another. And the rack's two rows lie within a tile or so of its five
+  /// tallest tiles, so anything farther above or below is something else.
+  private func rack(_ found: [Detection]) -> [Detection] {
+    racks = Array((racks + [onRack(found)]).suffix(5))
+    return Set(racks.joined().map(\.tile)).sorted { $0.description < $1.description }.flatMap { tile in
+      let counts = racks.map { $0.count { $0.tile == tile } }.sorted()
+      let copies = counts[counts.count / 2]
+      let seen = racks.last { $0.count { $0.tile == tile } >= copies } ?? []
+      return seen.filter { $0.tile == tile }.prefix(copies)
+    }
+  }
+
+  private func onRack(_ found: [Detection]) -> [Detection] {
+    let tall = found.sorted { $0.frame.height > $1.frame.height }.prefix(5)
+    let tallest = tall.first?.frame.height ?? 0
+    let ys = tall.map(\.frame.midY).sorted()
+    let middle = ys.isEmpty ? 0 : ys[ys.count / 2]
+    return found.filter { $0.frame.height >= tallest / 3 && abs($0.frame.midY - middle) <= tallest * 1.5 }
+  }
+
+  /// What the last frame read that agrees with the settled table or rack, whichever is being looked at, so the
+  /// Solver labels only those.
+  var settled: [Detection] {
+    var left = looking == .table ? scene.tableTiles.flatMap { $0 } : scene.rackTiles
+    return (looking == .table ? detections : onRack(detections)).filter { detection in
+      guard let i = left.firstIndex(of: detection.tile) else { return false }
+      left.remove(at: i)
+      return true
     }
   }
 
@@ -183,7 +220,7 @@ import UniformTypeIdentifiers
         ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]]
       },
     ]
-    try? JSONSerialization.data(withJSONObject: info, options: [.prettyPrinted, .sortedKeys])
+    try? JSONSerialization.data(withJSONObject: finite(info), options: [.prettyPrinted, .sortedKeys])
       .write(to: base.appendingPathExtension("json"))
   }
 
@@ -212,6 +249,18 @@ import UniformTypeIdentifiers
       default: true
       }
     }
+  }
+}
+
+/// The value with NaN and infinities as null, which JSONSerialization throws on, crashing the app.
+private func finite(_ value: Any) -> Any {
+  switch value {
+  case let dictionary as [String: Any]: dictionary.mapValues(finite)
+  case let array as [Any]: array.map(finite)
+  case let n as Double where !n.isFinite: NSNull()
+  case let n as Float where !n.isFinite: NSNull()
+  case let n as CGFloat where !n.isFinite: NSNull()
+  default: value
   }
 }
 

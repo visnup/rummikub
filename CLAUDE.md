@@ -100,9 +100,19 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     (credited), MIT, Apache. `outside.py` converts [sverrela/rummikub](https://www.kaggle.com/datasets/sverrela/rummikub)
     (Kaggle, CC0; from arXiv 2411.18172, KU Leuven): 382 phone photos of melds, 4,434 tiles boxed with value and
     color, 378 of them jokers. Download it by hand (it needs a Kaggle account), unzip into `Outside/sverrela`, then
-    `uv run Labeler/outside.py Outside/sverrela Outside/sverrela-train`; `make train` adds every `Outside/*-train`.
-    Not christophrus/rummikub, which is GPL-3.0. Roboflow Universe has CC BY 4.0 sets too (rummikub-3gqr9, 386
-    top-down melds; arthurvanmeerbeeck, 538), which need a Roboflow account to export.
+    `uv run Labeler/outside.py Outside/sverrela Outside/sverrela-train`; `make train` adds every `Outside/*-train`,
+    and `make values` those and every `Outside/*-values`, sets whose tiles aren't all boxed.
+    Not christophrus/rummikub, which is GPL-3.0.
+  - Roboflow Universe sets, all CC BY 4.0, so credit them: arthurvanmeerbeeck/rummikub-p8akb, jonasbuehler/rummikub-nvypk,
+    ofir-grinholtz/rummikub-b8i9s, snips/test2-fkcgr, and konstantin-elenik/rummy, web photos: 73 in `-train`, 8 in
+    `-values` with a face-up tile unboxed, mostly printed on a game box. Each was forked into our Roboflow workspace, given a version with auto-orient only (the
+    published ones are stretched to 640 and flipped), exported as CreateML JSON into `Outside/roboflow-<name>`, and
+    converted by `outside.py`. Many uploads were already rotated, with black corners and boxes that no longer fit,
+    and `outside.py` skips those. After converting, photos near-identical to an earlier set's were deleted
+    (difference hash within 20 of 256 bits), and ofir's photos whose boxes mostly hold no ink (shifted off their
+    tiles) too. Left out: rummikub-3gqr9 and noabiber44/rummikub-joker-tiles (re-uploads of sverrela and
+    arthurvanmeerbeeck), ferhatcelik/test (konstantin's), rummikub/rummikub-pvln1 (a suited tile design, numerals
+    boxed), bluebox (NC-SA), Okey sets (another game's tiles).
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
   times a second; `Game` decides rack or table (`RackOrTable`), finds the tiles (`Tiles`), reads each box
@@ -110,7 +120,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   tracks the step shown; `ContentView`
   draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table
   and rack as text once two frames agree. A reading only replaces the last one once two frames in a row agree, so a missed
-  tile doesn't re-solve. While a play is being shown, readings don't re-solve; they advance the step instead
+  tile doesn't re-solve. The rack is first voted over the last five frames (each tile as often as the median frame
+  read it), since two frames rarely read all of a rack alike. While a play is being shown, readings don't re-solve; they advance the step instead
   (`Play.stepsDone`). The simulator never uses a camera: it reads a fixture photo of whichever the Table/Rack switch says
   (`Demo`), straight off the Mac's disk. On the phone, Table/Rack follows `RackOrTable` when it's .8 sure, or
   without it the tilt from CoreMotion (`Game.tilt`), shown in degrees in the top pill and written into each capture.

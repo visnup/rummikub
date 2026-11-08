@@ -33,7 +33,7 @@ struct ContentView: View {
                   .onChanged { _ in pressing = true }
                   .onEnded { _ in
                     pressing = false
-                    if live && !justSaved { shoot() }
+                    if tab == 0 && live && !justSaved { shoot() }
                   })
             }
           }
@@ -138,7 +138,7 @@ struct ContentView: View {
         }
         if let frame = game.frame, !pressing {
           Overlay(
-            boxes: game.boxes, detections: game.detections, marks: game.marks,
+            boxes: game.boxes, detections: tab == 1 ? game.settled : game.detections, marks: game.marks,
             fit: Fit(image: CGSize(width: frame.width, height: frame.height), view: size))
         }
       }
@@ -194,7 +194,7 @@ struct ContentView: View {
   }
 
   @ViewBuilder var solver: some View {
-    if let play = game.play, let step = game.step {
+    if let play = game.play, let step = game.step, play.steps.indices.contains(step) {
       let current = play.steps[step]
       Text("Step \(step + 1) of \(play.steps.count): \(current.tile.description) from \(source(current.from))")
         .font(.headline)
@@ -206,15 +206,7 @@ struct ContentView: View {
       .buttonStyle(.bordered)
     } else {
       looking
-      VStack(alignment: .leading) {
-        Text("Table: " + game.scene.table.map { $0.map(\.tile.description).joined(separator: " ") }
-          .joined(separator: " · "))
-        Text("Rack: " + game.scene.rack.map(\.tile.description).joined(separator: " "))
-      }
-      .font(.caption.monospaced())
-      .frame(maxWidth: .infinity, alignment: .leading)
-      ForEach(game.plays.indices, id: \.self) { i in
-        let play = game.plays[i]
+      ForEach(Array(game.plays.enumerated()), id: \.offset) { i, play in
         Button {
           game.choice = i
           game.step = play.steps.isEmpty ? nil : 0
@@ -231,7 +223,9 @@ struct ContentView: View {
   func source(_ source: Play.Source) -> String {
     switch source {
     case .rack: "your rack"
-    case .table(let meld, _): game.scene.table[meld].map(\.tile.description).joined(separator: " ")
+    case .table(let meld, _):
+      game.scene.table.indices.contains(meld)
+        ? game.scene.table[meld].map(\.tile.description).joined(separator: " ") : "the table"
     }
   }
 }

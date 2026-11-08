@@ -58,7 +58,7 @@ for folder in outside:
         image = Image.open(folder / f"{stem}.jpg").convert("RGB")
         for i, t in enumerate(json.loads(labels.read_text())):
             tile = crop(image, t["frame"])
-            if min(tile.size) >= 20:
+            if t["tile"] != "?" and min(tile.size) >= 20:
                 save(tile, "any", t["tile"], f"{folder.name}-{stem}-{i}")
 for kind in ("upright", "any"):
     print(kind, sum(1 for _ in (out / kind).glob("*/*.jpg")), "crops")

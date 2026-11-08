@@ -16,7 +16,8 @@ enum Sync {
     defer { pushing = false }
     let documents = URL.documentsDirectory
     let files = ((try? FileManager.default.contentsOfDirectory(atPath: documents.path)) ?? [])
-      .filter { ["png", "txt", "json"].contains(($0 as NSString).pathExtension) }
+      // Only what the labeler takes: a stray text file it refused once held back every photo behind it.
+      .filter { $0.wholeMatch(of: /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\.(png|txt|json)/) != nil }
       .sorted { ($0.hasSuffix(".png") ? 1 : 0, $0) < ($1.hasSuffix(".png") ? 1 : 0, $1) }
     var left = files.filter { $0.hasSuffix(".png") }.count
     for file in files {

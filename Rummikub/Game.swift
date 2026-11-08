@@ -36,16 +36,32 @@ import UniformTypeIdentifiers
   var findTime = Duration.zero
   /// The tiles the finder saw in the last frame.
   var boxes = [CGRect]()
-  private let finder = Game.model("Tiles").flatMap { try? Finder(model: $0) }
-  /// What reads the finder's boxes: on the table at any quarter turn; on a rack, upright.
-  private let classifiers = [Looking.table: "Values", .rack: "RackValues"].compactMapValues {
-    Game.model($0).flatMap { try? Classifier(model: $0) }
-  }
-  /// Whether a frame shows a rack or the table, from the whole picture: tilt alone can't say, since racks were shot at
-  /// 24–48° and tables from 35° up. On held-out frames it got 21 of 24, two of them judgment calls.
-  private let rackOrTable = Game.model("RackOrTable").flatMap { try? Classifier(model: $0) }
+  /// Loaded off the main thread, since a cold launch takes seconds to load them. Frames before then are skipped.
+  private var models: Models?
+  private var finder: Finder? { models?.finder }
+  private var classifiers: [Looking: Classifier] { models?.classifiers ?? [:] }
+  private var rackOrTable: Classifier? { models?.rackOrTable }
 
-  private static func model(_ name: String) -> MLModel? {
+  private nonisolated struct Models: Sendable {
+    let finder = Game.model("Tiles").flatMap { try? Finder(model: $0) }
+    /// What reads the finder's boxes: on the table at any quarter turn; on a rack, upright.
+    let classifiers = [Looking.table: "Values", .rack: "RackValues"].compactMapValues {
+      Game.model($0).flatMap { try? Classifier(model: $0) }
+    }
+    /// Whether a frame shows a rack or the table, from the whole picture: tilt alone can't say, since racks were shot
+    /// at 24–48° and tables from 35° up. On held-out frames it got 21 of 24, two of them judgment calls.
+    let rackOrTable = Game.model("RackOrTable").flatMap { try? Classifier(model: $0) }
+  }
+
+  init() {
+    Task {
+      let start = Date.now
+      models = await Task.detached { Models() }.value
+      try? timing?.write(contentsOf: Data("\(Date.now.timeIntervalSince1970),load,0,\(Int(Date.now.timeIntervalSince(start) * 1000)),0,0\n".utf8))
+    }
+  }
+
+  private nonisolated static func model(_ name: String) -> MLModel? {
     let configuration = MLModelConfiguration()
     #if targetEnvironment(simulator)
       // Else Vision can't create an inference context.
@@ -100,6 +116,7 @@ import UniformTypeIdentifiers
   var play: Play? { plays.indices.contains(choice) ? plays[choice] : nil }
 
   func see(_ image: CGImage) async {
+    guard models != nil else { return }
     // Only where tilt can't say: below 30° it's always been a rack, above 55° a table.
     if picked == nil, let rackOrTable, (30...55).contains(tilt ?? 40),
       let (label, confidence) = await Task.detached(operation: { try? rackOrTable.label(of: image) }).value,

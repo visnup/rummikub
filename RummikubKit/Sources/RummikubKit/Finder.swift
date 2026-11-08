@@ -5,8 +5,13 @@ import Vision
 /// Finds tiles, not their values, with a detector trained by `train`. Tiles small in a photo are found in its crops.
 public struct Finder: @unchecked Sendable {
   let request: VNCoreMLRequest
+  /// The least confidence a box is kept at.
+  let least: Float
 
+  /// A Create ML detector, or D-FINE, whose `scores` and center `boxes` Vision can't read as objects, and whose
+  /// scores run lower.
   public init(model: MLModel) throws {
+    least = model.modelDescription.outputDescriptionsByName["scores"] == nil ? 0.9 : 0.6
     request = VNCoreMLRequest(model: try VNCoreMLModel(for: model))
     request.imageCropAndScaleOption = .scaleFill
     request.onCPUInSimulator()
@@ -23,14 +28,12 @@ public struct Finder: @unchecked Sendable {
       request.regionOfInterest = VNNormalizedRectForImageRect(
         CGRect(x: region.minX, y: Double(h) - region.maxY, width: region.width, height: region.height), w, h)
       try handler.perform([request])
-      for o in request.results as? [VNRecognizedObjectObservation] ?? [] where o.confidence > 0.9 {
-        let n = VNImageRectForNormalizedRect(o.boundingBox, Int(region.width), Int(region.height))
-        let box = CGRect(x: region.minX + n.minX, y: region.maxY - n.maxY, width: n.width, height: n.height)
+      for (box, confidence) in detections(in: region) where confidence > least {
         let inner = region.insetBy(dx: 2, dy: 2)
         let cut =
           box.minX < inner.minX && region.minX > 0 || box.maxX > inner.maxX && region.maxX < whole.maxX
           || box.minY < inner.minY && region.minY > 0 || box.maxY > inner.maxY && region.maxY < whole.maxY
-        if !cut { found.append((box, o.confidence)) }
+        if !cut { found.append((box, confidence)) }
       }
     }
     var kept = [(box: CGRect, confidence: Float)]()
@@ -39,6 +42,30 @@ public struct Finder: @unchecked Sendable {
       kept.append(f)
     }
     return kept.map(\.box)
+  }
+
+  /// The last request's boxes in the image's top-left-origin pixels.
+  func detections(in region: CGRect) -> [(box: CGRect, confidence: Float)] {
+    let results = request.results ?? []
+    if let objects = results as? [VNRecognizedObjectObservation] {
+      return objects.map { o in
+        let n = VNImageRectForNormalizedRect(o.boundingBox, Int(region.width), Int(region.height))
+        return (CGRect(x: region.minX + n.minX, y: region.maxY - n.maxY, width: n.width, height: n.height), o.confidence)
+      }
+    }
+    var features = [String: [Float]]()
+    for case let o as VNCoreMLFeatureValueObservation in results {
+      if let array = o.featureValue.multiArrayValue { features[o.featureName] = MLShapedArray<Float>(converting: array).scalars }
+    }
+    guard let scores = features["scores"], let boxes = features["boxes"] else { return [] }
+    return scores.indices.map { i in
+      let cx = Double(boxes[4 * i]), cy = Double(boxes[4 * i + 1])
+      let w = Double(boxes[4 * i + 2]), h = Double(boxes[4 * i + 3])
+      let box = CGRect(
+        x: region.minX + (cx - w / 2) * region.width, y: region.minY + (cy - h / 2) * region.height,
+        width: w * region.width, height: h * region.height)
+      return (box, scores[i])
+    }
   }
 
   /// Squares half the short side, side by side or overlapping by half.

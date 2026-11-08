@@ -10,7 +10,9 @@
   //   score <captures>
   setvbuf(stdout, nil, _IOLBF, 0)
   let captures = URL(filePath: CommandLine.arguments[1])
-  let finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: captures.appending(path: "Tiles.mlmodel"))))
+  let package = captures.appending(path: "Tiles.mlpackage")
+  let tiles = FileManager.default.fileExists(atPath: package.path) ? package : captures.appending(path: "Tiles.mlmodel")
+  let finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: tiles)))
   let values = captures.appending(path: "Values.mlmodel")
   let classifier = FileManager.default.fileExists(atPath: values.path)
     ? try Classifier(model: MLModel(contentsOf: MLModel.compileModel(at: values))) : nil

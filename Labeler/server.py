@@ -30,10 +30,24 @@ def done() -> set[str]:
     return set(boxed.read_text().split()) if boxed.exists() else set()
 
 
-def summary(png: Path) -> dict:
+numbered = captures / "ids.txt"
+
+
+def ids(pngs: list[Path]) -> dict[str, int]:
+    """A number for each capture to talk about it by, from 1 in the order first seen, never reused."""
+    known = numbered.read_text().split() if numbered.exists() else []
+    new = sorted({p.stem for p in pngs} - set(known))
+    if new:
+        known += new
+        numbered.write_text("".join(f"{n}\n" for n in known))
+    return {n: i + 1 for i, n in enumerate(known)}
+
+
+def summary(png: Path, number: int) -> dict:
     name = str(png.relative_to(captures).with_suffix(""))
     tiles = json.loads(png.with_suffix(".tiles.json").read_text()) if png.with_suffix(".tiles.json").exists() else []
     return {
+        "id": number,
         "name": name,
         "truth": truth(png),
         "boxes": len(tiles),
@@ -61,7 +75,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.path = "/index.html"
         if self.path == "/api/captures":
             pngs = sorted(captures.glob("*.png")) + sorted(captures.glob("unlabeled/*.png"))
-            return self.send_json([s for s in map(summary, pngs) if s["truth"] != []])
+            number = ids(pngs)
+            return self.send_json([s for p in pngs if (s := summary(p, number[p.stem]))["truth"] != []])
         if self.path.startswith("/api/tiles/"):
             path = self.labels()
             if path is None:

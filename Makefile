@@ -2,7 +2,7 @@ app := DerivedData/Build/Products
 
 files := --device Yam --domain-type appDataContainer --domain-identifier com.visnup.Rummikub
 
-.PHONY: all sim test captures watch timing upload labels train values scene score
+.PHONY: all sim test captures watch timing upload labels retrain train values scene score
 
 all:
 	xcodebuild -scheme Rummikub -destination generic/platform=iOS -derivedDataPath DerivedData \
@@ -55,15 +55,22 @@ labels:
 	uv run Labeler/prelabel.py
 	uv run Labeler/server.py
 
-# Trains the tile finder on captures whose boxes are done and the outside sets, gives the app the model, and scores
-# it. Three times Create ML's default iterations, since the outside set quadruples the data.
+# Retrains the finder and the value classifiers side by side, then scores them: about 25 minutes, nearly all the
+# finder's. After labeling values alone, `make values score` takes a minute or two.
+retrain:
+	cd RummikubKit && swift build -c release --product train && swift build -c release --product values
+	$(MAKE) -j2 train values
+	$(MAKE) score
+
+# Trains the tile finder on captures whose boxes are done and the outside sets, and gives the app the model. Three
+# times Create ML's default iterations, since the outside set quadruples the data.
 train:
 	cd RummikubKit && ITERATIONS=3000 swift run -c release train ../$(dir) $(addprefix ../,$(wildcard Outside/*-train))
 	cp $(dir)/Tiles.mlmodel Rummikub/
-	$(MAKE) score
 
 # Trains the value classifiers on tile crops and gives the app them: Values for tables, at any quarter turn, with
-# the outside sets; RackValues for racks, upright, ours alone.
+# the outside sets; RackValues for racks, upright, ours alone. Over Vision's feature prints, kept by crop in
+# `.crops/*.features`, so a rerun only reads new crops.
 values:
 	uv run Labeler/crops.py $(dir) $(dir)/.crops $(wildcard Outside/*-train)
 	cd RummikubKit && swift run -c release values ../$(dir)/.crops/any ../$(dir)/Values.mlmodel

@@ -40,11 +40,6 @@ def contained(a, b):
     return shared(a, b) / min(a[2] * a[3], b[2] * b[3])
 
 
-device = "mps" if torch.backends.mps.is_available() else "cpu"
-processor = Owlv2Processor.from_pretrained("google/owlv2-base-patch16-ensemble")
-model = Owlv2ForObjectDetection.from_pretrained("google/owlv2-base-patch16-ensemble").to(device).eval()
-
-
 @torch.no_grad()
 def embed(image):
     """Per patch of a square crop: a unit class embedding and a box (x, y, w, h in the crop's pixels)."""
@@ -72,6 +67,26 @@ def tiles(name):
 
 
 done = set((captures / "boxed.txt").read_text().split())
+
+
+def needs(png):
+    """Whether a capture gets boxes drawn: not done or edited by hand, nor known to hold no tiles."""
+    name = str(png.relative_to(captures).with_suffix(""))
+    txt = png.with_suffix(".txt")
+    empty = png.parent == captures and txt.exists() and not "".join(txt.read_text().splitlines()[1:]).strip()
+    if name in done or empty or any(t.get("source") == "hand" for t in tiles(name)):
+        return False
+    return not (new_only and (captures / f"{name}.tiles.json").exists())
+
+
+# Nothing to box costs nothing: `make watch` runs this every 30 s, and retraining the probe whenever a capture is
+# checked kept the GPU busy under training.
+todo = [png for png in sorted([*captures.glob("*.png"), *captures.glob("unlabeled/*.png")]) if needs(png)]
+if not todo:
+    sys.exit()
+device = "mps" if torch.backends.mps.is_available() else "cpu"
+processor = Owlv2Processor.from_pretrained("google/owlv2-base-patch16-ensemble")
+model = Owlv2ForObjectDetection.from_pretrained("google/owlv2-base-patch16-ensemble").to(device).eval()
 
 @torch.no_grad()
 def examples(probe=None):
@@ -148,17 +163,9 @@ def detect(image):
     return kept
 
 
-pngs = sorted([*captures.glob("*.png"), *captures.glob("unlabeled/*.png")])
-for png in pngs:
+for png in todo:
     name = str(png.relative_to(captures).with_suffix(""))
     current = tiles(name)
-    txt = png.with_suffix(".txt")
-    # Captures with no tiles in their truth keep their empty labels.
-    empty = png.parent == captures and txt.exists() and not "".join(txt.read_text().splitlines()[1:]).strip()
-    if name in done or empty or any(t.get("source") == "hand" for t in current):
-        continue
-    if new_only and (captures / f"{name}.tiles.json").exists():
-        continue
     found = detect(Image.open(png).convert("RGB"))
     unmatched = list(current)
     merged = []

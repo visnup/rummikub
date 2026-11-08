@@ -7,6 +7,10 @@ advancing as the camera sees each step done.
 This file describes the project as it is. What was tried and dropped goes in `ARCHIVE.md`, so nobody repeats it.
 What's next is in `TODO.md`.
 
+Keep long waits short: training, pre-labeling, scoring and anything else that runs for minutes. When one grows,
+make it faster (cache what doesn't change, only redo what's new, run independent steps together, skip work when
+there's nothing to do), or say how it could be, with a rough cost and saving.
+
 ## Layout
 
 - `RummikubKit/`: a Swift package with everything that doesn't need a device, so it's tested with `swift test` on
@@ -40,8 +44,8 @@ What's next is in `TODO.md`.
     left alone.
 
   - `train` (macOS only) trains a Create ML object detector, one "tile" class, on the captures whose boxes are done.
-    Done captures are listed in `Captures/boxed.txt`. It writes `Captures/Tiles.mlmodel`. `make train` runs it,
-    copies the model to `Rummikub/` and runs `score`. It trains on each
+    Done captures are listed in `Captures/boxed.txt`. It writes `Captures/Tiles.mlmodel`. `make train` runs it
+    and copies the model to `Rummikub/`; `make retrain` runs it beside `make values`, then `score`. It trains on each
     image and its side-by-side crops, and never on held-out captures (`Finder.isHeldOut`, a fifth of them by a
     hash of the name, so finishing more never moves one in or out). It stops
     after `MINUTES` (60) with its last checkpoint. `QUARTERS` (1–4, default 4) trains on that many quarters of the
@@ -55,8 +59,11 @@ What's next is in `TODO.md`.
     two with `crops.py` and the `values` tool: `Values` for tables, from our confirmed crops at all four quarter turns
     plus the outside sets as they lie, and `RackValues` for racks, upright, ours alone. On the held-out captures the
     finder plus `Values`, over .7 sure, read 426–435 of 580 right with 79–99 extras, where the reader got 341 with 97.
-    Through a Create ML session with no augmentation: `MLImageClassifier(trainingData:)` failed past a few thousand
-    images with "Failed to create CVPixelBufferPool", and the default flips took validation from 96% to 78%.
+    The classifiers are logistic regression over Vision's feature print of each crop, kept by crop content, so a
+    rerun reads only new crops: 80 s cold for 13,366, seconds warm, where Create ML's image classifier took about 8
+    minutes every time, and on 703 held-out tiles 486 right with 194 extras against its 474 with 209. That image
+    classifier also failed past a few thousand images ("Failed to create CVPixelBufferPool") unless run as a session,
+    and its default augmentation's flips took validation from 96% to 78%.
     Orienting the outside crops with an upright classifier first turned many upside down, so `Values` reads any turn.
   - `make scene` trains `RackOrTable` on whole frames labeled in `Captures/scene.txt`: by eye between 30° and 55°,
     else by tilt (two low ones were tables). Tilt alone can't say: racks were shot at 24–48°, tables from 35° up, and

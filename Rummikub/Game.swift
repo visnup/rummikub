@@ -56,17 +56,19 @@ import UniformTypeIdentifiers
     }
   }
   /// How far the camera points below the horizon, in degrees. Looking down at the table it's steep; at the rack,
-  /// nearly level. Without the rack-or-table model, it decides: the cutoffs leave a gap that keeps it from flipping
-  /// back and forth. Either way, a pick by hand holds until the phone goes well past the other cutoff.
+  /// nearly level. Below 30° and above 55° it decides; between, the rack-or-table model does, or without it a cutoff at
+  /// 45°. A pick by hand holds until the phone goes below 30° or above 70°.
   var tilt: Double? {
     didSet {
       guard let tilt else { return }
       if tilt > (picked == .rack ? 70 : 55) {
-        if picked != nil || rackOrTable == nil { looking = .table }
+        looking = .table
         picked = nil
-      } else if tilt < (picked == .table ? 30 : 45) {
-        if picked != nil || rackOrTable == nil { looking = .rack }
+      } else if tilt < 30 {
+        looking = .rack
         picked = nil
+      } else if tilt < 45, picked == nil, rackOrTable == nil {
+        looking = .rack
       }
     }
   }
@@ -100,7 +102,8 @@ import UniformTypeIdentifiers
   var play: Play? { plays.indices.contains(choice) ? plays[choice] : nil }
 
   func see(_ image: CGImage) async {
-    if picked == nil, let rackOrTable,
+    // Only where tilt can't say: below 30° it's always been a rack, above 55° a table.
+    if picked == nil, let rackOrTable, (30...55).contains(tilt ?? 40),
       let (label, confidence) = await Task.detached(operation: { try? rackOrTable.label(of: image) }).value,
       confidence >= 0.8, let seen = Looking(rawValue: label)
     {

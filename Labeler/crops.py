@@ -36,7 +36,9 @@ def save(image, kind, tile, name):
     image.resize((224, 224), Image.Resampling.BILINEAR).save(out / kind / tile / f"{name}.jpg", quality=90)
 
 
-shutil.rmtree(out, ignore_errors=True)
+# The crops, not the feature prints `values` keeps beside them, which spare it reading unchanged crops again.
+for kind in ("upright", "any"):
+    shutil.rmtree(out / kind, ignore_errors=True)
 for name in (captures / "boxed.txt").read_text().split():
     if held(name):
         continue
@@ -44,7 +46,7 @@ for name in (captures / "boxed.txt").read_text().split():
     image = Image.open(captures / f"{name}.png").convert("RGB") if tiles else None
     for i, t in enumerate(tiles):
         upright = crop(image, t["frame"]).rotate(-90 * t.get("turns", 0), expand=True)
-        if min(upright.size) < 8:
+        if min(upright.size) < 20:
             continue
         key = f"{name.replace('/', '-')}-{i}"
         save(upright, "upright", t["tile"], key)
@@ -56,7 +58,7 @@ for folder in outside:
         image = Image.open(folder / f"{stem}.jpg").convert("RGB")
         for i, t in enumerate(json.loads(labels.read_text())):
             tile = crop(image, t["frame"])
-            if min(tile.size) >= 8:
+            if min(tile.size) >= 20:
                 save(tile, "any", t["tile"], f"{folder.name}-{stem}-{i}")
 for kind in ("upright", "any"):
     print(kind, sum(1 for _ in (out / kind).glob("*/*.jpg")), "crops")

@@ -125,7 +125,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - The camera is the virtual multi-lens device, so .5× reaches the ultra wide; it starts at the widest, since a whole
     table fits from closer. Captures record the zoom as labeled and the lens.
   - Each frame's read and find times go to `Documents/timing/`, a file a launch, for `make timing`.
-  `make` builds it and installs and launches it on the phone (an iPhone named Yam); `make sim`
+  `make` builds it and installs it on the phone (an iPhone named Yam); `make sim`
   builds the Simulator's; `make test` runs the package's tests.
 - `RummikubKit` builds with `-O` even in debug, since recognition's pixel loops take seconds a frame unoptimized.
 

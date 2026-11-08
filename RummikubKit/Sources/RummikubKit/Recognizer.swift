@@ -7,6 +7,15 @@ public struct Detection: Hashable, Sendable {
   public let frame: CGRect
   /// How many quarter turns clockwise the image was turned to read it upright.
   public var turns = 0
+  /// How likely each tile is, from the classifier, for `Recognizer.valid` to weigh other readings by.
+  public var odds = [Tile: Float]()
+
+  public init(tile: Tile, frame: CGRect, turns: Int = 0, odds: [Tile: Float] = [:]) {
+    self.tile = tile
+    self.frame = frame
+    self.turns = turns
+    self.odds = odds
+  }
 }
 
 /// Finds tiles in a photo by their numerals: blobs of ink with tile face all around them, joined into numbers. Each

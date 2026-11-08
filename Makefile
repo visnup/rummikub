@@ -47,7 +47,7 @@ timing:
 	tail -qn +2 Timing/*.csv | awk -F, '{ r += $$3; f += $$4; n++; if ($$3 > rm) rm = $$3; if ($$4 > fm) fm = $$4 } \
 	  END { printf "%d frames: read %.0f ms (max %d), find %.0f ms (max %d)\n", n, r / n, rm, f / n, fm }'
 
-# Labels what the reader agrees with and boxes what OWLv2 finds, then serves the page for the rest at
+# Labels what the reader agrees with and boxes what the finder finds, then serves the page for the rest at
 # http://localhost:8765.
 labels:
 	cd RummikubKit && swift run -c release label ../$(dir)
@@ -89,6 +89,6 @@ score:
 # go public.
 upload:
 	uvx --from huggingface_hub hf upload visnup/rummikub-captures $(dir) . --repo-type dataset --exclude .files.json \
-	  --exclude .removed --exclude .DS_Store --exclude .probe.pt --exclude .words.txt --exclude review.txt \
+	  --exclude .removed --exclude .DS_Store --exclude .words.txt --exclude review.txt \
 	  --exclude ".crops/*" --exclude ".scene/*" --exclude ".finder/*" --exclude "*.mlmodel" \
 	  --exclude "Tiles.mlpackage/*" --exclude ids.txt

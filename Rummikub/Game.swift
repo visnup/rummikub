@@ -57,6 +57,7 @@ import UniformTypeIdentifiers
     Task {
       let start = Date.now
       models = await Task.detached { Models() }.value
+      _ = try? timing?.seekToEnd()
       try? timing?.write(contentsOf: Data("\(Date.now.timeIntervalSince1970),load,0,\(Int(Date.now.timeIntervalSince(start) * 1000)),0,0\n".utf8))
     }
   }
@@ -73,22 +74,18 @@ import UniformTypeIdentifiers
   }
   /// How far the camera points below the horizon, in degrees. Looking down at the table it's steep; at the rack,
   /// nearly level. Below 30° and above 55° it decides; between, the rack-or-table model does, or without it a cutoff at
-  /// 45°. A pick by hand holds until the phone goes below 30° or above 70°.
+  /// 45°. A pick by hand holds until that part locks.
   var tilt: Double? {
     didSet {
-      guard let tilt else { return }
-      if tilt > (picked == .rack ? 70 : 55) {
+      guard let tilt, picked == nil else { return }
+      if tilt > 55 {
         looking = .table
-        picked = nil
-      } else if tilt < 30 {
-        looking = .rack
-        picked = nil
-      } else if tilt < 45, picked == nil, rackOrTable == nil {
+      } else if tilt < 30 || tilt < 45 && rackOrTable == nil {
         looking = .rack
       }
     }
   }
-  /// What was picked by hand, until the tilt overrides it.
+  /// What was picked by hand, until it locks.
   private var picked: Looking?
 
   func pick(_ looking: Looking) {
@@ -117,6 +114,10 @@ import UniformTypeIdentifiers
 
   func see(_ image: CGImage) async {
     guard models != nil else { return }
+    // Once locked, frames only watch for changes, so a second apart is enough and the phone stays cooler; while
+    // stepping through a play, every frame, to follow each move.
+    if locked.contains(looking), step == nil, Date.now.timeIntervalSince(lastSeen) < 1 { return }
+    lastSeen = .now
     // Only where tilt can't say: below 30° it's always been a rack, above 55° a table.
     if picked == nil, let rackOrTable, (30...55).contains(tilt ?? 40),
       let (label, confidence) = await Task.detached(operation: { try? rackOrTable.label(of: image) }).value,
@@ -150,7 +151,9 @@ import UniformTypeIdentifiers
     try? timing?.write(contentsOf: Data(
       "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(found.count),\(boxes?.count ?? -1)\n".utf8))
     let part = looking
-    readings[part] = Array(((readings[part] ?? []) + [part == .rack ? onRack(found) : found]).suffix(5))
+    // On the table, each meld as the likeliest valid one, as between turns they all are.
+    let seen = part == .rack ? onRack(found) : Recognizer.valid(Recognizer.melds(found)).flatMap(\.self)
+    readings[part] = Array(((readings[part] ?? []) + [seen]).suffix(5))
     let voted = vote(readings[part]!)
     var next = scene
     if part == .table {
@@ -184,6 +187,7 @@ import UniformTypeIdentifiers
         part == .table || !voted.isEmpty
       {
         locked.insert(part)
+        if picked == part { picked = nil }
         await solve()
       }
     } else if locked.contains(part) {
@@ -202,6 +206,26 @@ import UniformTypeIdentifiers
   private var changedSince = [Looking: Date]()
   /// The parts whose reading has held for two seconds; frames no longer change them, until `rescan`.
   var locked = Set<Looking>()
+  private var lastSeen = Date.distantPast
+
+  /// Both parts read and held, so the Solver draws them instead of showing the camera, which stops.
+  var onBoard: Bool { locked.count == Looking.allCases.count }
+
+  /// The table as read, with room around it for new melds.
+  var tableBounds: CGRect? {
+    let frames = scene.table.joined().map(\.frame)
+    guard let first = frames.first else { return nil }
+    let all = frames.reduce(first) { $0.union($1) }
+    return all.insetBy(dx: -first.height * 1.5, dy: -first.height * 1.5)
+  }
+
+  /// Takes the chosen play as done: the board shows its melds where the steps put them, without a rescan.
+  func finish() async {
+    guard let play else { return }
+    scene = play.finished(scene, within: tableBounds)
+    step = nil
+    await solve()
+  }
 
   /// Whether a locked part has read differently for three seconds, as after someone's turn.
   func changed(_ part: Looking) -> Bool { changedSince[part].map { Date.now.timeIntervalSince($0) >= 3 } ?? false }
@@ -285,15 +309,17 @@ import UniformTypeIdentifiers
   /// pointed at.
   var marks: [Mark] {
     guard let play, let step, play.steps.indices.contains(step) else { return [] }
-    let tile = play.steps[step].tile
+    let group = play.group(at: step)
     if looking == .rack {
-      guard case .rack = play.steps[step].from, let match = detections.first(where: { $0.tile == tile }) else {
-        return []
+      guard case .rack = play.steps[step].from else { return [] }
+      var left = detections
+      return group.compactMap { i in
+        left.firstIndex { $0.tile == play.steps[i].tile }.map { Mark.source(left.remove(at: $0).frame) }
       }
-      return [.source(match.frame)]
     }
     let bounds = frame.map { CGRect(x: 0, y: 0, width: $0.width, height: $0.height) }
-    let marks = play.marks(in: scene.following(detections), step: step, within: bounds)
+    let following = scene.following(detections)
+    let marks = group.flatMap { play.marks(in: following, step: $0, within: bounds) }
     guard case .rack = play.steps[step].from else { return marks }
     return marks.filter {
       switch $0 {

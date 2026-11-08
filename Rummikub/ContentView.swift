@@ -76,17 +76,21 @@ struct ContentView: View {
           }
       }
       Tab("Solver", systemImage: "square.grid.3x3.fill", value: 1) {
-        panel { solver }
+        panel(over: board) { solver }
           .safeAreaBar(edge: .top) {
-            looking.fixedSize().padding(4).glassEffect().padding(.top, topInset == 0 ? 8 : 0)
+            if !game.onBoard {
+              looking.fixedSize().padding(4).glassEffect().padding(.top, topInset == 0 ? 8 : 0)
+            }
           }
-          .background { if tab == 1 { preview } }
+          .background { if tab == 1 && !game.onBoard { preview } }
       }
     }
     // The system's place for a row of controls: above the tab bar, or level with it where the tab bar is at the side.
     .tabViewBottomAccessory(isEnabled: tab == 0 && !pressing) { capture }
     .sensoryFeedback(.success, trigger: saved)
     .onChange(of: scenePhase) { if scenePhase == .active { send() } }
+    // The camera runs only while something needs it: the Capture tab, or a part of the Solver's being scanned.
+    .onChange(of: tab == 0 || !game.onBoard) { if live { camera.run(tab == 0 || !game.onBoard) } }
     .task(id: saved) {
       try? await Task.sleep(for: .seconds(1.5))
       justSaved = false
@@ -109,7 +113,7 @@ struct ContentView: View {
       } else {
         // No camera, as in the simulator: read a photo of whichever the picker says, as often as a camera would.
         while !Task.isCancelled {
-          if let image = Demo.photos[game.looking] { await game.see(image) }
+          if tab == 0 || !game.onBoard, let image = Demo.photos[game.looking] { await game.see(image) }
           try? await Task.sleep(for: .seconds(0.3))
         }
       }
@@ -118,12 +122,25 @@ struct ContentView: View {
 
   /// The Solver's controls, too tall for the tab bar's accessory, in a bar above the tab bar, with the scene's
   /// margins and corners concentric with the display's.
-  func panel(@ViewBuilder _ content: () -> some View) -> some View {
-    Color.clear.safeAreaBar(edge: .bottom) {
+  func panel(over base: some View, @ViewBuilder _ content: () -> some View) -> some View {
+    base.safeAreaBar(edge: .bottom) {
       VStack(spacing: 12, content: content)
         .padding()
         .glassEffect(in: .rect(corners: .concentric(minimum: .fixed(24)), isUniform: true))
         .scenePadding(.horizontal)
+    }
+  }
+
+  var board: some View {
+    ZStack {
+      if game.onBoard {
+        Board(game: game) { part in
+          game.rescan(part)
+          game.pick(part)
+        }
+      } else {
+        Color.clear
+      }
     }
   }
 
@@ -199,28 +216,46 @@ struct ContentView: View {
 
   @ViewBuilder var solver: some View {
     if let play = game.play, let step = game.step, play.steps.indices.contains(step) {
-      let current = play.steps[step]
-      Text("Step \(step + 1) of \(play.steps.count): \(current.tile.description) from \(source(current.from))")
-        .font(.headline)
+      let group = play.group(at: step), groups = play.groups
+      let n = groups.lastIndex { $0 <= step } ?? 0
+      HStack(alignment: .firstTextBaseline) {
+        Text("\(n + 1) of \(groups.count)").font(.caption.bold().monospacedDigit()).foregroundStyle(.secondary)
+        Text("\(numbers(group.map { play.steps[$0].tile })) from \(source(play.steps[step].from))").font(.headline)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
       HStack {
-        Button("Back") { game.step = step - 1 }.disabled(step == 0)
-        Button("Done") { game.step = nil }
-        Button("Next") { game.step = step + 1 }.disabled(step == play.steps.count - 1)
+        Button("Back") { game.step = groups[n - 1] }.disabled(n == 0)
+        Button("Cancel") { game.step = nil }
+        if group.upperBound == play.steps.count {
+          Button("Finish") { Task { await game.finish() } }.buttonStyle(.borderedProminent)
+        } else {
+          Button("Next") { game.step = group.upperBound }
+        }
       }
       .buttonStyle(.bordered)
     } else {
-      HStack {
-        chip(.table, count: game.scene.tableTiles.joined().count)
-        chip(.rack, count: game.scene.rack.count)
-      }
-      VStack(alignment: .leading, spacing: 4) {
-        game.scene.tableTiles.enumerated().reduce(Text("")) { text, meld in
-          Text("\(text)\(meld.offset == 0 ? "" : "  ·  ")\(numbers(meld.element))")
+      if !game.onBoard {
+        HStack {
+          chip(.table, count: game.scene.tableTiles.joined().count)
+          chip(.rack, count: game.scene.rack.count)
         }
-        numbers(game.scene.rackTiles)
+        VStack(alignment: .leading, spacing: 4) {
+          game.scene.tableTiles.enumerated().reduce(Text("")) { text, meld in
+            Text("\(text)\(meld.offset == 0 ? "" : "  ·  ")\(numbers(meld.element))")
+          }
+          numbers(game.scene.rackTiles)
+        }
+        .font(.callout.bold().monospacedDigit())
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
-      .font(.callout.bold().monospacedDigit())
-      .frame(maxWidth: .infinity, alignment: .leading)
+      let bad = game.scene.tableTiles.filter { !isMeld($0) }
+      if game.onBoard, game.plays.isEmpty, !bad.isEmpty {
+        let melds = bad.enumerated().reduce(Text("")) { text, meld in
+          Text("\(text)\(meld.offset == 0 ? "" : " · ")\(numbers(meld.element))")
+        }
+        Text("\(melds) isn't a meld. Tap the table to scan it again.").font(.callout)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
       ForEach(Array(game.plays.enumerated()), id: \.offset) { i, play in
         Button {
           game.choice = i
@@ -267,12 +302,11 @@ struct ContentView: View {
     .tint(game.changed(part) ? .orange : game.locked.contains(part) ? .green : .secondary)
   }
 
-  func source(_ source: Play.Source) -> String {
+  func source(_ source: Play.Source) -> Text {
     switch source {
-    case .rack: "your rack"
+    case .rack: Text("your rack")
     case .table(let meld, _):
-      game.scene.table.indices.contains(meld)
-        ? game.scene.table[meld].map(\.tile.description).joined(separator: " ") : "the table"
+      game.scene.table.indices.contains(meld) ? numbers(game.scene.tableTiles[meld]) : Text("the table")
     }
   }
 }
@@ -295,6 +329,14 @@ struct Fit {
   init(image: CGSize, view: CGSize) {
     scale = max(view.width / image.width, view.height / image.height)
     offset = CGPoint(x: (view.width - image.width * scale) / 2, y: (view.height - image.height * scale) / 2)
+  }
+
+  /// `rect` scaled to fit inside `view` and centered.
+  init(_ rect: CGRect, in view: CGSize) {
+    scale = min(view.width / rect.width, view.height / rect.height)
+    offset = CGPoint(
+      x: (view.width - rect.width * scale) / 2 - rect.minX * scale,
+      y: (view.height - rect.height * scale) / 2 - rect.minY * scale)
   }
 
   func callAsFunction(_ rect: CGRect) -> CGRect {
@@ -333,6 +375,12 @@ struct Overlay: View {
         context.fill(Path(roundedRect: chip, cornerRadius: 4), with: .color(.white.opacity(0.85)))
         context.draw(label, in: chip.insetBy(dx: 4, dy: 1))
       }
+      Self.draw(marks, in: &context, fit: fit)
+    }
+    .allowsHitTesting(false)
+  }
+
+  static func draw(_ marks: [Mark], in context: inout GraphicsContext, fit: Fit) {
       for mark in marks {
         switch mark {
         case .source(let rect):
@@ -362,8 +410,6 @@ struct Overlay: View {
           break
         }
       }
-    }
-    .allowsHitTesting(false)
   }
 
   static func color(_ tile: Tile) -> Color {

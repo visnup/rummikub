@@ -45,6 +45,11 @@ What was tried and dropped, so nobody repeats it.
   the same hour.
 - **Create ML's own pre-labels**: `train` used to draw its boxes on unchecked captures. On the same held-out captures
   it found 199 of 263 tiles with 110 extras; OWLv2 with a probe found 248 with 14.
+- **OWLv2 with a linear probe as the pre-labeler** (`prelabel.py`, replaced 2026-11-08 by the finder). Frozen OWLv2 on
+  the finder's crops, with a probe trained on the done captures' boxes, two passes so the second learned from the
+  first's false tiles; a box mostly inside a likelier one was dropped, since numerals got boxes of their own. It found
+  897 of 1013 held-out tiles with 153 extras, where D-FINE found 950 with 45, and keyboard keys still got boxed. A
+  text prompt alone needed the crops, since whole photos shrink to OWL's 960 px.
 - **OWLv2 queried with the mean tile embedding** instead of a probe: about 2,000 extra boxes at any threshold, since
   OWL's per-patch logit shift and scale swamp a single query.
 - **A value classifier** (Create ML image classifier on upright crops of confirmed tiles): on the fixtures, reader

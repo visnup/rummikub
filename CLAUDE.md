@@ -78,16 +78,11 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `make labels` runs `label`, then `prelabel.py`, then serves the page at http://localhost:8765 (also `labeler`
     in `.claude/launch.json`).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
-    round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet, and the probe is
-    cached in `Captures/.probe.pt` until the done captures' boxes change; with `--new` a stale one boxes the new
-    captures first and is retrained after. `make watch` runs it every 30 s while
-    capturing, beside `make labels`, which takes the app's pushes. A second probe pass learns from the patches the first wrongly calls tiles, but
-    keyboard keys still get boxed: the done captures rarely show one. It's OWLv2, frozen, run on the same overlapping crops as
-    `Finder`, with a linear probe trained on the done captures' boxes; patches that fit a tile badly are its
-    negatives, or they come back as extra boxes. A box mostly inside a likelier one is dropped too: numerals got
-    their own small boxes inside their tiles'. On the held-out captures it found 897 of 1013 tiles with 153 extras,
-    where the finder found 950 with 45, so the finder should take over pre-labeling. A text prompt alone found 226 of 230 with 127
-    extras, and needed the crops: whole photos shrink to OWL's 960 px. It's too big for the phone.
+    round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet. `make watch` runs it
+    every 30 s while capturing, beside `make labels`, which takes the app's pushes. It's the finder, from the
+    checkpoint `finder.py` leaves in `Captures/.finder`, read as `Finder` reads, so it improves only as `make train`
+    reruns. It replaced OWLv2 with a linear probe, which found 897 of 1013 held-out tiles with 153 extras to its 950
+    with 45.
   - In the page, every tile needs a box and nothing else may have one. Click adds an average-sized box, drag draws
     one. Enter marks a capture done. Values are optional. A tile cut off by the photo's edge gets a box too, which
     may run past the edge.
@@ -131,12 +126,17 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   (`Play.stepsDone`). The simulator never uses a camera: it reads a fixture photo of whichever the Table/Rack switch says
   (`Demo`), straight off the Mac's disk. On the phone, Table/Rack follows `RackOrTable` when it's .8 sure, or
   without it the tilt from CoreMotion (`Game.tilt`), shown in degrees in the top pill and written into each capture.
-  A pick by hand holds until the phone tilts past 30° or 70°. In the Simulator, Vision requests are pinned to the
+  A pick by hand holds until that part locks. In the Simulator, Vision requests are pinned to the
   CPU, else it can't create an inference context; the finder's boxes there still come out wrong, so check on the phone.
   - Two tabs. Capture's controls are one row in the tab bar's accessory (`tabViewBottomAccessory`), which the system
     places above the tab bar, or level with it on the iPhone Duo, whose tab bar is at the side; hand-placed panels
     were off on one device or the other. Notes are typed in an alert, since the accessory stays behind the keyboard.
     Solver keeps a two-row panel.
+  - Once table and rack are both locked, the Solver shows the Board (`Board.swift`) and the camera stops, to save
+    battery: each part drawn as it sat in its frame, with the step shown drawn on it. Tapping a part scans it again.
+    Finish on a play's last step takes its melds as the table (`Play.finished`, in the slots the steps put them) and
+    re-solves, with no rescan. Models load off the main thread, about 7 s on a cold launch; frames wait for them.
+    Once the part in view is locked, frames are read a second apart.
   - A capture is a finger lifted off the camera (pressing hides everything drawn over it, to check the framing) or a
     second tap on the Capture tab. The tab's icon is a checkmark for 1.5 s after, so a burst doesn't make duplicates.
   - The camera is the virtual multi-lens device, so .5× reaches the ultra wide; it starts at the widest, since a whole

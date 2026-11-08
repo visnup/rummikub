@@ -36,22 +36,27 @@ public struct Classifier: @unchecked Sendable {
 
   /// The most likely class for the whole image, with its probability.
   public func label(of image: CGImage) throws -> (label: String, confidence: Float)? {
+    try probabilities(of: image).max { $0.value < $1.value }.map { ($0.key, $0.value) }
+  }
+
+  /// Every class's probability for the whole image.
+  public func probabilities(of image: CGImage) throws -> [String: Float] {
     if let model {
       let print = VNGenerateImageFeaturePrintRequest()
       // Stretched square, as the crops it was trained on were.
       print.imageCropAndScaleOption = .scaleFill
       print.onCPUInSimulator()
       try VNImageRequestHandler(cgImage: image).perform([print])
-      guard let observation = print.results?.first else { return nil }
+      guard let observation = print.results?.first else { return [:] }
       let features = observation.data.withUnsafeBytes { MLShapedArray<Float>(scalars: $0.bindMemory(to: Float.self), shape: [observation.elementCount]) }
       let output = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: ["features": MLMultiArray(features)]))
-      guard let label = output.featureValue(for: "label")?.stringValue,
-        let probabilities = output.featureValue(for: "labelProbability")?.dictionaryValue as? [String: Double]
-      else { return nil }
-      return (label, Float(probabilities[label] ?? 0))
+      let probabilities = output.featureValue(for: "labelProbability")?.dictionaryValue as? [String: Double] ?? [:]
+      return probabilities.mapValues(Float.init)
     }
     try VNImageRequestHandler(cgImage: image).perform([request!])
-    return (request!.results as? [VNClassificationObservation])?.first.map { ($0.identifier, $0.confidence) }
+    return Dictionary(
+      ((request!.results as? [VNClassificationObservation]) ?? []).map { ($0.identifier, $0.confidence) },
+      uniquingKeysWith: max)
   }
 
   /// The most likely tile in each box, where the classifier is at least `least` sure. On the held-out captures .7 read
@@ -61,10 +66,13 @@ public struct Classifier: @unchecked Sendable {
     // A frame's worth of requests at a time: Vision's buffers otherwise pile up until it fails with "Failed to
     // create CVPixelBufferPool", as it did over thousands of crops.
     return try autoreleasepool { try boxes.compactMap { box in
-      guard let crop = image.cropping(to: box.intersection(whole).integral), crop.width >= 8, crop.height >= 8,
-        let (label, confidence) = try label(of: crop), confidence >= least, let tile = Tile(label)
+      guard let crop = image.cropping(to: box.intersection(whole).integral), crop.width >= 8, crop.height >= 8
       else { return nil }
-      return Detection(tile: tile, frame: box)
+      let odds = try probabilities(of: crop).reduce(into: [Tile: Float]()) { odds, class_ in
+        if let tile = Tile(class_.key), class_.value >= 0.001 { odds[tile] = class_.value }
+      }
+      guard let (tile, confidence) = odds.max(by: { $0.value < $1.value }), confidence >= least else { return nil }
+      return Detection(tile: tile, frame: box, odds: odds)
     } }
   }
 }

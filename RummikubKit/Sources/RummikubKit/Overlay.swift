@@ -118,6 +118,15 @@ extension Play {
     }
   }
 
+  /// The scene once every step is done: the new melds in their slots, and the rack without what went to the table.
+  public func finished(_ scene: Scene, within bounds: CGRect? = nil) -> Scene {
+    let table = zip(melds, slots(in: scene, within: bounds)).map { meld, slots in
+      zip(meld.tiles, slots).map { Detection(tile: $0, frame: $1) }
+    }
+    let used = Set(steps.compactMap { if case .rack(let i) = $0.from { i } else { nil } })
+    return Scene(table: table, rack: scene.rack.indices.filter { !used.contains($0) }.map { scene.rack[$0] })
+  }
+
   /// How many steps the table, read as `table`, shows done. A step is done once some meld read there holds its tile
   /// and everything already placed in its destination, and nothing that belongs in neither it nor the old meld it
   /// stays in place of, whose leaving tiles may not have left yet.
@@ -134,6 +143,26 @@ extension Play {
       placed[step.to] = expected
     }
     return steps.count
+  }
+
+  /// The steps from `index` on that take tiles from the same place, the rack or one meld, to the same meld: shown and
+  /// done as one, like three 6s from the rack laid down as a group.
+  public func group(at index: Int) -> Range<Int> {
+    func same(_ a: Source, _ b: Source) -> Bool {
+      switch (a, b) {
+      case (.rack, .rack): true
+      case (.table(let m, _), .table(let n, _)): m == n
+      default: false
+      }
+    }
+    var end = index + 1
+    while end < steps.count, steps[end].to == steps[index].to, same(steps[end].from, steps[index].from) { end += 1 }
+    return index..<end
+  }
+
+  /// Where each group of steps starts.
+  public var groups: [Int] {
+    sequence(first: 0) { group(at: $0).upperBound }.prefix { $0 < steps.count }.map(\.self)
   }
 
   /// What to draw for step `index`: the tile to pick up, where it goes, and an arrow between.

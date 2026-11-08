@@ -70,6 +70,19 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     #endif
   }
 
+  private let control = DispatchQueue(label: "camera control")
+
+  /// Starts or stops the camera, off the main thread, since starting blocks.
+  func run(_ on: Bool) {
+    control.async {
+      if on && !self.session.isRunning {
+        self.session.startRunning()
+      } else if !on && self.session.isRunning {
+        self.session.stopRunning()
+      }
+    }
+  }
+
   func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
     guard Date().timeIntervalSince(last) > 0.3, let buffer = sampleBuffer.imageBuffer else { return }
     let image = CIImage(cvPixelBuffer: buffer)

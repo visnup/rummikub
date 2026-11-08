@@ -21,23 +21,24 @@
 
   struct Score {
     var tiles = 0, found = 0, extraBoxes = 0, valued = 0, read = 0, filtered = 0, extraReads = 0, extraFiltered = 0
-    var classified = 0, extraClassified = 0
+    var classified = 0, extraClassified = 0, valid = 0, extraValid = 0
 
     static func += (a: inout Score, b: Score) {
       a = Score(
         tiles: a.tiles + b.tiles, found: a.found + b.found, extraBoxes: a.extraBoxes + b.extraBoxes,
         valued: a.valued + b.valued, read: a.read + b.read, filtered: a.filtered + b.filtered,
         extraReads: a.extraReads + b.extraReads, extraFiltered: a.extraFiltered + b.extraFiltered,
-        classified: a.classified + b.classified, extraClassified: a.extraClassified + b.extraClassified)
+        classified: a.classified + b.classified, extraClassified: a.extraClassified + b.extraClassified,
+        valid: a.valid + b.valid, extraValid: a.extraValid + b.extraValid)
     }
 
     var columns: [String] {
       ["\(found)/\(tiles) +\(extraBoxes)", "\(read)/\(valued) +\(extraReads)", "\(filtered)/\(valued) +\(extraFiltered)",
-        "\(classified)/\(valued) +\(extraClassified)"]
+        "\(classified)/\(valued) +\(extraClassified)", "\(valid)/\(valued) +\(extraValid)"]
     }
   }
   var total = Score()
-  print("capture", "found/tiles +extra", "read/valued +extra", "with finder +extra", "classified +extra", separator: "\t")
+  print("capture", "found/tiles +extra", "read/valued +extra", "with finder +extra", "classified +extra", "valid melds +extra", separator: "\t")
   for name in done.filter(Finder.isHeldOut).sorted() {
     let truth = try (JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
       as! [[String: Any]]).map { t in
@@ -79,7 +80,10 @@
     (s.read, s.extraReads) = score(readings)
     (s.filtered, s.extraFiltered) = score(filtered)
     if let classifier {
-      (s.classified, s.extraClassified) = score(try classifier.tiles(in: image, boxes: boxes))
+      let classified = try classifier.tiles(in: image, boxes: boxes)
+      (s.classified, s.extraClassified) = score(classified)
+      let table = lines.first?.hasPrefix("table") ?? false
+      (s.valid, s.extraValid) = score(table ? Recognizer.valid(Recognizer.melds(classified)).flatMap(\.self) : classified)
     }
     print(([name] + s.columns).joined(separator: "\t"))
     total += s

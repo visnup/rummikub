@@ -11,6 +11,18 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
   private var device: AVCaptureDevice?
   /// Only touched on the capture queue.
   private var last = Date.distantPast
+  /// The device zoom factor that shows as "1×".
+  private var wide: CGFloat = 1
+
+  /// The zooms to offer, as the Camera app labels them: 0.5× where there's an ultra wide.
+  var zooms: [Double] { wide > 1 ? [0.5, 1, 2] : [1, 2] }
+
+  /// Zooms to a factor as the Camera app labels it, so 0.5 is the ultra wide.
+  func zoom(to label: Double) {
+    guard let device, (try? device.lockForConfiguration()) != nil else { return }
+    device.videoZoomFactor = min(max(CGFloat(label) * wide, device.minAvailableVideoZoomFactor), device.maxAvailableVideoZoomFactor)
+    device.unlockForConfiguration()
+  }
 
   /// What the camera is set to right now, for a capture's notes.
   var settings: [String: Any] {
@@ -19,7 +31,8 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     return [
       "iso": device.iso, "exposure": device.exposureDuration.seconds, "lensPosition": device.lensPosition,
       "whiteBalanceGains": [gains.redGain, gains.greenGain, gains.blueGain],
-      "fieldOfView": device.activeFormat.videoFieldOfView, "zoom": device.videoZoomFactor,
+      "fieldOfView": device.activeFormat.videoFieldOfView, "zoom": device.videoZoomFactor, "zoomLabel": device.videoZoomFactor / wide,
+      "lens": device.activePrimaryConstituent?.deviceType.rawValue ?? device.deviceType.rawValue,
     ]
   }
 
@@ -33,10 +46,19 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     #if targetEnvironment(simulator)
       return false
     #else
-      guard let device = AVCaptureDevice.default(for: .video), await AVCaptureDevice.requestAccess(for: .video),
+      // A virtual device switches lenses as it zooms, so the ultra wide is in reach.
+      guard
+        let device = AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back)
+          ?? AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back)
+          ?? AVCaptureDevice.default(for: .video),
+        await AVCaptureDevice.requestAccess(for: .video),
         let input = try? AVCaptureDeviceInput(device: device)
       else { return false }
     self.device = device
+    // A zoom factor of 1 is the ultra wide; the wide lens, "1×", starts at the first switch-over.
+    wide = device.virtualDeviceSwitchOverVideoZoomFactors.first.map { CGFloat($0.doubleValue) } ?? 1
+    // Widest first: a whole table fits from closer.
+    zoom(to: zooms[0])
     session.sessionPreset = .hd1920x1080
     session.addInput(input)
     let output = AVCaptureVideoDataOutput()

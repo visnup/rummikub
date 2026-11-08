@@ -1,15 +1,12 @@
 import Foundation
 import ImageIO
 import RummikubKit
-import UniformTypeIdentifiers
 
 // Writes every tile read in each capture to `<capture>.tiles.json`, as boxes to check by hand. A tile's value is
 // confirmed where it agrees with the truth, closest matches first, and in a full set its neighbors agree too. A file
-// with any tile labeled by hand is left alone. With a second directory, also writes each capture with its tiles drawn
-// on for checking, unconfirmed ones as jokers.
-//   label <captures> [<overlays>]
+// with any tile labeled by hand is left alone.
+//   label <captures>
 let captures = URL(filePath: CommandLine.arguments[1])
-let overlays = CommandLine.arguments.dropFirst(2).first.map { URL(filePath: $0) }
 var labeled = 0, confirmedCount = 0, total = 0
 for url in try FileManager.default.contentsOfDirectory(at: captures, includingPropertiesForKeys: nil)
   .filter({ $0.pathExtension == "png" }).sorted(by: { $0.path < $1.path })
@@ -54,14 +51,6 @@ for url in try FileManager.default.contentsOfDirectory(at: captures, includingPr
   confirmedCount += sure.count
   total += truth
   print(base.lastPathComponent, agreed.count, sure.count, "of", truth)
-  if let overlays {
-    let destination = CGImageDestinationCreateWithURL(
-      overlays.appending(path: base.lastPathComponent + ".png") as CFURL, UTType.png.identifier as CFString, 1, nil)!
-    CGImageDestinationAddImage(
-      destination,
-      Render.overlay(image, read.map { .label($0.frame, sure.contains($0) ? $0.tile : .joker) }), nil)
-    CGImageDestinationFinalize(destination)
-  }
 }
 print("labeled", labeled, "confirmed", confirmedCount, "of", total)
 

@@ -3,12 +3,14 @@
 # dependencies = ["transformers", "torch", "pillow", "scipy"]
 # ///
 """Draws boxes on every capture not yet edited by hand, with OWLv2 and a linear probe trained on the done captures'
-boxes: uv run Labeler/prelabel.py. On the held-out captures it found 248 of 263 tiles with 14 extra boxes, where
+boxes: uv run Labeler/prelabel.py [--new]. On the held-out captures it found 248 of 263 tiles with 14 extra boxes, where
 `train`'s detector found 199 with 110. Too big for the phone, so it only pre-labels.
 
 A box takes the value of the tile already there it overlaps most; confirmed tiles stay where no box overlaps them."""
 
+import hashlib
 import json
+import sys
 from pathlib import Path
 
 import torch
@@ -18,6 +20,8 @@ from transformers.image_transforms import center_to_corners_format
 
 captures = Path(__file__).parent.parent / "Captures"
 threshold = 0.8
+# With --new, only captures with no boxes yet.
+new_only = "--new" in sys.argv
 
 
 def iou(a, b):
@@ -29,7 +33,7 @@ def iou(a, b):
     return i / (aw * ah + bw * bh - i) if i else 0
 
 
-def inside(a, b):
+def contained(a, b):
     """How much of the smaller box lies in the other: a numeral's box inside its tile's has a low IoU but a high
     overlap here."""
     w = max(0, min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0]))
@@ -70,34 +74,57 @@ def tiles(name):
 
 done = set((captures / "boxed.txt").read_text().split())
 
-# Each true tile's best-fitting patch is a tile. Patches that fit a tile badly are not, or they come back as extra
-# boxes beside the good one; so is a sample of the rest.
-positives, negatives = [], []
-for name in sorted(done):
-    image = Image.open(captures / f"{name}.png").convert("RGB")
-    true = [t["frame"] for t in tiles(name)]
-    for x, y, s in crops(*image.size, overlap=False):
-        inside = [(bx - x, by - y, bw, bh) for bx, by, bw, bh in true if bx >= x and by >= y and bx + bw <= x + s and by + bh <= y + s]
-        embeds, boxes = embed(image.crop((x, y, x + s, y + s)))
-        for t in inside:
-            i = max(range(len(boxes)), key=lambda i: iou(boxes[i], t))
-            if iou(boxes[i], t) > 0.5:
-                positives.append(embeds[i])
-        for i, box in enumerate(boxes):
-            best = max((iou(box, t) for t in inside), default=0)
-            if best < 0.4 and (best > 0.05 or i % 7 == 0):
-                negatives.append(embeds[i])
-print("learning from", len(positives), "tiles in", len(done), "captures", flush=True)
+@torch.no_grad()
+def examples(probe=None):
+    """Each true tile's best-fitting patch is a tile. Patches that fit a tile badly are not, or they come back as extra
+    boxes beside the good one; so is a sample of the rest. Given a probe, also every patch it wrongly calls a tile:
+    keyboard keys, mostly, too few to turn up in the sample."""
+    positives, negatives = [], []
+    for name in sorted(done):
+        image = Image.open(captures / f"{name}.png").convert("RGB")
+        true = [t["frame"] for t in tiles(name)]
+        for x, y, s in crops(*image.size, overlap=False):
+            within = [(bx - x, by - y, bw, bh) for bx, by, bw, bh in true if bx >= x and by >= y and bx + bw <= x + s and by + bh <= y + s]
+            embeds, boxes = embed(image.crop((x, y, x + s, y + s)))
+            scores = torch.sigmoid(probe(embeds).squeeze(1)).tolist() if probe else None
+            for t in within:
+                i = max(range(len(boxes)), key=lambda i: iou(boxes[i], t))
+                if iou(boxes[i], t) > 0.5:
+                    positives.append(embeds[i])
+            for i, box in enumerate(boxes):
+                best = max((iou(box, t) for t in within), default=0)
+                if best < 0.4 and (best > 0.05 or i % 7 == 0 or (scores and scores[i] > 0.5 and best == 0)):
+                    negatives.append(embeds[i])
+    return positives, negatives
 
-X = torch.cat([torch.stack(positives), torch.stack(negatives)])
-Y = torch.cat([torch.ones(len(positives)), torch.zeros(len(negatives))]).to(device)
-probe = torch.nn.Linear(X.shape[1], 1).to(device)
-optimizer = torch.optim.Adam(probe.parameters(), lr=1e-2, weight_decay=1e-4)
-weight = torch.where(Y == 1, len(negatives) / len(positives), 1.0)
-for _ in range(500):
-    optimizer.zero_grad()
-    torch.nn.functional.binary_cross_entropy_with_logits(probe(X).squeeze(1), Y, weight=weight).backward()
-    optimizer.step()
+
+def train(positives, negatives):
+    X = torch.cat([torch.stack(positives), torch.stack(negatives)])
+    Y = torch.cat([torch.ones(len(positives)), torch.zeros(len(negatives))]).to(device)
+    probe = torch.nn.Linear(X.shape[1], 1).to(device)
+    optimizer = torch.optim.Adam(probe.parameters(), lr=1e-2, weight_decay=1e-4)
+    weight = torch.where(Y == 1, len(negatives) / len(positives), 1.0)
+    for _ in range(500):
+        optimizer.zero_grad()
+        torch.nn.functional.binary_cross_entropy_with_logits(probe(X).squeeze(1), Y, weight=weight).backward()
+        optimizer.step()
+    return probe
+
+
+# The probe is kept until the done captures' boxes change, so `make watch` only pays for the new photos.
+key = hashlib.sha256("".join(sorted(done)).encode() + b"".join(
+    (captures / f"{name}.tiles.json").read_bytes() for name in sorted(done))).hexdigest()
+cache = captures / ".probe.pt"
+saved = torch.load(cache) if cache.exists() else {}
+if saved.get("key") == key:
+    probe = torch.nn.Linear(saved["state"]["weight"].shape[1], 1).to(device)
+    probe.load_state_dict(saved["state"])
+else:
+    probe = train(*examples())
+    positives, negatives = examples(probe)
+    print("learning from", len(positives), "tiles and", len(negatives), "others in", len(done), "captures", flush=True)
+    probe = train(positives, negatives)
+    torch.save({"key": key, "state": probe.state_dict()}, cache)
 
 
 @torch.no_grad()
@@ -106,16 +133,18 @@ def detect(image):
     and one overlapping a likelier box, or mostly inside it, is dropped."""
     w, h = image.size
     found = []
-    for x, y, s in crops(w, h, overlap=True):
-        embeds, boxes = embed(image.crop((x, y, x + s, y + s)))
+    # The whole photo too, for tiles too large to sit whole in any crop.
+    for x, y, s in [(0, 0, None)] + crops(w, h, overlap=True):
+        embeds, boxes = embed(image if s is None else image.crop((x, y, x + s, y + s)))
         scores = torch.sigmoid(probe(embeds).squeeze(1)).cpu().tolist()
         for (bx, by, bw, bh), score in zip(boxes, scores):
-            cut = (bx < 2 and x > 0) or (bx + bw > s - 2 and x + s < w) or (by < 2 and y > 0) or (by + bh > s - 2 and y + s < h)
+            cut = s is not None and (
+                (bx < 2 and x > 0) or (bx + bw > s - 2 and x + s < w) or (by < 2 and y > 0) or (by + bh > s - 2 and y + s < h))
             if score > threshold and not cut:
                 found.append(([bx + x, by + y, bw, bh], score))
     kept = []
     for f in sorted(found, key=lambda f: -f[1]):
-        if all(iou(f[0], k[0]) <= 0.1 and inside(f[0], k[0]) < 0.5 for k in kept):
+        if all(iou(f[0], k[0]) <= 0.1 and contained(f[0], k[0]) < 0.5 for k in kept):
             kept.append(f)
     return kept
 
@@ -128,6 +157,8 @@ for png in pngs:
     # Captures with no tiles in their truth keep their empty labels.
     empty = png.parent == captures and txt.exists() and not "".join(txt.read_text().splitlines()[1:]).strip()
     if name in done or empty or any(t.get("source") == "hand" for t in current):
+        continue
+    if new_only and (captures / f"{name}.tiles.json").exists():
         continue
     found = detect(Image.open(png).convert("RGB"))
     unmatched = list(current)

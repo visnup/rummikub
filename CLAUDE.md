@@ -55,7 +55,10 @@ What's next is in `TODO.md`.
   - `make labels` runs `label`, then `prelabel.py`, then serves the page at http://localhost:8765 (also `labeler`
     in `.claude/launch.json`).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
-    round of fixing boxes leaves less for the next. It's OWLv2, frozen, run on the same overlapping crops as
+    round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet, and the probe is
+    cached in `Captures/.probe.pt` until the done captures' boxes change. `make watch` runs it every 30 s while
+    capturing, beside `make labels`, which takes the app's pushes. A second probe pass learns from the patches the first wrongly calls tiles, but
+    keyboard keys still get boxed: the done captures rarely show one. It's OWLv2, frozen, run on the same overlapping crops as
     `Finder`, with a linear probe trained on the done captures' boxes; patches that fit a tile badly are its
     negatives, or they come back as extra boxes. A box mostly inside a likelier one is dropped too: numerals got
     their own small boxes inside their tiles'. On the held-out captures it found 248 of 263 tiles with 14 extras
@@ -66,11 +69,14 @@ What's next is in `TODO.md`.
     may run past the edge.
   - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
-  - `bootstrap.py` turns [christophrus/rummikub](https://huggingface.co/datasets/christophrus/rummikub) into a
-    Create ML set in `Bootstrap/`, which git ignores. The set is 828 photos of a similar tile set, every tile boxed
-    and shrunk to 1920 px.
-  - `make bootstrap` trains on it as well as on our done captures. That dataset is GPL-3.0, so its model stays in
-    `Bootstrap/`; the app's model is trained on ours alone.
+  - The app pushes each capture to `server.py` (`PUT /api/capture/<file>`, notes before the photo), which keeps one
+    already there or in `.removed` and moves "As read" ones to `unlabeled/`. It retries what didn't get through on
+    the next capture or launch (`Sync.swift`, `Documents/.sent`); the Mac is `box.local`, and the server listens on
+    the local network for it. `make captures` still copies by cable.
+  - `words` flags captures with readable words, a line of three or more, into `Captures/review.txt` for a look
+    before `make upload`; `make watch` runs it. Vision's text recognition, so tile numerals and key legends don't
+    count. On the first 101 captures it flagged 8: a Messages thread, this project's own chat on a laptop, a
+    business card, game boxes.
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
   times a second; `Game` reads them, drops readings outside every box `Finder` sees (`Tiles.mlmodel`), keeps the table and rack, solves, and tracks the step shown; `ContentView`
@@ -79,8 +85,16 @@ What's next is in `TODO.md`.
   tile doesn't re-solve. While a play is being shown, readings don't re-solve; they advance the step instead
   (`Play.stepsDone`). The simulator never uses a camera: it reads a fixture photo of whichever the Table/Rack switch says
   (`Demo`), straight off the Mac's disk. On the phone, Table/Rack follows the tilt from CoreMotion (`Game.tilt`), shown in degrees
-  beside the switch and written into each capture. The capture button turns into a checkmark for 1.5 s and counts what's saved,
-  so a burst doesn't make duplicates.
+  in the top pill and written into each capture.
+  - Two tabs. Capture's controls are one row in the tab bar's accessory (`tabViewBottomAccessory`), which the system
+    places above the tab bar, or level with it on the iPhone Duo, whose tab bar is at the side; hand-placed panels
+    were off on one device or the other. Notes are typed in an alert, since the accessory stays behind the keyboard.
+    Solver keeps a two-row panel.
+  - A capture is a finger lifted off the camera (pressing hides everything drawn over it, to check the framing) or a
+    second tap on the Capture tab. The tab's icon is a checkmark for 1.5 s after, so a burst doesn't make duplicates.
+  - The camera is the virtual multi-lens device, so .5× reaches the ultra wide; it starts at the widest, since a whole
+    table fits from closer. Captures record the zoom as labeled and the lens.
+  - Each frame's read and find times go to `Documents/timing/`, a file a launch, for `make timing`.
   `make` builds it and installs and launches it on the phone (an iPhone named Yam); `make sim`
   builds the Simulator's; `make test` runs the package's tests.
 - `RummikubKit` builds with `-O` even in debug, since recognition's pixel loops take seconds a frame unoptimized.
@@ -134,7 +148,8 @@ reaches the table between rendered tiles.
 
   `make captures` copies the new ones into `Captures/`, which git ignores since they're hundreds of MB. It copies
   one file at a time, since `devicectl device copy from` with `--source Documents` copies nothing. Captures whose
-  truth isn't written yet go in `Captures/unlabeled/`. `make upload` sends them to the Hugging Face dataset
+  truth isn't written yet go in `Captures/unlabeled/`; `make captures` moves new "As read" ones there itself. It
+  skips the per-frame timing logs, which `make timing` pulls into `Timing/`. `make upload` sends them to the Hugging Face dataset
   `visnup/rummikub-captures`, private for now and meant to go public. So before uploading, drop any capture that
   shows readable personal text, like messages on a screen; a screen in frame is fine otherwise.
   `Captures/README.md` is the dataset's card. `CAPTURES=$PWD/../Captures swift test --filter readsCaptures`,

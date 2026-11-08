@@ -5,12 +5,10 @@
   import RummikubKit
 
   // Trains a tile detector on the captures whose boxes are done (`boxed.txt`), except the held-out ones, and writes it
-  // to `Tiles.mlmodel` beside them. With another set (images and a Create ML `annotations.json`), trains on that too
-  // and writes the model there instead, since it isn't ours to ship.
-  //   train <captures> [<set>]
+  // to `Tiles.mlmodel` beside them.
+  //   train <captures>
   setvbuf(stdout, nil, _IOLBF, 0)
   let captures = URL(filePath: CommandLine.arguments[1])
-  let extra = CommandLine.arguments.dropFirst(2).first.map { URL(filePath: $0) }
   let done = Set(
     ((try? String(contentsOf: captures.appending(path: "boxed.txt"), encoding: .utf8)) ?? "").split(separator: "\n")
       .map(String.init))
@@ -56,17 +54,6 @@
     try add(
       captures.appending(path: name + ".png"), as: name.replacingOccurrences(of: "/", with: "-") + ".png", boxes: boxes)
   }
-  if let extra {
-    let data = try Data(contentsOf: extra.appending(path: "annotations.json"))
-    for entry in try JSONSerialization.jsonObject(with: data) as! [[String: Any]] {
-      let image = entry["image"] as! String
-      let boxes = (entry["annotations"] as! [[String: Any]]).map {
-        let c = $0["coordinates"] as! [String: Double]
-        return CGRect(x: c["x"]!, y: c["y"]!, width: c["width"]!, height: c["height"]!)
-      }
-      try add(extra.appending(path: image), as: "extra-" + image, boxes: boxes)
-    }
-  }
   let annotationFile = training.appending(path: "annotations.json")
   try JSONSerialization.data(withJSONObject: annotations).write(to: annotationFile)
   print("training on", annotations.count, "captures,", annotations.reduce(0) { $0 + ($1["annotations"] as! [Any]).count }, "tiles")
@@ -101,8 +88,7 @@
   }
   _ = subscriptions
   let detector = try result!.get()
-  let modelURL = (extra ?? captures).appending(path: "Tiles.mlmodel")
-  try detector.write(to: modelURL)
+  try detector.write(to: captures.appending(path: "Tiles.mlmodel"))
 
   func frame(_ tile: [String: Any]) -> CGRect {
     let f = tile["frame"] as! [Double]

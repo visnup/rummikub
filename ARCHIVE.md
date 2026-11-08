@@ -30,6 +30,21 @@ What was tried and dropped, so nobody repeats it.
 - **A wider value margin for the face** (peak − .3) to catch the rack photo's shaded green 7: it let wood grain in on
   the board photo and still missed the 7.
 
+## Tile finder
+
+- **Bootstrapping on [christophrus/rummikub](https://huggingface.co/datasets/christophrus/rummikub)** (2026-11-07):
+  828 boxed photos of a similar tile set, trained with ours, took held-out tiles found from 83% to 92% with 44 extra
+  boxes, against 129 on ours alone (29 captures). It's GPL-3.0, so its model only pre-labeled, never shipped. Dropped
+  once OWLv2 with a probe pre-labeled better from our boxes alone; `Labeler/bootstrap.py` and `make bootstrap` are in
+  the history.
+- **Create ML's own pre-labels**: `train` used to draw its boxes on unchecked captures. On the same held-out captures
+  it found 199 of 263 tiles with 110 extras; OWLv2 with a probe found 248 with 14.
+- **OWLv2 queried with the mean tile embedding** instead of a probe: about 2,000 extra boxes at any threshold, since
+  OWL's per-patch logit shift and scale swamp a single query.
+- **A value classifier** (Create ML image classifier on upright crops of confirmed tiles): on the fixtures, reader
+  frames filtered by the finder went from 59 wrong to 49, but it breaks right values too, mostly 6 read as 5. On 12
+  game captures given the true box and turn it read 177 of 220. Not in the app yet.
+
 ## Solver
 
 - **Memoized search over melds by value** (`Search`, replaced 2026-11-06 by the integer program). It settled the

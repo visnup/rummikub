@@ -62,6 +62,15 @@ import UniformTypeIdentifiers
   var step: Int?
   /// A reading that differs from `scene`, kept until a second frame agrees with it.
   private var pending: Scene?
+  /// Every frame's timing, a file a launch in Documents/timing, for `make timing`.
+  private let timing: FileHandle? = {
+    let directory = URL.documentsDirectory.appending(path: "timing")
+    let url = directory.appending(path: Date.now.formatted(.iso8601) + ".csv")
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    guard FileManager.default.createFile(atPath: url.path, contents: Data("time,looking,read_ms,find_ms,readings,boxes\n".utf8))
+    else { return nil }
+    return try? FileHandle(forWritingTo: url)
+  }()
 
   var play: Play? { plays.indices.contains(choice) ? plays[choice] : nil }
 
@@ -85,6 +94,9 @@ import UniformTypeIdentifiers
     self.findTime = findTime
     self.boxes = boxes ?? []
     detections = found
+    _ = try? timing?.seekToEnd()
+    try? timing?.write(contentsOf: Data(
+      "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(read.count),\(boxes?.count ?? -1)\n".utf8))
     var next = scene
     if looking == .table {
       next.table = Recognizer.melds(found)

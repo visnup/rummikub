@@ -159,10 +159,19 @@ Scores, on the Mac and in the Simulator:
    - On the reader: against written truth, the held-out captures read 257 of 360 right with 61 extras, and the
      finder's filter barely changes that (255, 61). It drops false reads off the tiles, but most held-out errors
      are misread values on real tiles.
-   - Data: 75 captures boxed by 2026-11-07, but most are full sets from two sessions at one table. Next is a
-     learning curve (`QUARTERS`) to see whether more of the same helps, and more varied captures: real games,
-     racks, other surfaces, light and angles.
-   - Next: its milliseconds per frame on the phone. It runs 16 passes a frame (the whole frame and 15 crops).
+   - Data: 75 captures boxed by 2026-11-07, but most are full sets from two sessions at one table. Learning curve
+     (`QUARTERS`) on the 581 held-out tiles: a quarter found 392 (67%) with 274 extras, half 446 (77%) with 194,
+     three quarters 446 with 201, all 477 (82%) with 124. Still rising, so more captures pay off; varied ones most:
+     real games, racks, other surfaces, light and angles. The app ships the model trained on all of them.
+   - On 12 game captures (220 tiles, values written by hand, tilted 31–77°) the reader got 58 right, missed 106 and
+     misread 55, many at the wrong quarter turn. Finding numerals at an angle is the gap, not reading them. A value
+     classifier given the true box, turned upright, got 177; it mostly reads 6 as 5. Next: finder boxes plus the
+     classifier, picking the turn by its confidence over all four.
+   - On the phone (`make timing`, 1,317 frames on 2026-11-07): the finder takes 148 ms a frame (max 622) beside the
+     reader's 96 (max 288). It runs 16 passes a frame (the whole frame and 15 crops). Backgrounded frames log
+     outliers of tens of seconds, which skew later averages.
+   - The finder's boxes draw below their tiles on screen while the labels sit on the numerals, so the preview and
+     the read frame may be framed differently. Not looked into; captures are unaffected.
    - Considered: Ultralytics YOLO is AGPL. RF-DETR and D-FINE nano are Apache-2.0 and could fine-tune on our boxes,
      but their Core ML export is untested. The Rummikub models on Hugging Face (roeiderman) are gated and
      unlicensed.

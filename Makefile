@@ -54,18 +54,17 @@ labels:
 	uv run Labeler/prelabel.py
 	uv run Labeler/server.py
 
-# Retrains the finder and the value classifiers side by side, then scores them: about 25 minutes, nearly all the
-# finder's. After labeling values alone, `make values score` takes a minute or two.
+# Retrains the finder and the value classifiers side by side, then scores them: a little over an hour, nearly all
+# the finder's. After labeling values alone, `make values score` takes a minute or two.
 retrain:
-	cd RummikubKit && swift build -c release --product train && swift build -c release --product values
+	cd RummikubKit && swift build -c release --product values
 	$(MAKE) -j2 train values
 	$(MAKE) score
 
-# Trains the tile finder on captures whose boxes are done and the outside sets, and gives the app the model. Three
-# times Create ML's default iterations, since the outside set quadruples the data.
+# Trains the tile finder on captures whose boxes are done and the outside sets for MINUTES (60), and gives the app it.
 train:
-	cd RummikubKit && ITERATIONS=3000 swift run -c release train ../$(dir) $(addprefix ../,$(wildcard Outside/*-train))
-	cp $(dir)/Tiles.mlmodel Rummikub/
+	uv run Labeler/finder.py $(dir) $(wildcard Outside/*-train)
+	rm -rf Rummikub/Tiles.mlpackage && cp -R $(dir)/Tiles.mlpackage Rummikub/
 
 # Trains the value classifiers on tile crops and gives the app them: Values for tables, at any quarter turn, with
 # the outside sets; RackValues for racks, upright, ours alone. Over Vision's feature prints, kept by crop in
@@ -91,4 +90,5 @@ score:
 upload:
 	uvx --from huggingface_hub hf upload visnup/rummikub-captures $(dir) . --repo-type dataset --exclude .files.json \
 	  --exclude .removed --exclude .DS_Store --exclude .probe.pt --exclude .words.txt --exclude review.txt \
-	  --exclude ".crops/*" --exclude ".scene/*" --exclude "*.mlmodel"
+	  --exclude ".crops/*" --exclude ".scene/*" --exclude ".finder/*" --exclude "*.mlmodel" \
+	  --exclude "Tiles.mlpackage/*" --exclude ids.txt

@@ -16,7 +16,7 @@
   nav summary { cursor: pointer; }
   nav h3 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0; padding: 6px 10px 2px; position: sticky; top: 0; background: var(--bg); }
   main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  header { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+  header { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
   header b { font-size: 14px; }
   #missing { color: var(--muted); }
   #missing .extra { color: #d33; }
@@ -24,7 +24,10 @@
   canvas { display: block; cursor: crosshair; margin: auto; flex: none; }
   header small { color: var(--muted); }
   #typed { position: absolute; background: #111; color: #fff; font: bold 16px ui-monospace, monospace; padding: 2px 6px; border-radius: 4px; pointer-events: none; display: none; }
-  details { color: var(--muted); }
+  nav { padding-bottom: 32px; box-sizing: border-box; }
+  #keys { position: fixed; left: 0; bottom: 0; width: 230px; padding: 6px 10px; box-sizing: border-box; background: var(--bg); border-top: 1px solid var(--line); color: var(--muted); }
+  #keys summary { cursor: pointer; }
+  #keys div { position: absolute; left: 8px; bottom: calc(100% + 4px); width: 380px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.15); color: var(--fg); }
   kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; font: 11px ui-monospace, monospace; }
 </style>
 </head>
@@ -35,15 +38,15 @@
     <b id="name"></b>
     <span id="count"></span>
     <span id="missing"></span>
-    <details><summary>Keys</summary>
+  </header>
+  <div id="view"><canvas id="canvas"></canvas><div id="typed"></div></div>
+</main>
+<details id="keys"><summary>Keys</summary><div>
       Every tile needs a box and nothing else does. Click empty space to add a box the size of those nearby, or drag to draw one; click one and <kbd>⌫</kbd> to
       delete it, or shift-drag a rectangle around several and <kbd>⌫</kbd>; drag a box to move it, its corner to resize. <kbd>Enter</kbd> marks the capture done and opens the next.
       Values are optional: click a box, type its tile (<kbd>r12</kbd>, <kbd>j</kbd>) and <kbd>Enter</kbd>.
       <kbd>←</kbd><kbd>→</kbd> turn which way is up. <kbd>+</kbd><kbd>−</kbd> zoom, <kbd>0</kbd> fit. <kbd>[</kbd><kbd>]</kbd> previous and next capture.
-    </details>
-  </header>
-  <div id="view"><canvas id="canvas"></canvas><div id="typed"></div></div>
-</main>
+</div></details>
 <script>
 const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d"), view = document.getElementById("view");
 const typedEl = document.getElementById("typed");
@@ -139,11 +142,11 @@ function draw() {
     ctx.strokeRect(x, y, w, h);
     const label = `${t.tile}${arrows[t.turns || 0]}`, width = ctx.measureText(label).width + 6;
     ctx.fillStyle = "#fff";
-    ctx.fillRect(x + w / 2 - width / 2, y - 17, width, 16);
+    ctx.fillRect(x + w / 2 - width / 2, y + h - 18, width, 16);
     ctx.lineWidth = 1;
-    ctx.strokeRect(x + w / 2 - width / 2, y - 17, width, 16);
+    ctx.strokeRect(x + w / 2 - width / 2, y + h - 18, width, 16);
     ctx.fillStyle = ink[t.tile[0]] ?? "#888";
-    ctx.fillText(label, x + w / 2, y - 5);
+    ctx.fillText(label, x + w / 2, y + h - 6);
   });
   if (drag?.mode === "create" || drag?.mode === "select") {
     const [x, y, w, h] = rect(drag).map(v => v * scale);

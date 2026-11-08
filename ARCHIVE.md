@@ -37,6 +37,12 @@ What was tried and dropped, so nobody repeats it.
   boxes, against 129 on ours alone (29 captures). It's GPL-3.0, so its model only pre-labeled, never shipped. Dropped
   once OWLv2 with a probe pre-labeled better from our boxes alone; `Labeler/bootstrap.py` and `make bootstrap` are in
   the history.
+- **A Create ML object detector** (`train`, replaced 2026-11-08 by D-FINE). Its object print reads every region at
+  299 px, so a 22 px tile shrinks to a few pixels: on 1013 held-out tiles it found 764 with 203 extras, and a
+  quarter of our captures did nearly as well as all of them (741). Crops a quarter of the short side found 860 but
+  read no more right, the extra tiles too small for the classifier; YOLO (darknet) at 416 px found 746 with 155 after
+  32 minutes. D-FINE small found 950 with 45. Ultralytics YOLO26s, AGPL so only a benchmark, found 924 with 56 in
+  the same hour.
 - **Create ML's own pre-labels**: `train` used to draw its boxes on unchecked captures. On the same held-out captures
   it found 199 of 263 tiles with 110 extras; OWLv2 with a probe found 248 with 14.
 - **OWLv2 queried with the mean tile embedding** instead of a probe: about 2,000 extra boxes at any threshold, since

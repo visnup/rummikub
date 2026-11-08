@@ -29,10 +29,11 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     not 1, 6, 8, 9 or 11. The tile face color is the peak of a
     saturation/value histogram, since white balance varies too much between photos for fixed thresholds. Vision's
     text recognition skips lone digits, both rendered and photographed, so it isn't used.
-  - `Finder.swift`: finds tiles, not values, with the detector `train` makes, through Vision. It runs on the whole
-    image and on overlapping crops half its short side, since small tiles are missed whole; a box cut by a crop's
-    edge is left to the neighboring crop. It keeps boxes over .9 confidence and drops any that overlap a kept one by over a tenth (IoU).
-    On the Simulator the model must run on the CPU, or Vision can't create an inference context.
+  - `Finder.swift`: finds tiles, not values, with the detector `Labeler/finder.py` makes, through Vision. It runs on
+    the whole image and on overlapping crops half its short side, since small tiles are missed whole; a box cut by a
+    crop's edge is left to the neighboring crop. It keeps boxes over .6 confidence and drops any that overlap a kept
+    one by over a tenth (IoU). On the Simulator the model must run on the CPU, or Vision can't create an inference
+    context. On the phone it takes about 490 ms a frame for the 19 regions of a 1080p frame.
   - `Overlay.swift`: what to draw for each step of a play over the image: the tile to pick up, its target slot as a
     ghost, and an arrow.
   - `Render.swift`: synthetic table images for tests, and drawing overlays onto images.
@@ -43,18 +44,12 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     in its color and one above or below has its value. Elsewhere, agreeing is enough. Files with hand labels are
     left alone.
 
-  - `train` (macOS only) trains a Create ML object detector, one "tile" class, on the captures whose boxes are done.
-    Done captures are listed in `Captures/boxed.txt`. It writes `Captures/Tiles.mlmodel`. `make train` runs it
-    and copies the model to `Rummikub/`; `make retrain` runs it beside `make values`, then `score`. It trains on each
-    image and its side-by-side crops, and never on held-out captures (`Finder.isHeldOut`, a fifth of them by a
-    hash of the name, so finishing more never moves one in or out). It stops
-    after `MINUTES` (60) with its last checkpoint. `QUARTERS` (1–4, default 4) trains on that many quarters of the
-    captures, nested, for a learning curve. It waits on the run loop: sleeping the main thread hung a run at 0% CPU.
-  - `score` (`make score`) runs the finder and the reader on the held-out done captures, through `Finder`, since
-    `MLObjectDetector.prediction`'s boxes are skewed on portrait images: tiles found (a box
-    overlapping a true one by half) and extra boxes, then tiles read right and extra against the written truth,
-    with and without the app's filter, and the finder's boxes read by `Values.mlmodel` when it's beside the captures.
-    Not against `tiles.json`'s values, which are mostly the reader's own.
+  - `score` (`make score`) runs the finder and the reader on the held-out done captures, through `Finder`: tiles
+    found (a box overlapping a true one by half) and extra boxes, then tiles read right and extra against the
+    written truth, with and without the app's filter, and the finder's boxes read by `Values.mlmodel` when it's
+    beside the captures. Not against `tiles.json`'s values, which are mostly the reader's own. It takes
+    `Captures/Tiles.mlpackage`. On 2026-11-08 the finder found 951 of 1013 held-out tiles with 44 extras, and with
+    `Values` read 809 right with 75 extras.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles. `make values` builds
     two with `crops.py` and the `values` tool: `Values` for tables, from our confirmed crops at all four quarter turns
     plus the outside sets as they lie, and `RackValues` for racks, upright, ours alone. On the held-out captures the
@@ -69,7 +64,17 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     else by tilt (two low ones were tables). Tilt alone can't say: racks were shot at 24–48°, tables from 35° up, and
     box shape doesn't separate them either. 21 of 24 held-out frames right, two of the misses judgment calls.
 
-- `Labeler/`: a page for checking boxes by hand, and a stdlib server that saves to the same `.tiles.json`.
+- `Labeler/`: a page for checking boxes by hand, a stdlib server that saves to the same `.tiles.json`, and the
+  Python that trains on them.
+  - `finder.py` trains the finder: D-FINE small (Apache 2.0) from COCO, one "tile" class at 640 px, on random
+    squares of the done captures (listed in `Captures/boxed.txt`) and the outside sets, at random quarter turns. It
+    never trains on held-out captures (`Finder.isHeldOut`, a fifth of them by a hash of the name, so finishing more
+    never moves one in or out). It runs `MINUTES` (60) on the Mac's GPU, then converts to
+    `Captures/Tiles.mlpackage`, swapping out three parts coremltools 9.0 can't convert. `make train` runs it and
+    copies the model to `Rummikub/`; `make retrain` runs it beside `make values`, then `score`. Training time
+    matters more than our captures now: in 15 minutes, a quarter of them took it from 856 found with 169 extras
+    (outside sets alone) to 895 with 67, and all of them to 894 with 62; 60 minutes found 950 with 45. `QUARTERS`
+    (0–4) and `SIZE` (`nano`, `small`) are for those comparisons.
   - `make labels` runs `label`, then `prelabel.py`, then serves the page at http://localhost:8765 (also `labeler`
     in `.claude/launch.json`).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
@@ -80,8 +85,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     keyboard keys still get boxed: the done captures rarely show one. It's OWLv2, frozen, run on the same overlapping crops as
     `Finder`, with a linear probe trained on the done captures' boxes; patches that fit a tile badly are its
     negatives, or they come back as extra boxes. A box mostly inside a likelier one is dropped too: numerals got
-    their own small boxes inside their tiles'. On the held-out captures it found 248 of 263 tiles with 14 extras
-    at its .8 cutoff, where `train`'s detector found 199 with 110. A text prompt alone found 226 of 230 with 127
+    their own small boxes inside their tiles'. On the held-out captures it found 897 of 1013 tiles with 153 extras,
+    where the finder found 950 with 45, so the finder should take over pre-labeling. A text prompt alone found 226 of 230 with 127
     extras, and needed the crops: whole photos shrink to OWL's 960 px. It's too big for the phone.
   - In the page, every tile needs a box and nothing else may have one. Click adds an average-sized box, drag draws
     one. Enter marks a capture done. Values are optional. A tile cut off by the photo's edge gets a box too, which

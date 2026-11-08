@@ -150,10 +150,22 @@ Scores, on the Mac and in the Simulator:
    numeral-finding, and with it the false reads on printed text and the rack tray, and tiles joined in glare.
    - In the app since 2026-11-07, filtering the reader: readings outside every box are dropped. On the fixtures
      that's 59 wrong against 65 (bootstrap model). Its boxes show faintly, and its time shows beside the read time.
-   - Held-out score (every fifth done capture): trained on whole photos it found 58%. On crops, half the short side,
-     it finds 92% with 44 extra boxes with the bootstrap set, 83% with 129 extra on ours alone (29 captures). The app
-     ships ours alone, since the bootstrap set is GPL.
+   - Held-out score (every fifth done capture then): trained on whole photos it found 58%. On crops, half the short
+     side, it finds 92% with 44 extra boxes with the bootstrap set, 83% with 129 extra on ours alone (29 captures).
+     The app ships ours alone, since the bootstrap set is GPL.
+   - Since 2026-11-07 the held-out fifth is picked by a hash of the name, and `make score` scores it. With 39 done
+     captures it found 269 of 369 held-out tiles (73%) with 131 extras; the set had grown to include a low-angle
+     shot. OWLv2 with a probe, now the pre-labeler, found 248 of 263 with 14 extras.
+   - On the reader: against written truth, the held-out captures read 257 of 360 right with 61 extras, and the
+     finder's filter barely changes that (255, 61). It drops false reads off the tiles, but most held-out errors
+     are misread values on real tiles.
+   - Data: 75 captures boxed by 2026-11-07, but most are full sets from two sessions at one table. Next is a
+     learning curve (`QUARTERS`) to see whether more of the same helps, and more varied captures: real games,
+     racks, other surfaces, light and angles.
    - Next: its milliseconds per frame on the phone. It runs 16 passes a frame (the whole frame and 15 crops).
+   - Considered: Ultralytics YOLO is AGPL. RF-DETR and D-FINE nano are Apache-2.0 and could fine-tune on our boxes,
+     but their Core ML export is untested. The Rummikub models on Hugging Face (roeiderman) are gated and
+     unlicensed.
 5. **The classifier**, if glyph matching on clean crops still confuses values.
    - Tried 2026-11-07 on about 2000 confirmed crops, fixtures' captures left out: on the reader's frames filtered by
      the finder, fixtures went from 59 wrong to 49. It changes 32 values, so it breaks some right ones; k6 often

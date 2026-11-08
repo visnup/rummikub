@@ -31,7 +31,7 @@
     <span id="count"></span>
     <span id="missing"></span>
     <details><summary>Keys</summary>
-      Every tile needs a box and nothing else does. Drag on empty space to add a box; click one and <kbd>⌫</kbd> to
+      Every tile needs a box and nothing else does. Click empty space to add a box the average size, or drag to draw one; click one and <kbd>⌫</kbd> to
       delete it; drag a box to move it, its corner to resize. <kbd>Enter</kbd> marks the capture done and opens the next.
       Values are optional: click a box, type its tile (<kbd>r12</kbd>, <kbd>j</kbd>) and <kbd>Enter</kbd>.
       <kbd>←</kbd><kbd>→</kbd> turn which way is up. <kbd>+</kbd><kbd>−</kbd> zoom. <kbd>[</kbd><kbd>]</kbd> previous and next capture.
@@ -69,7 +69,7 @@ function list() {
   document.getElementById("list").replaceChildren(...captures.map((c, i) => {
     const b = document.createElement("button");
     b.className = i === current ? "current" : "";
-    b.innerHTML = `<span>${c.name.replace("2026-11-06T", "")}</span><span class="${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</span>`;
+    b.innerHTML = `<span>${c.name.replace(/^(unlabeled\/)?\d{4}-/, "").replace("T", " ")}</span><span class="${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</span>`;
     b.onclick = () => open(i);
     return b;
   }));
@@ -79,7 +79,7 @@ function summary() {
   const c = captures[current];
   c.boxes = tiles.length;
   c.confirmed = tiles.filter(t => t.confirmed).length;
-  document.getElementById("name").textContent = c.name;
+  document.getElementById("name").textContent = c.name.replace("unlabeled/", "");
   document.getElementById("count").textContent = `${tiles.length} boxes${c.truth ? ` for ${c.truth.length} tiles` : ""}${c.boxed ? ", done" : ""}`;
   const missing = document.getElementById("missing");
   if (!c.truth) { missing.textContent = "truth unknown: box every tile"; list(); return; }
@@ -156,8 +156,10 @@ window.onmousemove = e => {
 };
 window.onmouseup = () => {
   if (!drag) return;
-  if (drag.mode === "create" && drag.moved) {
-    const frame = rect(drag), cx = frame[0] + frame[2] / 2, cy = frame[1] + frame[3] / 2;
+  if (drag.mode === "create" && (drag.moved || tiles.length)) {
+    const w = tiles.reduce((s, t) => s + t.frame[2], 0) / tiles.length, h = tiles.reduce((s, t) => s + t.frame[3], 0) / tiles.length;
+    const frame = drag.moved ? rect(drag) : [drag.x0 - w / 2, drag.y0 - h / 2, w, h];
+    const cx = frame[0] + frame[2] / 2, cy = frame[1] + frame[3] / 2;
     const near = [...tiles].sort((a, b) => dist(a, cx, cy) - dist(b, cx, cy))[0];
     tiles.push({ tile: "?", frame, turns: near ? near.turns : 0, source: "hand", confirmed: false });
     selected = tiles.length - 1;

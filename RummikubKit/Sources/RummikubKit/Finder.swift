@@ -49,6 +49,12 @@ public struct Finder: @unchecked Sendable {
     }
   }
 
+  /// Whether a capture is kept out of training to score on: a fifth of them, by a hash of its name, so finishing
+  /// more captures never moves one in or out.
+  public static func isHeldOut(_ name: String) -> Bool {
+    name.utf8.reduce(14_695_981_039_346_656_037 as UInt64) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 } % 5 == 0
+  }
+
   /// Intersection over union.
   public static func overlap(_ a: CGRect, _ b: CGRect) -> Double {
     let i = a.intersection(b)

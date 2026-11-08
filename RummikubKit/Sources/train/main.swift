@@ -3,12 +3,10 @@
   import Foundation
   import ImageIO
   import RummikubKit
-  import Vision
 
-  // Trains a tile detector on the captures whose boxes are done (`boxed.txt`), writes it to `Tiles.mlmodel` beside
-  // them, then draws its boxes into every other capture's `tiles.json` that hasn't been touched by hand, so each
-  // round of checking boxes leaves less for the next. With another set (images and a Create ML `annotations.json`),
-  // trains on that too and writes the model there instead, since it isn't ours to ship.
+  // Trains a tile detector on the captures whose boxes are done (`boxed.txt`), except the held-out ones, and writes it
+  // to `Tiles.mlmodel` beside them. With another set (images and a Create ML `annotations.json`), trains on that too
+  // and writes the model there instead, since it isn't ours to ship.
   //   train <captures> [<set>]
   setvbuf(stdout, nil, _IOLBF, 0)
   let captures = URL(filePath: CommandLine.arguments[1])
@@ -27,8 +25,7 @@
   let training = FileManager.default.temporaryDirectory.appending(path: "rummikub-training")
   try? FileManager.default.removeItem(at: training)
   try FileManager.default.createDirectory(at: training, withIntermediateDirectories: true)
-  // Every fifth done capture is held out to score the model.
-  let held = Set(done.sorted().enumerated().filter { $0.offset % 5 == 4 }.map(\.element))
+  let held = done.filter(Finder.isHeldOut)
   var annotations = [[String: Any]]()
   /// Adds the image and its crops, so tiles small in a photo are large in some crop. A crop keeps only the tiles
   /// wholly inside it.
@@ -51,7 +48,9 @@
       annotations.append(annotation(name, inside))
     }
   }
-  for name in done.subtracting(held).sorted() {
+  // QUARTERS (default 4) trains on that many quarters of the captures, nested, for a learning curve.
+  let quarters = Int(ProcessInfo.processInfo.environment["QUARTERS"] ?? "") ?? 4
+  for (i, name) in done.subtracting(held).sorted().enumerated() where i % 4 < quarters {
     let boxes = tiles(name).map(frame)
     guard !boxes.isEmpty else { continue }
     try add(
@@ -104,70 +103,9 @@
   let detector = try result!.get()
   let modelURL = (extra ?? captures).appending(path: "Tiles.mlmodel")
   try detector.write(to: modelURL)
-  // Through Vision, as the app does: MLObjectDetector.prediction's boxes are skewed on portrait images.
-  let finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: modelURL)))
-  func detect(_ url: URL) throws -> [(box: CGRect, confidence: Float)] {
-    try finder.tiles(in: CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }!)
-  }
-
-  var (total, hits, extras) = (0, 0, 0)
-  for name in held.sorted() {
-    var truth = tiles(name).map(frame)
-    var extra = 0
-    for (box, _) in try detect(captures.appending(path: name + ".png")) {
-      if let i = truth.indices.max(by: { overlap(truth[$0], box) < overlap(truth[$1], box) }),
-        overlap(truth[i], box) > 0.5
-      {
-        truth.remove(at: i)
-      } else {
-        extra += 1
-      }
-    }
-    let count = tiles(name).count
-    print("held out", name, "found", count - truth.count, "of", count, "with", extra, "extra")
-    (total, hits, extras) = (total + count, hits + count - truth.count, extras + extra)
-  }
-  print("held out: found", hits, "of", total, "tiles, with", extras, "extra boxes")
-
-  let pngs = try FileManager.default.contentsOfDirectory(at: captures, includingPropertiesForKeys: nil)
-    + ((try? FileManager.default.contentsOfDirectory(at: captures.appending(path: "unlabeled"), includingPropertiesForKeys: nil)) ?? [])
-  for url in pngs.filter({ $0.pathExtension == "png" }).sorted(by: { $0.path < $1.path }) {
-    let name = String(url.deletingPathExtension().path.dropFirst(captures.path.count + 1))
-    let current = tiles(name)
-    // Captures with no tiles in their truth keep their empty labels.
-    let truth = (try? String(contentsOf: url.deletingPathExtension().appendingPathExtension("txt"), encoding: .utf8))?
-      .split(separator: "\n").dropFirst().joined()
-    guard !done.contains(name), !current.contains(where: { $0["source"] as? String == "hand" }), truth != "" else {
-      continue
-    }
-    let found = try detect(url)
-    // The model's box wins, but a value already read for it is kept. Confirmed tiles stay where the model found
-    // nothing; unconfirmed ones go. The reader's boxes are guessed from the numeral, so any overlap is a match.
-    var unmatched = current
-    var merged = found.map { (b, confidence) -> [String: Any] in
-      var tile: [String: Any] = ["tile": "?", "turns": 0, "confirmed": false]
-      if let i = unmatched.indices.max(by: { overlap(frame(unmatched[$0]), b) < overlap(frame(unmatched[$1]), b) }),
-        overlap(frame(unmatched[i]), b) > 0
-      {
-        tile = unmatched.remove(at: i)
-      }
-      tile["frame"] = [b.minX, b.minY, b.width, b.height]
-      tile["source"] = "model"
-      tile["confidence"] = confidence
-      return tile
-    }
-    merged += unmatched.filter { t in
-      t["confirmed"] as? Bool == true && !found.contains { overlap(frame(t), $0.box) > 0 }
-    }
-    try JSONSerialization.data(withJSONObject: merged, options: [.prettyPrinted, .sortedKeys])
-      .write(to: captures.appending(path: name + ".tiles.json"))
-    print(name, current.count, "→", merged.count, "boxes")
-  }
 
   func frame(_ tile: [String: Any]) -> CGRect {
     let f = tile["frame"] as! [Double]
     return CGRect(x: f[0], y: f[1], width: f[2], height: f[3])
   }
-
-  func overlap(_ a: CGRect, _ b: CGRect) -> Double { Finder.overlap(a, b) }
 #endif

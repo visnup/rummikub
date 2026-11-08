@@ -2,7 +2,7 @@ app := DerivedData/Build/Products
 
 files := --device Yam --domain-type appDataContainer --domain-identifier com.visnup.Rummikub
 
-.PHONY: all sim test captures upload labels train bootstrap
+.PHONY: all sim test captures upload labels train score bootstrap
 
 all:
 	xcodebuild -scheme Rummikub -destination generic/platform=iOS -derivedDataPath DerivedData \
@@ -28,15 +28,22 @@ captures:
 	    xcrun devicectl device copy from $(files) --source "$$f" --destination "$(dir)/$${f#Documents/}" > /dev/null; \
 	done
 
-# Labels what the reader agrees with, then serves the page for the rest at http://localhost:8765.
+# Labels what the reader agrees with and boxes what OWLv2 finds, then serves the page for the rest at
+# http://localhost:8765.
 labels:
 	cd RummikubKit && swift run -c release label ../$(dir)
+	uv run Labeler/prelabel.py
 	uv run Labeler/server.py
 
-# Trains the tile finder on captures whose boxes are done, pre-draws boxes on the rest, and gives the app the model.
+# Trains the tile finder on captures whose boxes are done, gives the app the model, and scores it.
 train:
 	cd RummikubKit && swift run -c release train ../$(dir)
 	cp $(dir)/Tiles.mlmodel Rummikub/
+	$(MAKE) score
+
+# Scores the finder and the reader on the held-out captures, a fifth of the done ones, which training never sees.
+score:
+	cd RummikubKit && swift run -c release score ../$(dir)
 
 # The same, with christophrus/rummikub's 828 boxed photos too, for while ours are few. GPL-3.0, so its model stays
 # in Bootstrap/ and only pre-labels.

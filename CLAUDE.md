@@ -40,24 +40,37 @@ What's next is in `TODO.md`.
     left alone.
 
   - `train` (macOS only) trains a Create ML object detector, one "tile" class, on the captures whose boxes are done.
-    Done captures are listed in `Captures/boxed.txt`. It writes `Captures/Tiles.mlmodel`, then pre-draws boxes on
-    every capture not yet edited by hand, keeping any values already confirmed. Each round of fixing boxes leaves
-    less for the next. `make train` runs it and copies the model to `Rummikub/`. It trains on each image and its
-    side-by-side crops, holds out every fifth done capture and prints how many of their tiles it finds. It stops
-    after `MINUTES` (60) with its last checkpoint, and predicts through `Finder`, since
-    `MLObjectDetector.prediction`'s boxes are skewed on portrait images. It waits on the run loop: sleeping the
-    main thread hung a run at 0% CPU.
+    Done captures are listed in `Captures/boxed.txt`. It writes `Captures/Tiles.mlmodel`. `make train` runs it,
+    copies the model to `Rummikub/` and runs `score`. It trains on each
+    image and its side-by-side crops, and never on held-out captures (`Finder.isHeldOut`, a fifth of them by a
+    hash of the name, so finishing more never moves one in or out). It stops
+    after `MINUTES` (60) with its last checkpoint. `QUARTERS` (1–4, default 4) trains on that many quarters of the
+    captures, nested, for a learning curve. It waits on the run loop: sleeping the main thread hung a run at 0% CPU.
+  - `score` (`make score`) runs the finder and the reader on the held-out done captures, through `Finder`, since
+    `MLObjectDetector.prediction`'s boxes are skewed on portrait images: tiles found (a box
+    overlapping a true one by half) and extra boxes, then tiles read right and extra against the written truth,
+    with and without the app's filter. Not against `tiles.json`'s values, which are mostly the reader's own.
 
 - `Labeler/`: a page for checking boxes by hand, and a stdlib server that saves to the same `.tiles.json`.
-  - `make labels` runs `label`, then serves the page at http://localhost:8765 (also `labeler` in
-    `.claude/launch.json`).
-  - In the page, every tile needs a box and nothing else may have one. Enter marks a capture done. Values are
-    optional.
+  - `make labels` runs `label`, then `prelabel.py`, then serves the page at http://localhost:8765 (also `labeler`
+    in `.claude/launch.json`).
+  - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
+    round of fixing boxes leaves less for the next. It's OWLv2, frozen, run on the same overlapping crops as
+    `Finder`, with a linear probe trained on the done captures' boxes; patches that fit a tile badly are its
+    negatives, or they come back as extra boxes. A box mostly inside a likelier one is dropped too: numerals got
+    their own small boxes inside their tiles'. On the held-out captures it found 248 of 263 tiles with 14 extras
+    at its .8 cutoff, where `train`'s detector found 199 with 110. A text prompt alone found 226 of 230 with 127
+    extras, and needed the crops: whole photos shrink to OWL's 960 px. It's too big for the phone.
+  - In the page, every tile needs a box and nothing else may have one. Click adds an average-sized box, drag draws
+    one. Enter marks a capture done. Values are optional. A tile cut off by the photo's edge gets a box too, which
+    may run past the edge.
+  - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
+    row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - `bootstrap.py` turns [christophrus/rummikub](https://huggingface.co/datasets/christophrus/rummikub) into a
     Create ML set in `Bootstrap/`, which git ignores. The set is 828 photos of a similar tile set, every tile boxed
     and shrunk to 1920 px.
   - `make bootstrap` trains on it as well as on our done captures. That dataset is GPL-3.0, so its model stays in
-    `Bootstrap/` and only pre-labels; the app's model is trained on ours alone.
+    `Bootstrap/`; the app's model is trained on ours alone.
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
   times a second; `Game` reads them, drops readings outside every box `Finder` sees (`Tiles.mlmodel`), keeps the table and rack, solves, and tracks the step shown; `ContentView`

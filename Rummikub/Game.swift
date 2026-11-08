@@ -275,7 +275,8 @@ import UniformTypeIdentifiers
       }
       return [.source(match.frame)]
     }
-    let marks = play.marks(in: scene.following(detections), step: step)
+    let bounds = frame.map { CGRect(x: 0, y: 0, width: $0.width, height: $0.height) }
+    let marks = play.marks(in: scene.following(detections), step: step, within: bounds)
     guard case .rack = play.steps[step].from else { return marks }
     return marks.filter {
       switch $0 {

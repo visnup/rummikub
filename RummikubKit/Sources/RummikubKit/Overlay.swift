@@ -59,30 +59,62 @@ public enum Mark: Hashable, Sendable {
 
 extension Play {
   /// Where every tile of every new meld sits on the table: kept tiles where they are, the rest in line with them, and
-  /// melds with no anchor in a new row under the table. A slot that would cover another meld's tile is lifted above
-  /// the row, since there's no room until that meld moves over.
-  public func slots(in scene: Scene) -> [[CGRect]] {
+  /// melds with no anchor in open table nearest the rest, inside `bounds` (the photo) when given, else in a new row
+  /// under the table, which may be off screen. A slot that would cover another meld's tile is lifted above the row,
+  /// since there's no room until that meld moves over.
+  public func slots(in scene: Scene, within bounds: CGRect? = nil) -> [[CGRect]] {
     let all = scene.table.joined().map(\.frame)
     let size = all.first?.size ?? scene.rack.first?.frame.size ?? CGSize(width: 60, height: 84)
     let pitch = size.width + 2
     var free = CGPoint(x: all.map(\.minX).min() ?? 0, y: (all.map(\.maxY).max() ?? 0) + size.height / 3)
-    return melds.indices.map { n in
-      let tiles = melds[n].tiles
-      if let anchor = melds[n].anchor {
-        let old = scene.table[anchor]
-        let pairs = tiles.indices.compactMap { i in old.firstIndex { $0.tile == tiles[i] }.map { (i, old[$0].frame) } }
-        if let (i, frame) = pairs.first {
-          let others = scene.table.indices.filter { $0 != anchor }.flatMap { scene.table[$0].map(\.frame) }
-          return tiles.indices.map {
-            let slot = frame.offsetBy(dx: CGFloat($0 - i) * pitch, dy: 0)
-            let covers = others.contains { $0.intersects(slot.insetBy(dx: size.width / 10, dy: size.height / 10)) }
-            return covers ? slot.offsetBy(dx: 0, dy: -size.height * 1.1) : slot
-          }
+    var taken = all
+    let center = all.isEmpty ? nil : CGPoint(x: all.map(\.midX).reduce(0, +) / CGFloat(all.count),
+      y: all.map(\.midY).reduce(0, +) / CGFloat(all.count))
+    /// The open spot for a row of `count` tiles nearest the table's middle, a third of a tile clear of every tile.
+    func open(_ count: Int) -> CGPoint? {
+      guard let bounds else { return nil }
+      let width = CGFloat(count) * pitch, gap = size.height / 3
+      let middle = center ?? CGPoint(x: bounds.midX, y: bounds.midY)
+      return stride(from: bounds.minX + gap, through: bounds.maxX - width - gap, by: pitch / 2).flatMap { x in
+        stride(from: bounds.minY + gap, through: bounds.maxY - size.height - gap, by: size.height / 2).map {
+          CGPoint(x: x, y: $0)
         }
       }
-      let origin = free
-      free.x += CGFloat(tiles.count) * pitch + size.width / 2
-      return tiles.indices.map { CGRect(origin: CGPoint(x: origin.x + CGFloat($0) * pitch, y: origin.y), size: size) }
+      .filter { point in
+        let row = CGRect(origin: point, size: CGSize(width: width, height: size.height)).insetBy(dx: -gap, dy: -gap)
+        return !taken.contains { $0.intersects(row) }
+      }
+      .min { a, b in
+        hypot(a.x + width / 2 - middle.x, a.y + size.height / 2 - middle.y)
+          < hypot(b.x + width / 2 - middle.x, b.y + size.height / 2 - middle.y)
+      }
+    }
+    let anchored = melds.map { meld -> [CGRect]? in
+      guard let anchor = meld.anchor else { return nil }
+      let tiles = meld.tiles, old = scene.table[anchor]
+      let pairs = tiles.indices.compactMap { i in old.firstIndex { $0.tile == tiles[i] }.map { (i, old[$0].frame) } }
+      guard let (i, frame) = pairs.first else { return nil }
+      let others = scene.table.indices.filter { $0 != anchor }.flatMap { scene.table[$0].map(\.frame) }
+      return tiles.indices.map {
+        let slot = frame.offsetBy(dx: CGFloat($0 - i) * pitch, dy: 0)
+        let covers = others.contains { $0.intersects(slot.insetBy(dx: size.width / 10, dy: size.height / 10)) }
+        return covers ? slot.offsetBy(dx: 0, dy: -size.height * 1.1) : slot
+      }
+    }
+    taken += anchored.compactMap(\.self).joined()
+    return melds.indices.map { n in
+      if let slots = anchored[n] { return slots }
+      let tiles = melds[n].tiles
+      let origin: CGPoint
+      if let spot = open(tiles.count) {
+        origin = spot
+      } else {
+        origin = free
+        free.x += CGFloat(tiles.count) * pitch + size.width / 2
+      }
+      let row = tiles.indices.map { CGRect(origin: CGPoint(x: origin.x + CGFloat($0) * pitch, y: origin.y), size: size) }
+      taken += row
+      return row
     }
   }
 
@@ -105,14 +137,14 @@ extension Play {
   }
 
   /// What to draw for step `index`: the tile to pick up, where it goes, and an arrow between.
-  public func marks(in scene: Scene, step index: Int) -> [Mark] {
+  public func marks(in scene: Scene, step index: Int, within bounds: CGRect? = nil) -> [Mark] {
     let step = steps[index]
     let source: CGRect =
       switch step.from {
       case .rack(let i): scene.rack[i].frame
       case .table(let meld, let i): scene.table[meld][i].frame
       }
-    let slots = slots(in: scene)
+    let slots = slots(in: scene, within: bounds)
     let earlier = steps[..<index].filter { $0.to == step.to && $0.tile == step.tile }.count
     let positions = melds[step.to].tiles.indices.filter { melds[step.to].tiles[$0] == step.tile }
     let target = slots[step.to][positions[min(earlier, positions.count - 1)]]

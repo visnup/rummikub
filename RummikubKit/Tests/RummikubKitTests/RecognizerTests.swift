@@ -93,6 +93,22 @@ func tiles(_ counts: Counts) -> [Tile] {
   #expect(!scene.table[1].contains { $0.frame.intersects(k4) })
 }
 
+@Test func putsNewMeldsInOpenTableOnScreen() throws {
+  let table = melds("r3 r4 r5 r6, k1 k2 k3, b9 b10 b11, o12 r12 b12")
+  let image = Render.table(table, rack: Tile.parse("o7 o8 o9"))
+  let scene = Scene(Recognizer.tiles(in: image), rackY: CGFloat(image.height) - 150)
+  let play = try #require(solve(table: scene.tableTiles, rack: scene.rackTiles).last)
+  // The table, above the rack.
+  let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height - 150)
+  let new = try #require(play.melds.indices.first { play.melds[$0].anchor == nil })
+  let slots = play.slots(in: scene, within: bounds)[new]
+  #expect(slots.allSatisfy { bounds.contains($0) })
+  #expect(!slots.contains { slot in scene.table.joined().contains { $0.frame.intersects(slot) } })
+  for step in play.steps.indices {
+    save(Render.overlay(image, play.marks(in: scene, step: step, within: bounds)), "open\(step + 1)")
+  }
+}
+
 @Test func followsTheCamera() {
   let table = melds("r3 r4 r5 r6, k1 k2 k3, b9 b10 b11, o12 r12 b12")
   let before = Scene(table: Recognizer.melds(Recognizer.tiles(in: Render.table(table))), rack: [])

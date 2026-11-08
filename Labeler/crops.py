@@ -2,9 +2,10 @@
 # requires-python = ">=3.12"
 # dependencies = ["pillow"]
 # ///
-"""Tile crops for the value classifiers, one folder per tile (k1…r13, j), each 224 px square, written under
-<out>/upright and <out>/any. Upright: confirmed tiles of done captures that aren't held out, turned upright, for
-racks. Any: the same at all four quarter turns, plus every tile of the outside sets as it lies, for tables.
+"""Tile crops for the value classifiers, each 224 px square. Upright, one folder per tile (k1…r13, j): confirmed
+tiles of done captures that aren't held out, turned upright, for racks. Turned, one folder per tile and turn ("k6@2",
+the quarter turns clockwise that make it upright): the same at all four turns, plus the outside sets' tiles, for
+tables. Outside, one folder per tile: the outside sets' tiles as they lie, for `values --turns`.
 uv run Labeler/crops.py <captures> <out> [<outside set>...]"""
 
 import json
@@ -37,7 +38,7 @@ def save(image, kind, tile, name):
 
 
 # The crops, not the feature prints `values` keeps beside them, which spare it reading unchanged crops again.
-for kind in ("upright", "any"):
+for kind in ("upright", "turned", "outside"):
     shutil.rmtree(out / kind, ignore_errors=True)
 for name in (captures / "boxed.txt").read_text().split():
     if held(name):
@@ -51,7 +52,8 @@ for name in (captures / "boxed.txt").read_text().split():
         key = f"{name.replace('/', '-')}-{i}"
         save(upright, "upright", t["tile"], key)
         for turn in range(4):
-            save(upright.rotate(90 * turn, expand=True), "any", t["tile"], f"{key}-{turn}")
+            # Labeled with the quarter turns clockwise that make it upright, so an upside-down 6 isn't a 9.
+            save(upright.rotate(90 * turn, expand=True), "turned", f"{t['tile']}@{turn}", f"{key}-{turn}")
 for folder in outside:
     for labels in sorted(folder.glob("*.tiles.json")):
         stem = labels.name.removesuffix(".tiles.json")
@@ -59,6 +61,16 @@ for folder in outside:
         for i, t in enumerate(json.loads(labels.read_text())):
             tile = crop(image, t["frame"])
             if t["tile"] != "?" and min(tile.size) >= 20:
-                save(tile, "any", t["tile"], f"{folder.name}-{stem}-{i}")
-for kind in ("upright", "any"):
+                save(tile, "outside", t["tile"], f"{folder.name}-{stem}-{i}")
+# Outside tiles lie at turns nobody wrote down, so they join `turned` at the turn a turned model gives them
+# (`values --turns`), where it's .9 sure; not 6s and 9s, whose turn is the very thing it confuses.
+known = out / "outside.turns"
+for line in known.read_text().splitlines() if known.exists() else []:
+    path, turns, share = line.split("\t")
+    tile, name = path.split("/")
+    if float(share) >= 0.9 and tile[1:] not in ("6", "9") and (out / "outside" / path).exists():
+        upright = Image.open(out / "outside" / path).rotate(-90 * int(turns))
+        for turn in range(4):
+            save(upright.rotate(90 * turn), "turned", f"{tile}@{turn}", f"{name.removesuffix('.jpg')}-{turn}")
+for kind in ("upright", "turned", "outside"):
     print(kind, sum(1 for _ in (out / kind).glob("*/*.jpg")), "crops")

@@ -9,12 +9,15 @@ public struct Detection: Hashable, Sendable {
   public var turns = 0
   /// How likely each tile is, from the classifier, for `Recognizer.valid` to weigh other readings by.
   public var odds = [Tile: Float]()
+  /// The same at each quarter turn, from a classifier whose classes are tiles at a turn.
+  public var turned = [Tile: [Float]]()
 
-  public init(tile: Tile, frame: CGRect, turns: Int = 0, odds: [Tile: Float] = [:]) {
+  public init(tile: Tile, frame: CGRect, turns: Int = 0, odds: [Tile: Float] = [:], turned: [Tile: [Float]] = [:]) {
     self.tile = tile
     self.frame = frame
     self.turns = turns
     self.odds = odds
+    self.turned = turned
   }
 }
 

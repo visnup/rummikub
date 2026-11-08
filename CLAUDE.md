@@ -50,16 +50,21 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     beside the captures. Not against `tiles.json`'s values, which are mostly the reader's own. It takes
     `Captures/Tiles.mlpackage`. On 2026-11-08 the finder found 951 of 1013 held-out tiles with 44 extras, and with
     `Values` read 809 right with 75 extras.
-  - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles. `make values` builds
-    two with `crops.py` and the `values` tool: `Values` for tables, from our confirmed crops at all four quarter turns
-    plus the outside sets as they lie, and `RackValues` for racks, upright, ours alone. On the held-out captures the
-    finder plus `Values`, over .7 sure, read 426–435 of 580 right with 79–99 extras, where the reader got 341 with 97.
+  - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles, or tiles at a turn.
+    `make values` builds two with `crops.py` and the `values` tool: `Values` for tables, a class per tile and turn
+    ("k6@2"), from our confirmed crops at all four quarter turns, and `RackValues` for racks, upright, ours alone.
+    A class blind to turns can't tell our 6 from a 9 turned half around (they differ only in the logo under the
+    numeral): of 625 held-out confirmed tiles, 19 of its 62 misreads were 6↔9. The outside sets' turns aren't
+    written down, so they join `Values` at the turn the last `Values` gives them (`values --turns`, into
+    `.crops/outside.turns`), where it's .9 sure, but not their 6s and 9s. `Recognizer.turned` then reads each patch
+    of touching tiles at the turn they agree on, any direction, since a meld seen sideways runs down the photo. On
+    1048 held-out tiles that read 886 right with 76 extras over .5 sure, where turn-blind `Values` read 838 with 77
+    over .7. Most of the rest are small: misread tiles were a median 22–44 px tall, against 70 for those read right.
     The classifiers are logistic regression over Vision's feature print of each crop, kept by crop content, so a
     rerun reads only new crops: 80 s cold for 13,366, seconds warm, where Create ML's image classifier took about 8
     minutes every time, and on 703 held-out tiles 486 right with 194 extras against its 474 with 209. That image
     classifier also failed past a few thousand images ("Failed to create CVPixelBufferPool") unless run as a session,
     and its default augmentation's flips took validation from 96% to 78%.
-    Orienting the outside crops with an upright classifier first turned many upside down, so `Values` reads any turn.
   - `make scene` trains `RackOrTable` on whole frames labeled in `Captures/scene.txt`: by eye between 30° and 55°,
     else by tilt (two low ones were tables). Tilt alone can't say: racks were shot at 24–48°, tables from 35° up, and
     box shape doesn't separate them either. 21 of 24 held-out frames right, two of the misses judgment calls.

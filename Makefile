@@ -66,12 +66,14 @@ train:
 	uv run Labeler/finder.py $(dir) $(wildcard Outside/*-train)
 	rm -rf Rummikub/Tiles.mlpackage && cp -R $(dir)/Tiles.mlpackage Rummikub/
 
-# Trains the value classifiers on tile crops and gives the app them: Values for tables, at any quarter turn, with
-# the outside sets; RackValues for racks, upright, ours alone. Over Vision's feature prints, kept by crop in
-# `.crops/*.features`, so a rerun only reads new crops.
+# Trains the value classifiers on tile crops and gives the app them: Values for tables, a class per tile and turn,
+# with the outside sets at the turns the last Values gave them; RackValues for racks, upright, ours alone. Over
+# Vision's feature prints, kept by crop in `.crops/*.features`, so a rerun only reads new crops.
 values:
 	uv run Labeler/crops.py $(dir) $(dir)/.crops $(wildcard Outside/*-train Outside/*-values)
-	cd RummikubKit && swift run -c release values ../$(dir)/.crops/any ../$(dir)/Values.mlmodel
+	cd RummikubKit && swift run -c release values ../$(dir)/.crops/turned ../$(dir)/Values.mlmodel
+	cd RummikubKit && swift run -c release values --turns ../$(dir)/Values.mlmodel ../$(dir)/.crops/outside \
+	  > ../$(dir)/.crops/outside.turns
 	cd RummikubKit && swift run -c release values ../$(dir)/.crops/upright ../$(dir)/RackValues.mlmodel
 	cp $(dir)/Values.mlmodel $(dir)/RackValues.mlmodel Rummikub/
 

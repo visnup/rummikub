@@ -80,10 +80,31 @@
     (s.read, s.extraReads) = score(readings)
     (s.filtered, s.extraFiltered) = score(filtered)
     if let classifier {
-      let classified = try classifier.tiles(in: image, boxes: boxes)
+      let classified = try ProcessInfo.processInfo.environment["LEAST"].flatMap(Float.init).map {
+        try classifier.tiles(in: image, boxes: boxes, least: $0)
+      } ?? classifier.tiles(in: image, boxes: boxes)
+      // READS=1 prints each confirmed tile's reading, for a breakdown of what's misread.
+      if ProcessInfo.processInfo.environment["READS"] != nil {
+        let all = try classifier.tiles(in: image, boxes: boxes, least: 0)
+        let tiles = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
+          as! [[String: Any]]
+        for t in tiles where t["confirmed"] as? Bool == true {
+          guard let tile = Tile(t["tile"] as! String) else { continue }
+          let f = t["frame"] as! [Double]
+          let frame = CGRect(x: f[0], y: f[1], width: f[2], height: f[3])
+          let read = all.max { Finder.overlap($0.frame, frame) < Finder.overlap($1.frame, frame) }
+          guard let read, Finder.overlap(read.frame, frame) > 0.5 else {
+            print("read", name, lines[0], tile, "-", 0, 0, Int(frame.height), t["turns"] as? Int ?? 0, separator: "\t")
+            continue
+          }
+          print("read", name, lines[0], tile, read.tile, read.odds[read.tile] ?? 0, read.odds[tile] ?? 0,
+            Int(frame.height), t["turns"] as? Int ?? 0, separator: "\t")
+        }
+      }
       (s.classified, s.extraClassified) = score(classified)
       let table = lines.first?.hasPrefix("table") ?? false
-      (s.valid, s.extraValid) = score(table ? Recognizer.valid(Recognizer.melds(classified)).flatMap(\.self) : classified)
+      let turned = Recognizer.turned(classified)
+      (s.valid, s.extraValid) = score(table ? Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self) : turned)
     }
     print(([name] + s.columns).joined(separator: "\t"))
     total += s

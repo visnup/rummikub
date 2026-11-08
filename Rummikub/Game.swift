@@ -151,8 +151,10 @@ import UniformTypeIdentifiers
     try? timing?.write(contentsOf: Data(
       "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(found.count),\(boxes?.count ?? -1)\n".utf8))
     let part = looking
-    // On the table, each meld as the likeliest valid one, as between turns they all are.
-    let seen = part == .rack ? onRack(found) : Recognizer.valid(Recognizer.melds(found)).flatMap(\.self)
+    // Touching tiles at the turn they agree on; on the table, each meld then as the likeliest valid one, as between
+    // turns they all are.
+    let turned = Recognizer.turned(found)
+    let seen = part == .rack ? onRack(turned) : Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self)
     readings[part] = Array(((readings[part] ?? []) + [seen]).suffix(5))
     let voted = vote(readings[part]!)
     var next = scene

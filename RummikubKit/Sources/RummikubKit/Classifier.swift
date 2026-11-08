@@ -59,20 +59,26 @@ public struct Classifier: @unchecked Sendable {
       uniquingKeysWith: max)
   }
 
-  /// The most likely tile in each box, where the classifier is at least `least` sure. On the held-out captures .7 read
-  /// 435 of 572 right with 79 extras; no cutoff, 470 with 122; .9, 386 with 43.
-  public func tiles(in image: CGImage, boxes: [CGRect], least: Float = 0.7) throws -> [Detection] {
+  /// The most likely tile in each box, where the classifier is at least `least` sure. On 1048 held-out tiles, a class
+  /// per tile and turn with `Recognizer.turned` read 886 right with 76 extras at .5, 822 with 41 at .7, 898 with 85 at
+  /// .4; a class per tile, turn blind, read 838 with 77 at .7.
+  public func tiles(in image: CGImage, boxes: [CGRect], least: Float = 0.5) throws -> [Detection] {
     let whole = CGRect(x: 0, y: 0, width: image.width, height: image.height)
     // A frame's worth of requests at a time: Vision's buffers otherwise pile up until it fails with "Failed to
     // create CVPixelBufferPool", as it did over thousands of crops.
     return try autoreleasepool { try boxes.compactMap { box in
       guard let crop = image.cropping(to: box.intersection(whole).integral), crop.width >= 8, crop.height >= 8
       else { return nil }
-      let odds = try probabilities(of: crop).reduce(into: [Tile: Float]()) { odds, class_ in
-        if let tile = Tile(class_.key), class_.value >= 0.001 { odds[tile] = class_.value }
+      // Classes are tiles, or tiles at a turn ("k6@2"), summed over turns.
+      var turned = [Tile: [Float]]()
+      for (label, p) in try probabilities(of: crop) {
+        let parts = label.split(separator: "@")
+        guard let tile = Tile(parts[0]) else { continue }
+        turned[tile, default: [0, 0, 0, 0]][parts.count > 1 ? Int(parts[1])! : 0] += p
       }
+      let odds = turned.mapValues { $0.reduce(0, +) }.filter { $0.value >= 0.001 }
       guard let (tile, confidence) = odds.max(by: { $0.value < $1.value }), confidence >= least else { return nil }
-      return Detection(tile: tile, frame: box, odds: odds)
+      return Detection(tile: tile, frame: box, odds: odds, turned: turned)
     } }
   }
 }

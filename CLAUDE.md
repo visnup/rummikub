@@ -48,8 +48,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     found (a box overlapping a true one by half) and extra boxes, then tiles read right and extra against the
     written truth, with and without the app's filter, and the finder's boxes read by `Values.mlpackage` when it's
     beside the captures. Not against `tiles.json`'s values, which are mostly the reader's own. It takes
-    `Captures/Tiles.mlpackage`. On 2026-11-09 the finder found 1003 of 1057 held-out tiles with 29 extras, and with
-    `Values` read 984 of 1048 right with 32 extras.
+    `Captures/Tiles.mlpackage`. On 2026-11-09, with every tile's value and orientation confirmed, the finder
+    found 1016 of 1054 held-out tiles with 52 extras, and with `Values` read 1009 of 1072 right with 31 extras.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks
     alike: `crops.py` crops confirmed tiles upright, and `Labeler/values.py` trains MobileNetV3 (ImageNet) at 128 px

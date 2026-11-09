@@ -5,7 +5,6 @@
 <title>Values</title>
 <link rel="stylesheet" href="/common.css">
 <style>
-  nav, #keys { width: 150px; }
   main { flex: 1; overflow: auto; padding: 8px; }
   header { padding: 0 4px 8px; color: var(--muted); }
   #grid { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -68,8 +67,7 @@ function nav() {
     return a;
   };
   const heading = text => Object.assign(document.createElement("h2"), { textContent: text });
-  const captures = Object.assign(document.createElement("a"), { className: "page", href: "/captures", textContent: "Captures →" });
-  document.getElementById("list").replaceChildren(captures,
+  document.getElementById("list").replaceChildren(pages("/values"),
     link("unsure", "Least sure", unsure().length), heading("Tiles"),
     ...kinds.map(k => {
       const of = all.filter(t => t.tile === k), open = of.filter(t => !t.confirmed).length;

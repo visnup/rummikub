@@ -5,7 +5,6 @@
 <title>Captures</title>
 <link rel="stylesheet" href="/common.css">
 <style>
-  nav, #keys { width: 230px; }
   nav h3 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0; padding: 6px 10px 2px; position: sticky; top: 0; background: var(--bg); }
   main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   header { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
@@ -110,7 +109,6 @@ function list() {
     return n === 0 || day(captures[indices[n - 1]]) !== day(captures[i]) ? [h, button(i)] : [button(i)];
   });
   const { pending, check, done } = sections();
-  const values = Object.assign(document.createElement("a"), { className: "page", href: "/values", textContent: "Values →" });
   const heading = document.createElement("h2");
   heading.textContent = `Pending ${pending.length}`;
   const checking = document.createElement("h2");
@@ -122,7 +120,7 @@ function list() {
   const summary = document.createElement("summary");
   summary.textContent = `Done ${done.length}`;
   details.replaceChildren(summary, ...days(done));
-  document.getElementById("list").replaceChildren(values, heading, ...days(pending), ...(check.length ? [checking, ...check.map(button)] : []), details);
+  document.getElementById("list").replaceChildren(pages("/captures"), heading, ...days(pending), ...(check.length ? [checking, ...check.map(button)] : []), details);
 }
 
 function summary() {

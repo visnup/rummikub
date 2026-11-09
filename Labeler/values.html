@@ -2,31 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Tile values</title>
+<title>Values</title>
+<link rel="stylesheet" href="/common.css">
 <style>
-  :root { --bg: #fff; --fg: #111; --muted: #666; --line: #ddd; --pick: #e0e7ff; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #eee; --muted: #999; --line: #333; --pick: #2a2f4a; } }
-  body { margin: 0; display: flex; height: 100vh; font: 13px/1.4 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--fg); }
-  nav { width: 150px; overflow: auto; border-right: 1px solid var(--line); flex: none; padding-bottom: 32px; box-sizing: border-box; }
-  nav a { display: flex; justify-content: space-between; padding: 2px 10px; color: inherit; text-decoration: none; font-variant-numeric: tabular-nums; }
-  nav a.current { background: var(--pick); }
-  nav a small { color: var(--muted); }
-  nav h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin: 0; padding: 10px 10px 4px; }
+  nav, #keys { width: 150px; }
   main { flex: 1; overflow: auto; padding: 8px; }
   header { padding: 0 4px 8px; color: var(--muted); }
   #grid { display: flex; flex-wrap: wrap; gap: 6px; }
-  .cell { width: 96px; border: 3px solid #fc0; border-radius: 4px; cursor: pointer; user-select: none; }
-  .cell.confirmed { border-color: #2c2; }
-  .cell.picked { border-color: #f0f; }
+  .cell { width: 96px; border: 3px solid var(--unconfirmed); border-radius: 4px; cursor: pointer; user-select: none; }
+  .cell.confirmed { border-color: var(--confirmed); }
+  .cell.selected { border-color: var(--selected); }
   .cell div { width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .cell img { max-width: 96px; max-height: 96px; }
   .cell p { margin: 0; padding: 1px 4px; font: bold 12px ui-monospace, monospace; display: flex; justify-content: space-between; }
   .cell p small { color: var(--muted); font-weight: normal; }
-  #typed { position: fixed; right: 16px; top: 12px; background: #111; color: #fff; font: bold 16px ui-monospace, monospace; padding: 2px 6px; border-radius: 4px; display: none; }
-  #keys { position: fixed; left: 0; bottom: 0; width: 150px; padding: 6px 10px; box-sizing: border-box; background: var(--bg); border-top: 1px solid var(--line); color: var(--muted); }
-  #keys summary { cursor: pointer; }
-  #keys div { position: absolute; left: 8px; bottom: calc(100% + 4px); width: 380px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.15); color: var(--fg); }
-  kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; font: 11px ui-monospace, monospace; }
+  #typed { position: fixed; right: 16px; top: 12px; }
 </style>
 </head>
 <body>
@@ -34,17 +24,17 @@
 <main><header id="title"></header><div id="grid"></div></main>
 <div id="typed"></div>
 <details id="keys"><summary>Keys</summary><div>
-  Each tile is drawn turned upright by its orientation, so one upside down or sideways has the wrong orientation. Yellow
-  is unconfirmed, least sure first, green confirmed. Click a tile to pick it, shift-click to pick a run, <kbd>a</kbd> to
-  pick every unconfirmed one. <kbd>←</kbd><kbd>→</kbd> turn the picked ones. Type a tile (<kbd>r6</kbd>, <kbd>j</kbd>)
-  and <kbd>Enter</kbd> to relabel and confirm them, or just <kbd>Enter</kbd> to confirm them as they are.
-  <kbd>Esc</kbd> picks none. Double-click opens the capture in the labeler. Changes save as you make them.
+  Each tile is drawn upright by its orientation, so one upside down or sideways has the wrong orientation. Yellow is
+  unconfirmed, least sure first, and green confirmed. Click a tile to select it, shift-click to select a run,
+  cmd-click to add or remove one, or <kbd>a</kbd> to select every unconfirmed one. Type a tile (<kbd>r6</kbd>,
+  <kbd>j</kbd>) and <kbd>Enter</kbd> to set and confirm the selected ones, or just <kbd>Enter</kbd> to confirm what
+  they show. <kbd>←</kbd><kbd>→</kbd> turn their orientation, <kbd>Esc</kbd> selects none. Double-click opens the
+  capture. Changes save as you make them.
 </div></details>
+<script src="/common.js"></script>
 <script>
 const kinds = [..."kbor"].flatMap(c => Array.from({ length: 13 }, (_, i) => `${c}${i + 1}`)).concat("j");
-const valid = /^([kbor](1[0-3]|[1-9])|j)$/;
-const ink = { k: "#111", b: "#0a62d0", o: "#e07800", r: "#d0102a", j: "#d0102a" };
-let all = [], shown = [], picked = new Set(), last = null, typed = "";
+let all = [], shown = [], selected = new Set(), last = null, typed = "";
 
 const view = () => decodeURIComponent(location.pathname.split("/")[2] || "unsure");
 
@@ -60,6 +50,7 @@ function render() {
   const v = view();
   shown = v === "unsure" ? unsure().slice(0, 300)
     : all.filter(t => t.tile === v).sort((a, b) => a.confirmed - b.confirmed || (a.odds ?? 1) - (b.odds ?? 1));
+  last = null;
   nav();
   document.getElementById("grid").replaceChildren(...shown.map(cell));
   refresh();
@@ -73,11 +64,12 @@ function nav() {
     a.href = `/values/${k}`;
     a.className = k === v ? "current" : "";
     a.innerHTML = `<span>${label}</span><small>${count}</small>`;
-    a.onclick = e => { e.preventDefault(); history.pushState(null, "", a.href); picked.clear(); render(); };
+    a.onclick = e => { e.preventDefault(); history.pushState(null, "", a.href); selected.clear(); render(); };
     return a;
   };
   const heading = text => Object.assign(document.createElement("h2"), { textContent: text });
-  document.getElementById("list").replaceChildren(
+  const captures = Object.assign(document.createElement("a"), { className: "page", href: "/captures", textContent: "Captures →" });
+  document.getElementById("list").replaceChildren(captures,
     link("unsure", "Least sure", unsure().length), heading("Tiles"),
     ...kinds.map(k => {
       const of = all.filter(t => t.tile === k), open = of.filter(t => !t.confirmed).length;
@@ -98,9 +90,9 @@ function cell(t, i) {
   c.onclick = e => {
     if (e.shiftKey && last !== null) {
       const [a, b] = [last, i].sort((x, y) => x - y);
-      for (let k = a; k <= b; k++) picked.add(shown[k]);
-    } else if (e.metaKey) picked.has(t) ? picked.delete(t) : picked.add(t);
-    else { picked.clear(); picked.add(t); }
+      for (let k = a; k <= b; k++) selected.add(shown[k]);
+    } else if (e.metaKey) selected.has(t) ? selected.delete(t) : selected.add(t);
+    else { selected.clear(); selected.add(t); }
     last = i;
     refresh();
   };
@@ -112,18 +104,18 @@ function cell(t, i) {
 function refresh() {
   [...document.getElementById("grid").children].forEach((c, i) => {
     const t = shown[i];
-    c.className = "cell" + (t.confirmed ? " confirmed" : "") + (picked.has(t) ? " picked" : "");
+    c.className = "cell" + (t.confirmed ? " confirmed" : "") + (selected.has(t) ? " selected" : "");
     c.querySelector("img").style.transform = `rotate(${(t.turns || 0) * 90}deg)`;
-    c.querySelector("p").innerHTML = `<span style="color:${ink[t.tile[0]]}">${t.tile}</span><small>#${t.id}${t.odds != null && !t.confirmed ? ` ${t.odds.toFixed(2)}` : ""}</small>`;
+    c.querySelector("p").innerHTML = `<span style="color:${ink[t.tile[0]]}">${label(t)}</span><small>#${t.id}${t.odds != null && !t.confirmed ? ` ${t.odds.toFixed(2)}` : ""}</small>`;
   });
   const el = document.getElementById("typed");
   el.textContent = typed;
   el.style.display = typed ? "block" : "none";
 }
 
-/** Sets fields on the picked tiles, all in one request, drawn before it's saved. */
+/** Sets fields on the selected tiles, all in one request, drawn before it's saved. */
 function change(fields) {
-  const tiles = [...picked], each = typeof fields === "function" ? fields : () => fields;
+  const tiles = [...selected], each = typeof fields === "function" ? fields : () => fields;
   const changes = tiles.map(t => { const f = each(t); Object.assign(t, f); return { name: t.name, frame: t.frame, ...f }; });
   fetch("/api/tiles", { method: "POST", body: JSON.stringify(changes) });
 }
@@ -132,22 +124,22 @@ window.onkeydown = e => {
   if (e.metaKey || e.ctrlKey) return;
   if (/^[kborj]$/.test(e.key) && !typed || typed && /^[0-9]$/.test(e.key)) typed += e.key;
   else if (e.key === "Backspace") typed = typed.slice(0, -1);
-  else if (e.key === "Escape") { typed ? typed = "" : picked.clear(); }
-  else if (e.key === "a" && !typed) shown.filter(t => !t.confirmed).forEach(t => picked.add(t));
-  else if (e.key === "Enter" && picked.size) {
-    if (typed && !valid.test(typed)) return;
-    const fields = typed ? { tile: typed, confirmed: true } : { confirmed: true };
+  else if (e.key === "Escape") { typed ? typed = "" : selected.clear(); }
+  else if (e.key === "a" && !typed) shown.filter(t => !t.confirmed).forEach(t => selected.add(t));
+  else if (e.key === "Enter") {
+    if (!selected.size || typed && !valid.test(typed)) return flash();
+    change(typed ? { tile: typed, confirmed: true } : { confirmed: true });
     typed = "";
-    change(fields);
-    picked.clear();
-  } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && picked.size) {
+    selected.clear();
+  } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
     e.preventDefault();
-    change(t => ({ turns: ((t.turns || 0) + (e.key === "ArrowLeft" ? 1 : 3)) % 4 }));
+    if (!selected.size) return flash();
+    change(t => ({ turns: turn(t.turns, e.key) }));
   } else return;
   refresh();
   nav();
 };
-addEventListener("popstate", () => { picked.clear(); render(); });
+addEventListener("popstate", () => { selected.clear(); render(); });
 load();
 </script>
 </body>

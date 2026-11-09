@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["pillow"]
 # ///
-"""Serves the labeling page for Captures/, saves each capture's <name>.tiles.json, and takes captures the app pushes:
+"""Serves the labeler's pages for Captures/, saves each capture's <name>.tiles.json, and takes captures the app pushes:
 uv run Labeler/server.py"""
 
 import io
@@ -20,6 +20,20 @@ root = Path(__file__).parent
 captures = root.parent / "Captures"
 
 
+def inside(name: str, suffix: str) -> Path | None:
+    """A capture's file, if it's inside Captures/."""
+    path = (captures / (name + suffix)).resolve()
+    return path if path.is_relative_to(captures.resolve()) else None
+
+
+def pngs() -> list[Path]:
+    return sorted(captures.glob("*.png")) + sorted(captures.glob("unlabeled/*.png"))
+
+
+def write_tiles(path: Path, tiles: list[dict]):
+    path.write_text(json.dumps(tiles, indent=2, sort_keys=True) + "\n")
+
+
 def truth(png: Path) -> list[str] | None:
     """The true tiles, or None when they're unknown, as for captures in unlabeled/."""
     txt = png.with_suffix(".txt")
@@ -32,14 +46,12 @@ def truth(png: Path) -> list[str] | None:
 boxed = captures / "boxed.txt"
 # Done captures looked over again where the models disagree with them, as `check` lists in .check.json.
 checked = captures / "checked.txt"
+# Captures deleted, which the app's pushes don't bring back.
+removed = captures / ".removed"
 
 
 def names(path: Path) -> set[str]:
     return set(path.read_text().split()) if path.exists() else set()
-
-
-def done() -> set[str]:
-    return names(boxed)
 
 
 def disagreements() -> dict:
@@ -48,7 +60,7 @@ def disagreements() -> dict:
 
 
 numbered = captures / "ids.txt"
-# The values page saves without waiting, so two of its saves can reach the same file at once.
+# The values page saves without waiting, so two saves, from it or the capture page, can reach the same file at once.
 writing = threading.Lock()
 
 
@@ -61,9 +73,9 @@ def photo(path: Path) -> Image.Image:
 
 def values() -> list[dict]:
     """Every tile with a value in the done captures, for the values page."""
-    number = ids(sorted(captures.glob("*.png")) + sorted(captures.glob("unlabeled/*.png")))
+    number = ids(pngs())
     out = []
-    for name in sorted(done()):
+    for name in sorted(names(boxed)):
         path = captures / f"{name}.tiles.json"
         for t in json.loads(path.read_text()) if path.exists() else []:
             if t.get("tile", "?") != "?":
@@ -83,7 +95,7 @@ def ids(pngs: list[Path]) -> dict[str, int]:
     return {n: i + 1 for i, n in enumerate(known)}
 
 
-def summary(png: Path, number: int, check: dict, looked: set[str]) -> dict:
+def summary(png: Path, number: int, check: dict, done: set[str], looked: set[str]) -> dict:
     name = str(png.relative_to(captures).with_suffix(""))
     tiles = json.loads(png.with_suffix(".tiles.json").read_text()) if png.with_suffix(".tiles.json").exists() else []
     return {
@@ -91,7 +103,7 @@ def summary(png: Path, number: int, check: dict, looked: set[str]) -> dict:
         "name": name,
         "truth": truth(png),
         "boxes": len(tiles),
-        "boxed": name in done(),
+        "boxed": name in done,
         "check": check.get(name),
         "checked": name in looked,
         "modified": png.stat().st_mtime,
@@ -107,31 +119,26 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def labels(self) -> Path | None:
-        """The labels file the path names, if it's inside Captures/."""
-        path = (captures / (unquote(self.path.removeprefix("/api/tiles/")) + ".tiles.json")).resolve()
-        return path if path.is_relative_to(captures.resolve()) else None
-
     def do_GET(self):
         # /captures/48 is capture #48 in the labeler, /values/r6 the r6s in the values page.
         if self.path == "/":
             self.send_response(302)
             self.send_header("Location", "/captures")
             return self.end_headers()
-        if self.path == "/captures" or re.fullmatch(r"/captures/\d+", self.path):
-            self.path = "/index.html"
-        if self.path == "/values" or self.path.startswith("/values/"):
+        if re.fullmatch(r"/captures(/\d+)?", self.path):
+            self.path = "/captures.html"
+        if re.fullmatch(r"/values(/\w+)?", self.path):
             self.path = "/values.html"
         if self.path == "/api/values":
             return self.send_json(values())
         if self.path.startswith("/api/crop/"):
             return self.crop()
         if self.path == "/api/captures":
-            pngs = sorted(captures.glob("*.png")) + sorted(captures.glob("unlabeled/*.png"))
-            number, check, looked = ids(pngs), disagreements(), names(checked)
-            return self.send_json([s for p in pngs if (s := summary(p, number[p.stem], check, looked))["truth"] != []])
+            photos = pngs()
+            number, check, done, looked = ids(photos), disagreements(), names(boxed), names(checked)
+            return self.send_json([s for p in photos if (s := summary(p, number[p.stem], check, done, looked))["truth"] != []])
         if self.path.startswith("/api/tiles/"):
-            path = self.labels()
+            path = inside(unquote(self.path.removeprefix("/api/tiles/")), ".tiles.json")
             if path is None:
                 return self.send_error(403)
             return self.send_json(json.loads(path.read_text()) if path.exists() else [])
@@ -140,8 +147,8 @@ class Handler(SimpleHTTPRequestHandler):
     def crop(self):
         """A tile's box from its capture, with a little around it: GET /api/crop/<name>?f=x,y,w,h."""
         name, _, query = self.path.removeprefix("/api/crop/").partition("?")
-        path = (captures / (unquote(name) + ".png")).resolve()
-        if not path.is_relative_to(captures.resolve()) or not path.exists():
+        path = inside(unquote(name), ".png")
+        if path is None or not path.exists():
             return self.send_error(404)
         x, y, w, h = (float(v) for v in parse_qs(query)["f"][0].split(","))
         m = max(w, h) * 0.15
@@ -174,11 +181,12 @@ class Handler(SimpleHTTPRequestHandler):
     def do_PUT(self):
         if self.path.startswith("/api/capture/"):
             return self.receive()
-        path = self.labels() if self.path.startswith("/api/tiles/") else None
+        path = inside(unquote(self.path.removeprefix("/api/tiles/")), ".tiles.json") if self.path.startswith("/api/tiles/") else None
         if path is None:
             return self.send_error(403)
         tiles = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        path.write_text(json.dumps(tiles, indent=2, sort_keys=True) + "\n")
+        with writing:
+            write_tiles(path, tiles)
         self.send_json({"saved": len(tiles)})
 
     def change(self):
@@ -196,8 +204,8 @@ class Handler(SimpleHTTPRequestHandler):
             by_name.setdefault(c.pop("name"), []).append(c)
         changed = 0
         for name, fields in by_name.items():
-            path = (captures / (name + ".tiles.json")).resolve()
-            if not path.is_relative_to(captures.resolve()) or not path.exists():
+            path = inside(name, ".tiles.json")
+            if path is None or not path.exists():
                 continue
             tiles = json.loads(path.read_text())
             for f in fields:
@@ -207,7 +215,7 @@ class Handler(SimpleHTTPRequestHandler):
                     tile.update(f, source="hand")
                     tile.pop("odds", None)
                     changed += 1
-            path.write_text(json.dumps(tiles, indent=2, sort_keys=True) + "\n")
+            write_tiles(path, tiles)
         return changed
 
     def do_DELETE(self):
@@ -220,7 +228,7 @@ class Handler(SimpleHTTPRequestHandler):
         trash = Path.home() / ".Trash"
         for f in (captures / name).parent.glob(stem + ".*"):
             f.rename(trash / f.name)
-        with open(captures / ".removed", "a") as f:
+        with open(removed, "a") as f:
             f.write("".join(f"{stem}.{ext}\n" for ext in ("png", "txt", "json")))
         for path in (boxed, checked):
             path.write_text("".join(f"{n}\n" for n in sorted(names(path) - {name})))
@@ -233,8 +241,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\.(png|txt|json)", name):
             return self.send_error(400)
         body = self.rfile.read(int(self.headers["Content-Length"]))
-        removed = (captures / ".removed").read_text().split() if (captures / ".removed").exists() else []
-        if name in removed or (captures / name).exists() or (captures / "unlabeled" / name).exists():
+        if name in names(removed) or (captures / name).exists() or (captures / "unlabeled" / name).exists():
             return self.send_json({"kept": name})
         (captures / name).write_bytes(body)
         base = captures / name.rsplit(".", 1)[0]

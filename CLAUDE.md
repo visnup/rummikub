@@ -79,9 +79,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     against 60 minutes' 988 with 44, and so did 60 minutes with the rate falling along a half cosine: 974 with 50.
     After the first round of Check fixes, that model found 1001 of 1057 with 31, and a fresh 60-minute run on the
     fixed labels 973 with 45. Runs vary by about that much, so the 988 model is likely a lucky draw: compare a
-    change over several runs, not one. Nano found 905 with 103 in 60 minutes, small 950, for about a fifth less time.
+    change over several runs, not one. On 2026-11-09, after the box sizes were fixed, that model found 1016 of 1054
+    with 52, and a fresh run 993 with 75; `Values` retrained then read 1006 of 1072 with 35 either way. Nano found 905 with 103 in 60 minutes, small 950, for about a fifth less time.
     `QUARTERS` (0–4) and `SIZE` (`nano`, `small`) are for those comparisons.
-  - `make labels` runs `label`, then `prelabel.py`, then serves the page at http://localhost:8765 (also `labeler`
+  - `make labels` runs `label`, then `prelabel.py`, then serves the page at http://localhost:8765/captures (`/captures/48` is #48; also `labeler`
     in `.claude/launch.json`).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
     round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet. `make watch` runs it
@@ -92,6 +93,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - In the page, every tile needs a box and nothing else may have one. Click adds an average-sized box, drag draws
     one. Enter marks a capture done. Values are optional. A tile cut off by the photo's edge gets a box too, which
     may run past the edge.
+  - http://localhost:8765/values/r6 shows every r6 in the done captures as a grid, each crop turned upright by its
+    orientation, so a wrong orientation or value stands out; "Least sure" lists the unconfirmed ones `Values` is least
+    sure of. The `fill` tool (`swift run -c release fill ../Captures`) writes what `Values` reads, with its odds,
+    into every unconfirmed box; on 2026-11-09 that was 2905.
   - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones

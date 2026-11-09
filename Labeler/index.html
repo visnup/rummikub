@@ -43,10 +43,10 @@
 </main>
 <details id="keys"><summary>Keys</summary><div>
       Every tile needs a box and nothing else does. Click empty space to add a box the size of those nearby, or drag to draw one; click one and <kbd>⌫</kbd> to
-      delete it, or shift-drag a rectangle around several and <kbd>⌫</kbd>; drag a box to move it, its corner to resize. <kbd>Enter</kbd> marks the capture done and opens the next.
+      delete it, or shift-drag a rectangle around several and <kbd>⌫</kbd>, <kbd>Enter</kbd> to confirm their values, or <kbd>←</kbd><kbd>→</kbd>; drag a box to move it, its corner to resize. <kbd>Enter</kbd> marks the capture done and opens the next.
       Values are optional: click a box, type its tile (<kbd>r12</kbd>, <kbd>j</kbd>) and <kbd>Enter</kbd>, or just <kbd>Enter</kbd> to confirm the
       value it shows; either goes on to the next box without one. <kbd>Esc</kbd> deselects, so <kbd>Enter</kbd> marks the capture;
-      <kbd>u</kbd> unmarks it.
+      <kbd>u</kbd> unmarks it. <kbd>D</kbd> deletes the capture, to the Trash.
       Under Check, dashed red marks a box the finder misses, dashed blue a box it finds that has none (double-click to adopt it, or <kbd>f</kbd> on a box
       to snap it to the one it overlaps), and a red tag a value the classifier reads otherwise. <kbd>n</kbd> zooms to the next mark,
       <kbd>N</kbd> the previous, drawing the finder's box there solid; <kbd>f</kbd> then snaps the selected box to it, or adds it; <kbd>Tab</kbd> selects the next box without a value; <kbd>Enter</kbd> marks the capture looked over.
@@ -72,8 +72,11 @@ async function load() {
   captures = await (await fetch("/api/captures")).json();
   captures.sort((a, b) => when(b) - when(a));
   const pending = captures.findIndex(c => !c.boxed);
-  open(pending < 0 ? 0 : pending);
+  open(numbered() ?? (pending < 0 ? 0 : pending), false);
 }
+/** The capture the URL's /captures/number names, so reload, back and forward return to it. */
+const numbered = () => { const i = captures.findIndex(c => `/captures/${c.id}` === location.pathname); return i < 0 ? null : i; };
+addEventListener("popstate", () => { const i = numbered(); if (i !== null && i !== current) open(i, false); });
 /** How many places the models disagree with a done capture's labels, until it's looked over. */
 const disputes = c => c.boxed && c.check && !c.checked ? c.check.missed.length + c.check.extra.length + c.check.values.length : 0;
 const sections = () => {
@@ -87,14 +90,17 @@ const sections = () => {
 /** Indices in the order listed: pending, newest first, then to check, least disputed first, then done when shown. */
 const order = () => { const s = sections(); return [...s.pending, ...s.check, ...s.done.filter(i => showDone || i === current)]; };
 
-async function open(i) {
+async function open(i, push = true) {
+  const c = captures[i];
+  // Its tiles first, so a save meanwhile can't write the last capture's tiles under this one's name.
+  const loaded = await (await fetch(`/api/tiles/${encodeURIComponent(c.name)}`)).json();
   current = i;
-  const c = captures[current];
-  tiles = await (await fetch(`/api/tiles/${encodeURIComponent(c.name)}`)).json();
+  tiles = loaded;
+  if (location.pathname !== `/captures/${c.id}`) history[push ? "pushState" : "replaceState"](null, "", `/captures/${c.id}`);
   selected = null; typed = ""; many.clear(); fit = true; mark = -1; focus = null; opened = Date.now();
   image = new Image();
   image.onload = draw;
-  image.src = `/captures/${encodeURIComponent(c.name).replace("%2F", "/")}.png?${c.modified}`;
+  image.src = `/photos/${encodeURIComponent(c.name).replace("%2F", "/")}.png?${c.modified}`;
   list();
   document.querySelector("nav .current")?.scrollIntoView({ block: "nearest" });
 }
@@ -163,13 +169,16 @@ function draw() {
     ctx.lineWidth = i === selected || many.has(i) ? 3 : 2;
     ctx.strokeStyle = i === selected || many.has(i) ? "#f0f" : t.confirmed ? "#2c2" : "#fc0";
     ctx.strokeRect(x, y, w, h);
-    const label = `${t.tile}${arrows[t.turns || 0]}`, width = ctx.measureText(label).width + 6;
+    const turns = t.turns || 0, label = `${t.tile}${arrows[turns]}`, width = ctx.measureText(label).width + 6;
+    // Against the edge that's the tile's bottom at its orientation.
+    const [lx, ly] = [[x + w / 2 - width / 2, y + h - 18], [x + w - width - 2, y + h / 2 - 8],
+      [x + w / 2 - width / 2, y + 2], [x + 2, y + h / 2 - 8]][turns];
     ctx.fillStyle = "#fff";
-    ctx.fillRect(x + w / 2 - width / 2, y + h - 18, width, 16);
+    ctx.fillRect(lx, ly, width, 16);
     ctx.lineWidth = 1;
-    ctx.strokeRect(x + w / 2 - width / 2, y + h - 18, width, 16);
+    ctx.strokeRect(lx, ly, width, 16);
     ctx.fillStyle = ink[t.tile[0]] ?? "#888";
-    ctx.fillText(label, x + w / 2, y + h - 6);
+    ctx.fillText(label, lx + width / 2, ly + 12);
   });
   const k = marks();
   if (k) {
@@ -339,6 +348,10 @@ window.onkeydown = e => {
     if (!valid.test(s.tile)) return flash();
     s.confirmed = true; save();
     selectNext(1);
+  } else if (e.key === "Enter" && many.size) {
+    // Confirms the shift-dragged boxes that have a value.
+    for (const i of many) if (valid.test(tiles[i].tile)) tiles[i].confirmed = true;
+    many.clear(); save();
   } else if (e.key === "Enter") {
     // A second Enter right after the first would mark the capture it opened too.
     if (Date.now() - opened > 1000) finish();
@@ -366,11 +379,13 @@ window.onkeydown = e => {
     if (!found || found[1] < 0.1) return flash();
     s.frame = [...found[0]]; save();
   }
-  else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && s) {
-    s.turns = ((s.turns || 0) + (e.key === "ArrowLeft" ? 1 : 3)) % 4; save();
+  else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && (s || many.size)) {
+    for (const t of s ? [s] : [...many].map(i => tiles[i])) t.turns = ((t.turns || 0) + (e.key === "ArrowLeft" ? 1 : 3)) % 4;
+    save();
   } else if (e.key === "Tab") selectNext(e.shiftKey ? -1 : 1);
   else if ((e.key === "n" || e.key === "N") && !typed) return nextMark(e.key === "n" ? 1 : -1);
   else if (e.key === "u" && !typed) return unmark();
+  else if (e.key === "D" && !typed) return remove();
   else if (e.key === "+" || e.key === "=") { fit = false; scale = Math.min(4, scale * 1.25); }
   else if (e.key === "-") { fit = false; scale = Math.max(0.1, scale / 1.25); }
   else if (e.key === "0") fit = true;
@@ -403,6 +418,15 @@ async function unmark() {
   await fetch(`/api/${kind}/${encodeURIComponent(c.name)}?done=0`, { method: "POST" });
   c[kind] = false;
   draw();
+}
+/** Deletes this capture, to the Trash, and opens the next one listed. */
+async function remove() {
+  const c = captures[current];
+  if (!confirm(`Delete #${c.id}? Its files go to the Trash.`)) return;
+  const o = order(), next = o[(o.indexOf(current) + 1) % o.length];
+  await fetch(`/api/capture/${encodeURIComponent(c.name)}`, { method: "DELETE" });
+  captures.splice(current, 1);
+  open(next > current ? next - 1 : next);
 }
 window.onresize = () => fit && draw();
 const flash = () => { typedEl.style.background = "#d33"; setTimeout(() => typedEl.style.background = "#111", 300); };

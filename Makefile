@@ -54,10 +54,9 @@ labels:
 	uv run Labeler/prelabel.py
 	uv run Labeler/server.py
 
-# Retrains the finder and the value classifiers side by side, then scores them: a little over an hour, nearly all
-# the finder's. After labeling values alone, `make values score` takes a minute or two.
+# Retrains the finder and Values side by side, then scores them: a little over an hour, nearly all the finder's.
+# After labeling values alone, `make values score` takes about 8 minutes.
 retrain:
-	cd RummikubKit && swift build -c release --product values
 	$(MAKE) -j2 train values
 	$(MAKE) score
 
@@ -66,16 +65,11 @@ train:
 	uv run Labeler/finder.py $(dir) $(wildcard Outside/*-train)
 	rm -rf Rummikub/Tiles.mlpackage && cp -R $(dir)/Tiles.mlpackage Rummikub/
 
-# Trains the value classifiers on tile crops and gives the app them: Values for tables, a class per tile and turn,
-# with the outside sets at the turns the last Values gave them; RackValues for racks, upright, with the outside sets too. Over
-# Vision's feature prints, kept by crop in `.crops/*.features`, so a rerun only reads new crops.
+# Trains Values, which reads each tile and its orientation, on tile crops for MINUTES (5), and gives the app it.
 values:
 	uv run Labeler/crops.py $(dir) $(dir)/.crops $(wildcard Outside/*-train Outside/*-values)
-	cd RummikubKit && swift run -c release values ../$(dir)/.crops/turned ../$(dir)/Values.mlmodel
-	cd RummikubKit && swift run -c release values --turns ../$(dir)/Values.mlmodel ../$(dir)/.crops/outside \
-	  > ../$(dir)/.crops/outside.turns
-	cd RummikubKit && swift run -c release values ../$(dir)/.crops/upright ../$(dir)/RackValues.mlmodel
-	cp $(dir)/Values.mlmodel $(dir)/RackValues.mlmodel Rummikub/
+	uv run Labeler/values.py $(dir)
+	rm -rf Rummikub/Values.mlpackage && cp -R $(dir)/Values.mlpackage Rummikub/
 
 # Trains the scene classifier, rack or table, on whole frames labeled in scene.txt, and gives the app it.
 scene:
@@ -97,4 +91,4 @@ upload:
 	uvx --from huggingface_hub hf upload visnup/rummikub-captures $(dir) . --repo-type dataset --exclude .files.json \
 	  --exclude .removed --exclude .DS_Store --exclude .words.txt --exclude review.txt \
 	  --exclude ".crops/*" --exclude ".scene/*" --exclude ".finder/*" --exclude "*.mlmodel" \
-	  --exclude "Tiles.mlpackage/*" --exclude ids.txt --exclude .check.json --exclude checked.txt
+	  --exclude "Tiles.mlpackage/*" --exclude "Values.mlpackage/*" --exclude ids.txt --exclude .check.json --exclude checked.txt

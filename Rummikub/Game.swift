@@ -39,15 +39,13 @@ import UniformTypeIdentifiers
   /// Loaded off the main thread, since a cold launch takes seconds to load them. Frames before then are skipped.
   private var models: Models?
   private var finder: Finder? { models?.finder }
-  private var classifiers: [Looking: Classifier] { models?.classifiers ?? [:] }
+  private var values: Classifier? { models?.values }
   private var rackOrTable: Classifier? { models?.rackOrTable }
 
   private nonisolated struct Models: Sendable {
     let finder = Game.model("Tiles").flatMap { try? Finder(model: $0) }
-    /// What reads the finder's boxes: on the table at any quarter turn; on a rack, upright.
-    let classifiers = [Looking.table: "Values", .rack: "RackValues"].compactMapValues {
-      Game.model($0).flatMap { try? Classifier(model: $0) }
-    }
+    /// What reads the finder's boxes: each tile and its orientation.
+    let values = Game.model("Values").flatMap { try? Classifier(model: $0) }
     /// Whether a frame shows a rack or the table, from the whole picture: tilt alone can't say, since racks were shot
     /// at 24–48° and tables from 35° up. On held-out frames it got 21 of 24, two of them judgment calls.
     let rackOrTable = Game.model("RackOrTable").flatMap { try? Classifier(model: $0) }
@@ -125,9 +123,9 @@ import UniformTypeIdentifiers
     {
       looking = seen
     }
-    let finder = finder, classifier = classifiers[looking]
-    // The finder's boxes read by a classifier: on the held-out captures 435 of 572 tiles right with 79 extras, where
-    // the reader got 345 with 93. Without the models, the reader.
+    let finder = finder, classifier = values
+    // The finder's boxes read by Values: on the held-out captures 974 of 1048 tiles right with 35 extras. Without
+    // the models, the reader.
     let (found, boxes, findTime, time) = await Task.detached {
       let clock = ContinuousClock()
       var boxes: [CGRect]?

@@ -46,28 +46,22 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
 
   - `score` (`make score`) runs the finder and the reader on the held-out done captures, through `Finder`: tiles
     found (a box overlapping a true one by half) and extra boxes, then tiles read right and extra against the
-    written truth, with and without the app's filter, and the finder's boxes read by `Values.mlmodel` when it's
+    written truth, with and without the app's filter, and the finder's boxes read by `Values.mlpackage` when it's
     beside the captures. Not against `tiles.json`'s values, which are mostly the reader's own. It takes
-    `Captures/Tiles.mlpackage`. On 2026-11-08 the finder found 951 of 1013 held-out tiles with 44 extras, and with
-    `Values` read 809 right with 75 extras.
-  - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles, or tiles at a turn.
-    `make values` builds two with `crops.py` and the `values` tool: `Values` for tables, a class per tile and turn
-    ("k6@2"), from our confirmed crops at all four quarter turns, and `RackValues` for racks, a class per tile, from
-    the same crops upright. On 161 held-out rack tiles `RackValues` read 142 right with 14 extras, `Values` 131 with
-    11, and `RackValues` from our crops alone 137 with 23. `score` reads rack captures with `RackValues` when it's
-    beside the captures.
-    A class blind to turns can't tell our 6 from a 9 turned half around (they differ only in the logo under the
-    numeral): of 625 held-out confirmed tiles, 19 of its 62 misreads were 6↔9. The outside sets' turns aren't
-    written down, so they join both at the turn the last `Values` gives them (`values --turns`, into
-    `.crops/outside.turns`), where it's .9 sure, but not their 6s and 9s. `Recognizer.turned` then reads each patch
-    of touching tiles at the turn they agree on, any direction, since a meld seen sideways runs down the photo. On
-    1048 held-out tiles that read 886 right with 76 extras over .5 sure, where turn-blind `Values` read 838 with 77
-    over .7. Most of the rest are small: misread tiles were a median 22–44 px tall, against 70 for those read right.
-    The classifiers are logistic regression over Vision's feature print of each crop, kept by crop content, so a
-    rerun reads only new crops: 80 s cold for 13,366, seconds warm, where Create ML's image classifier took about 8
-    minutes every time, and on 703 held-out tiles 486 right with 194 extras against its 474 with 209. That image
-    classifier also failed past a few thousand images ("Failed to create CVPixelBufferPool") unless run as a session,
-    and its default augmentation's flips took validation from 96% to 78%.
+    `Captures/Tiles.mlpackage`. On 2026-11-09 the finder found 1003 of 1057 held-out tiles with 29 extras, and with
+    `Values` read 984 of 1048 right with 32 extras.
+  - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
+    ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks
+    alike: `crops.py` crops confirmed tiles upright, and `Labeler/values.py` trains MobileNetV3 (ImageNet) at 128 px
+    with a head for the tile and one for the orientation, on those crops at random orientations, for 5 minutes on
+    the Mac's GPU, then converts it with each class p(tile)·p(orientation). It's 6.8 MB. Read at the labeled boxes,
+    it gets about 612 of 628 held-out confirmed tiles and 595 orientations right; it levels off after about 3
+    minutes. Orientation matters because our 6 and 9 differ only in the logo under the numeral. The outside sets'
+    orientations aren't written down, so they join at the orientation the last `Values` gives them
+    (`.crops/outside.turns`), where it's .9 sure, but not their 6s and 9s. `Recognizer.turned` then reads each
+    patch of touching tiles at the orientation they agree on, any direction, since a meld seen sideways runs down
+    the photo. The feature-print classifiers it replaced are in `ARCHIVE.md`.
+    The `values` tool still trains `RackOrTable`: logistic regression over Vision's feature print of each frame.
   - `make scene` trains `RackOrTable` on whole frames labeled in `Captures/scene.txt`: by eye between 30° and 55°,
     else by tilt (two low ones were tables). Tilt alone can't say: racks were shot at 24–48°, tables from 35° up, and
     box shape doesn't separate them either. 21 of 24 held-out frames right, two of the misses judgment calls.
@@ -82,7 +76,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     copies the model to `Rummikub/`; `make retrain` runs it beside `make values`, then `score`. In 15 minutes, a
     quarter of our captures took it from 856 found with 169 extras (outside sets alone) to 895 with 67, and all of
     them to 894 with 62; 60 minutes found 950 with 45. 120 minutes did worse, one run each: 966 of 1051 with 47
-    against 60 minutes' 988 with 44, and so did 60 minutes with the rate falling along a half cosine: 974 with 50. Nano found 905 with 103 in 60 minutes, small 950, for about a fifth less time.
+    against 60 minutes' 988 with 44, and so did 60 minutes with the rate falling along a half cosine: 974 with 50.
+    After the first round of Check fixes, that model found 1001 of 1057 with 31, and a fresh 60-minute run on the
+    fixed labels 973 with 45. Runs vary by about that much, so the 988 model is likely a lucky draw: compare a
+    change over several runs, not one. Nano found 905 with 103 in 60 minutes, small 950, for about a fifth less time.
     `QUARTERS` (0–4) and `SIZE` (`nano`, `small`) are for those comparisons.
   - `make labels` runs `label`, then `prelabel.py`, then serves the page at http://localhost:8765 (also `labeler`
     in `.claude/launch.json`).
@@ -98,8 +95,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones
-    too, the boxes the finder misses, the boxes it finds that have none, and confirmed values `Values` (`RackValues`
-    for racks) reads as another tile at least .8 sure. The page lists those captures under Check, fewest first, and
+    too, the boxes the finder misses, the boxes it finds that have none, and confirmed values `Values` reads as another
+    tile at least .8 sure. The page lists those captures under Check, fewest first, and
     marks each spot, which `n` zooms to in turn; Enter there records the capture in `Captures/checked.txt`. On 2026-11-08 it flagged 120 of
     174: 470 boxes missed, 456 extra, 57 values. 279 of the misses had a finder box on them (median IoU .44), mostly
     our click-placed boxes sitting loose or off center, which `f` snaps to the finder's. Of the rest, most were real
@@ -133,7 +130,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
   times a second; `Game` decides rack or table (`RackOrTable`), finds the tiles (`Tiles`), reads each box
-  (`Values` or `RackValues`), or falls back to the reader without the models, keeps the table and rack, solves, and
+  and its orientation (`Values`), or falls back to the reader without the models, keeps the table and rack, solves, and
   tracks the step shown; `ContentView`
   draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table
   and rack as text once two frames agree. The table and rack are each voted over their last five frames (each tile as often as the median frame read it),

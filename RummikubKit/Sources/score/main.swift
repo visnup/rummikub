@@ -6,20 +6,16 @@
 
   // Scores the finder and the reader on the held-out captures whose boxes are done, which training never sees. A
   // tile is found when a box overlaps its true box by half. Reads with and without dropping readings outside the
-  // finder's boxes, as the app does, and with a `Values.mlmodel` beside the captures, by classifying the boxes.
+  // finder's boxes, as the app does, and with a `Values.mlpackage` beside the captures, by classifying the boxes.
   //   score <captures>
   setvbuf(stdout, nil, _IOLBF, 0)
   let captures = URL(filePath: CommandLine.arguments[1])
   let package = captures.appending(path: "Tiles.mlpackage")
   let tiles = FileManager.default.fileExists(atPath: package.path) ? package : captures.appending(path: "Tiles.mlmodel")
   let finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: tiles)))
-  let values = captures.appending(path: "Values.mlmodel")
+  let values = captures.appending(path: "Values.mlpackage")
   let classifier = FileManager.default.fileExists(atPath: values.path)
     ? try Classifier(model: MLModel(contentsOf: MLModel.compileModel(at: values))) : nil
-  // RackValues reads the rack captures, as in the app, when it's beside the captures too.
-  let rackValues = captures.appending(path: "RackValues.mlmodel")
-  let rackClassifier = FileManager.default.fileExists(atPath: rackValues.path)
-    ? try Classifier(model: MLModel(contentsOf: MLModel.compileModel(at: rackValues))) : nil
   let done = ((try? String(contentsOf: captures.appending(path: "boxed.txt"), encoding: .utf8)) ?? "")
     .split(separator: "\n").map(String.init)
 
@@ -83,7 +79,7 @@
     }
     (s.read, s.extraReads) = score(readings)
     (s.filtered, s.extraFiltered) = score(filtered)
-    if let classifier = (lines.first?.hasPrefix("rack") == true ? rackClassifier : nil) ?? classifier {
+    if let classifier {
       let classified = try ProcessInfo.processInfo.environment["LEAST"].flatMap(Float.init).map {
         try classifier.tiles(in: image, boxes: boxes, least: $0)
       } ?? classifier.tiles(in: image, boxes: boxes)

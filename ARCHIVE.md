@@ -29,6 +29,21 @@ What was tried and dropped, so nobody repeats it.
 - **A 3×3 blur of glyph cells** before matching, to soften aliasing: 29 misreads against 25.
 - **A wider value margin for the face** (peak − .3) to catch the rack photo's shaded green 7: it let wood grain in on
   the board photo and still missed the 7.
+- **The color from the ink's hue** (`inkColor` in the middle 60% of each finder box), weighing `Values`' tiles in
+  other colors by .2: 896 of 1048 right with 85 extras against 892 with 84, on 2026-11-08. Letting the hue decide
+  outright read 853 with 131, so it's wrong too often to trust. 10 of the 100 misreads were color only.
+- **Values as logistic regression over Vision's feature print**, replaced 2026-11-09 by a small CNN, which read 974 of
+  1048 held-out tiles right with 35 extras through the same finder boxes, against 897 with 79. Two models: `Values`,
+  a class per tile and orientation ("k6@2") from crops at all four, and `RackValues`, a class per tile, upright. Its
+  orientations were right for 417 of 552 held-out tiles, even with touching tiles voting, where the CNN's are 96%
+  right alone: the feature print barely sees rotation. It was quick, 80 s cold and seconds warm, since prints were
+  kept by crop. Before it, Create ML's image classifier took about 8 minutes every time, read 474 of 703 with 209
+  extras against its 486 with 194, failed past a few thousand images ("Failed to create CVPixelBufferPool") unless
+  run as a session, and its default flips took validation from 96% to 78%.
+- **A finder with a class per orientation**, so one D-FINE pass gives boxes and orientations: right for 541 of 552
+  held-out tiles, but it found 929 of 1057 at .6 against the one-class finder's 1003, and lower cutoffs brought
+  extras (976 with 90 at .4). Untested whether that's the four classes, its ~1,700 fewer tiles (photos with no
+  confirmed orientation were left out) or run noise. Still the goal once boxes hold up.
 
 ## Tile finder
 

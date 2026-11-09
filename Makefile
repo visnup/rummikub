@@ -31,12 +31,14 @@ captures:
 	for j in $(dir)/*.json; do b=$${j%.json}; [ -e "$$b.tiles.json" ] || [ "$$(jq -r .layout "$$j" 2>/dev/null)" != "As read" ] || \
 	  grep -qxF "$${b#$(dir)/}" $(dir)/boxed.txt || mv "$$b".* $(dir)/unlabeled/; done
 
-# Boxes new captures, fills in what Values reads in each box, and flags readable text in them every half minute,
-# while capturing. The app pushes captures to the labeler (`make labels`), so run both.
+# Boxes new captures, fills in what Values reads in each box, checks newly done ones against the models, and flags
+# readable text in them every half minute, while capturing. The app pushes captures to the labeler (`make labels`),
+# so run both.
 watch:
-	cd RummikubKit && swift build -c release --product words --product fill
+	cd RummikubKit && swift build -c release --product words --product fill --product check
 	while true; do uv run Labeler/prelabel.py --new 2>&1 | grep -v "Loading\|NOTE\|^\s*$$"; \
-	  RummikubKit/.build/release/fill --new $(dir); RummikubKit/.build/release/words $(dir); sleep 30; done
+	  RummikubKit/.build/release/fill --new $(dir); \
+	  RummikubKit/.build/release/check --new $(dir) | grep -v "^[0-9]"; RummikubKit/.build/release/words $(dir); sleep 30; done
 
 # Copies the app's per-frame timing logs, one a launch, every time, since they grow, then sums them up.
 timing:
@@ -54,11 +56,12 @@ labels:
 	cd RummikubKit && swift run -c release fill ../$(dir)
 	uv run Labeler/server.py
 
-# Trains the finder and Values side by side, then scores them: a little over an hour, nearly all the finder's.
+# Trains the finder and Values side by side, then scores and checks them: a little over an hour, nearly all the
+# finder's.
 # After labeling values alone, `make values score` takes about 8 minutes.
 train:
 	$(MAKE) -j2 finder values
-	$(MAKE) score
+	$(MAKE) score check
 
 # Trains the tile finder on captures whose boxes are done and the outside sets for MINUTES (60), and gives the app it.
 finder:
@@ -92,4 +95,4 @@ upload:
 	uvx --from huggingface_hub hf upload visnup/rummikub-captures $(dir) . --repo-type dataset --exclude .files.json \
 	  --exclude .removed --exclude .DS_Store --exclude .words.txt --exclude review.txt \
 	  --exclude ".crops/*" --exclude ".looking/*" --exclude ".finder/*" --exclude "*.mlmodel" \
-	  --exclude "Tiles.mlpackage/*" --exclude "Values.mlpackage/*" --exclude ids.txt --exclude .check.json --exclude checked.txt
+	  --exclude "Tiles.mlpackage/*" --exclude "Values.mlpackage/*" --exclude ids.txt --exclude .check.json --exclude .check.done --exclude checked.txt

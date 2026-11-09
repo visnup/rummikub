@@ -17,6 +17,9 @@
   finder.cropped = (ProcessInfo.processInfo.environment["WHOLE"] ?? "").isEmpty
   // SIDE=0.5 crops squares half the short side of the image, rather than all of it.
   if let side = ProcessInfo.processInfo.environment["SIDE"].flatMap(Double.init) { finder.side = side }
+  // ENOUGH=60 skips the crops when every box the whole image finds is 60 px or more.
+  finder.enough = ProcessInfo.processInfo.environment["ENOUGH"].flatMap(Double.init)
+  var regions = 0, frames = 0
   // Tiles out of scope aren't counted, and a box on one isn't extra. MIN=40 moves the cutoff, MIN=0 counts them all.
   let smallest = ProcessInfo.processInfo.environment["MIN"].flatMap(Double.init) ?? Finder.smallest
   let values = captures.appending(path: "Values.mlpackage")
@@ -49,7 +52,9 @@
       }
     let url = captures.appending(path: name + ".png")
     let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
-    let boxes = try finder.tiles(in: image)
+    let (boxes, used) = try finder.find(in: image)
+    regions += used
+    frames += 1
 
     let lines = try String(contentsOf: url.deletingPathExtension().appendingPathExtension("txt"), encoding: .utf8)
       .split(separator: "\n")
@@ -106,4 +111,5 @@
     total += s
   }
   print((["total"] + total.columns).joined(separator: "\t"))
+  print("regions", regions, "in", frames, "frames")
 #endif

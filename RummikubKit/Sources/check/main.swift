@@ -7,18 +7,27 @@
   // Lists where the models disagree with each done capture's labels, for the labeler to show: boxes the finder
   // doesn't find, boxes it finds that aren't labeled, and confirmed values that Values reads as
   // another tile at least .8 sure. Training captures too, since a label the models can't fit is likely wrong.
-  //   check <captures>  → <captures>/.check.json
+  // Captures checked go in `.check.done`; with --new, only done captures not there yet are checked, so `make watch`
+  // can run it every pass.
+  //   check [--new] <captures>  → <captures>/.check.json
   setvbuf(stdout, nil, _IOLBF, 0)
-  let captures = URL(filePath: CommandLine.arguments[1])
+  let new = CommandLine.arguments.contains("--new")
+  let captures = URL(filePath: CommandLine.arguments.dropFirst().first { $0 != "--new" }!)
+  let checkedURL = captures.appending(path: ".check.done"), outURL = captures.appending(path: ".check.json")
+  let done = try String(contentsOf: captures.appending(path: "boxed.txt"), encoding: .utf8).split(separator: "\n")
+    .map(String.init)
+  let checked = new ? Set(((try? String(contentsOf: checkedURL, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)) : []
+  let todo = done.filter { !checked.contains($0) }
+  if todo.isEmpty { exit(0) }
+
   let compiled = { (name: String) in try MLModel(contentsOf: MLModel.compileModel(at: captures.appending(path: name))) }
   let finder = try Finder(model: compiled("Tiles.mlpackage"))
   let values = try Classifier(model: compiled("Values.mlpackage"))
-  let done = try String(contentsOf: captures.appending(path: "boxed.txt"), encoding: .utf8).split(separator: "\n")
   let rect = { (f: [Double]) in CGRect(x: f[0], y: f[1], width: f[2], height: f[3]) }
   let array = { (r: CGRect) in [r.minX, r.minY, r.width, r.height].map { Double(($0 * 10).rounded() / 10) } }
 
-  var out = [String: Any]()
-  for (n, name) in done.map(String.init).enumerated() {
+  var out = new ? (try? JSONSerialization.jsonObject(with: Data(contentsOf: outURL))) as? [String: Any] ?? [:] : [:]
+  for (n, name) in todo.enumerated() {
     let labels = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
       as! [[String: Any]]
     let url = captures.appending(path: name + ".png")
@@ -37,9 +46,10 @@
     }
 
     let confirmed = labels.indices.filter { labels[$0]["confirmed"] as? Bool == true && Tile(labels[$0]["tile"] as! String) != nil }
+    let reads = try values.tiles(in: image, boxes: confirmed.map { truth[$0] }, least: 0.8)
     var misread = [[String: Any]]()
     for i in confirmed {
-      guard let read = try values.tiles(in: image, boxes: [truth[i]], least: 0.8).first else { continue }
+      guard let read = reads.first(where: { $0.frame == truth[i] }) else { continue }
       if read.tile.description != labels[i]["tile"] as! String {
         misread.append(["frame": array(truth[i]), "tile": labels[i]["tile"]!, "read": read.tile.description,
           "odds": (read.odds[read.tile]! * 100).rounded() / 100])
@@ -47,11 +57,10 @@
     }
     // A box on a tile out of scope isn't extra, nor is one the finder misses there missed.
     left.removeAll { !Finder.inScope(truth[$0], width: image.width, height: image.height) }
-    if !left.isEmpty || !extra.isEmpty || !misread.isEmpty {
-      out[name] = ["missed": left.map { array(truth[$0]) }, "extra": extra, "values": misread]
-    }
-    print(n + 1, done.count, name, left.count, extra.count, misread.count, separator: "\t")
+    out[name] = !left.isEmpty || !extra.isEmpty || !misread.isEmpty
+      ? ["missed": left.map { array(truth[$0]) }, "extra": extra, "values": misread] : nil
+    print(n + 1, todo.count, name, left.count, extra.count, misread.count, separator: "\t")
   }
-  try JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys])
-    .write(to: captures.appending(path: ".check.json"))
+  try JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys]).write(to: outURL)
+  try (checked.union(todo).sorted().joined(separator: "\n") + "\n").write(to: checkedURL, atomically: true, encoding: .utf8)
 #endif

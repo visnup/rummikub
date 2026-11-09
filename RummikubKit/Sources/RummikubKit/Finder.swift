@@ -14,6 +14,9 @@ public struct Finder: @unchecked Sendable {
   /// Tiles under this many px on their short side, in a frame 1920 px long, are out of scope: far ones, like the table
   /// behind a rack. `score` and `check` leave them out.
   public static let smallest = 30.0
+  /// Skips the crops when every box the whole image finds is at least this many px on its short side, in a frame
+  /// 1920 px long, since then there are no small tiles to look closer for.
+  public var enough: Double?
 
   public init(model: MLModel) throws {
     request = VNCoreMLRequest(model: try VNCoreMLModel(for: model))
@@ -23,12 +26,23 @@ public struct Finder: @unchecked Sendable {
 
   /// Boxes in top-left-origin pixels, most confident first. A box cut by a crop's edge is left to the neighboring crop
   /// it's whole in, and one that overlaps a more confident box by over a tenth (IoU) is dropped.
-  public func tiles(in image: CGImage) throws -> [CGRect] {
+  public func tiles(in image: CGImage) throws -> [CGRect] { try find(in: image).boxes }
+
+  /// The boxes, and how many regions it took to find them.
+  public func find(in image: CGImage) throws -> (boxes: [CGRect], regions: Int) {
     let (w, h) = (image.width, image.height)
     let whole = CGRect(x: 0, y: 0, width: w, height: h)
     let handler = VNImageRequestHandler(cgImage: image)
     var found = [(box: CGRect, confidence: Float)]()
+    var regions = 0
     for region in [whole] + (cropped ? Self.crops(width: w, height: h, side: side) : []) {
+      // Decided once, after the whole image.
+      if regions == 1, let enough, !found.isEmpty,
+        found.allSatisfy({ min($0.box.width, $0.box.height) * 1920 / Double(max(w, h)) >= enough })
+      {
+        break
+      }
+      regions += 1
       request.regionOfInterest = VNNormalizedRectForImageRect(
         CGRect(x: region.minX, y: Double(h) - region.maxY, width: region.width, height: region.height), w, h)
       try handler.perform([request])
@@ -45,7 +59,7 @@ public struct Finder: @unchecked Sendable {
     where !kept.contains(where: { Self.overlap($0.box, f.box) > 0.1 }) {
       kept.append(f)
     }
-    return kept.map(\.box)
+    return (kept.map(\.box), regions)
   }
 
   /// The last request's boxes in the image's top-left-origin pixels.

@@ -90,7 +90,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones
     too, the boxes the finder misses, the boxes it finds that have none, and confirmed values `Values` reads as another
-    tile at least .8 sure. The page lists those captures under Check, fewest first, and
+    tile at least .8 sure. It takes 30 s for 186 captures. `make train` reruns it, and `make watch` runs `check --new`
+    on captures newly done (those not in `.check.done`). The page lists those captures under Check, fewest first, and
     marks each spot, which `n` zooms to in turn; Enter there records the capture in `Captures/checked.txt`. On 2026-11-08 it flagged 120 of
     174: 470 boxes missed, 456 extra, 57 values. 279 of the misses had a finder box on them (median IoU .44), mostly
     our click-placed boxes sitting loose or off center, which `f` snaps to the finder's. Of the rest, most were real

@@ -273,7 +273,7 @@ struct ContentView: View {
   /// Tiles as their numbers in their colors, black as the text color so it shows on dark glass.
   func numbers(_ tiles: [Tile]) -> Text {
     tiles.enumerated().reduce(Text("")) { text, tile in
-      let number = Text(tile.element.value.map(String.init) ?? "☺")
+      let number = Text(tile.element.face)
         .foregroundStyle(tile.element.color == .black ? .primary : Overlay.color(tile.element))
       return Text("\(text)\(tile.offset == 0 ? "" : " ")\(number)")
     }
@@ -367,7 +367,7 @@ struct Overlay: View {
         let rect = fit(detection.frame)
         context.stroke(Path(roundedRect: rect, cornerRadius: 4), with: .color(.white.opacity(0.4)))
         let label = context.resolve(
-          Text(detection.tile.value.map(String.init) ?? "☺").font(.system(size: max(12, rect.width * 0.35), weight: .bold))
+          Text(detection.tile.face).font(.system(size: max(12, rect.width * 0.35), weight: .bold))
             .foregroundStyle(Self.color(detection.tile)))
         let size = label.measure(in: rect.size)
         let chip = CGRect(x: rect.midX - size.width / 2 - 4, y: rect.minY - size.height - 4, width: size.width + 8,
@@ -381,35 +381,35 @@ struct Overlay: View {
   }
 
   static func draw(_ marks: [Mark], in context: inout GraphicsContext, fit: Fit) {
-      for mark in marks {
-        switch mark {
-        case .source(let rect):
-          context.stroke(Path(roundedRect: fit(rect).insetBy(dx: -4, dy: -4), cornerRadius: 6), with: .color(.yellow), lineWidth: 4)
-        case .target(let rect, let tile):
-          let rect = fit(rect)
-          context.fill(Path(roundedRect: rect, cornerRadius: 6), with: .color(.white.opacity(0.7)))
-          context.stroke(
-            Path(roundedRect: rect.insetBy(dx: -4, dy: -4), cornerRadius: 6), with: .color(.yellow),
-            style: StrokeStyle(lineWidth: 4, dash: [8, 5]))
-          context.draw(
-            Text(tile == .joker ? "☺" : "\(tile.value!)").font(.system(size: rect.height * 0.4, weight: .bold))
-              .foregroundStyle(Self.color(tile)),
-            at: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.4))
-        case .arrow(let from, let to):
-          let from = fit(from), to = fit(to)
-          let angle = atan2(to.y - from.y, to.x - from.x)
-          var path = Path()
-          path.move(to: from)
-          path.addLine(to: to)
-          for side in [-1.0, 1.0] {
-            path.move(to: to)
-            path.addLine(to: CGPoint(x: to.x - 18 * cos(angle + side * 0.5), y: to.y - 18 * sin(angle + side * 0.5)))
-          }
-          context.stroke(path, with: .color(.yellow), lineWidth: 4)
-        case .caption, .label:
-          break
+    for mark in marks {
+      switch mark {
+      case .source(let rect):
+        context.stroke(Path(roundedRect: fit(rect).insetBy(dx: -4, dy: -4), cornerRadius: 6), with: .color(.yellow), lineWidth: 4)
+      case .target(let rect, let tile):
+        let rect = fit(rect)
+        context.fill(Path(roundedRect: rect, cornerRadius: 6), with: .color(.white.opacity(0.7)))
+        context.stroke(
+          Path(roundedRect: rect.insetBy(dx: -4, dy: -4), cornerRadius: 6), with: .color(.yellow),
+          style: StrokeStyle(lineWidth: 4, dash: [8, 5]))
+        context.draw(
+          Text(tile.face).font(.system(size: rect.height * 0.4, weight: .bold))
+            .foregroundStyle(Self.color(tile)),
+          at: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.4))
+      case .arrow(let from, let to):
+        let from = fit(from), to = fit(to)
+        let angle = atan2(to.y - from.y, to.x - from.x)
+        var path = Path()
+        path.move(to: from)
+        path.addLine(to: to)
+        for side in [-1.0, 1.0] {
+          path.move(to: to)
+          path.addLine(to: CGPoint(x: to.x - 18 * cos(angle + side * 0.5), y: to.y - 18 * sin(angle + side * 0.5)))
         }
+        context.stroke(path, with: .color(.yellow), lineWidth: 4)
+      case .caption:
+        break
       }
+    }
   }
 
   static func color(_ tile: Tile) -> Color {
@@ -422,12 +422,11 @@ struct Overlay: View {
   }
 }
 
-/// Photos from the test fixtures, read straight off the Mac, which the simulator can see.
+/// Photos from `Demo/`, read straight off the Mac, which the simulator can see.
 enum Demo {
   static let photos: [Game.Looking: CGImage] = [.table: "2026-11-06T155531Z", .rack: "2026-11-06T155556Z"]
     .compactMapValues { name in
-      let url = URL(filePath: #filePath).deletingLastPathComponent()
-        .appending(path: "../RummikubKit/Tests/RummikubKitTests/Fixtures/\(name).png")
+      let url = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../Demo/\(name).png")
       return CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }
     }
 }

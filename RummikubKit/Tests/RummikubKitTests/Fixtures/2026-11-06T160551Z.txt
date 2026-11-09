@@ -1,5 +1,0 @@
-rack
-o2 o3 o7 o10 r4 b3 b8 b6
-k1 k10 b10 b13
-b12
-k4

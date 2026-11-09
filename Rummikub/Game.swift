@@ -30,7 +30,7 @@ import UniformTypeIdentifiers
   /// What's around the tiles, like "lamp glare, wood", saved with each capture.
   var notes = ""
   var gravity: [Double]?
-  /// How long the last frame took to read: classifying the finder's boxes, or the reader without them.
+  /// How long the last frame took to read: classifying the finder's boxes.
   var readTime = Duration.zero
   /// How long the finder took on the last frame.
   var findTime = Duration.zero
@@ -124,20 +124,13 @@ import UniformTypeIdentifiers
       looking = seen
     }
     let finder = finder, classifier = values
-    // The finder's boxes read by Values: on the held-out captures 974 of 1048 tiles right with 35 extras. Without
-    // the models, the reader.
+    // The finder's boxes read by Values.
     let (found, boxes, findTime, time) = await Task.detached {
       let clock = ContinuousClock()
       var boxes: [CGRect]?
       let findTime = clock.measure { boxes = try? finder?.tiles(in: image) }
       var found = [Detection]()
-      let time = clock.measure {
-        if let boxes, let classifier, let read = try? classifier.tiles(in: image, boxes: boxes) {
-          found = read
-        } else {
-          found = Recognizer.tiles(in: image)
-        }
-      }
+      let time = clock.measure { found = boxes.flatMap { try? classifier?.tiles(in: image, boxes: $0) } ?? [] }
       return (found, boxes, findTime, time)
     }.value
     frame = image
@@ -149,8 +142,8 @@ import UniformTypeIdentifiers
     try? timing?.write(contentsOf: Data(
       "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(found.count),\(boxes?.count ?? -1)\n".utf8))
     let part = looking
-    // Touching tiles at the turn they agree on; on the table, each meld then as the likeliest valid one, as between
-    // turns they all are.
+    // Touching tiles at the orientation they agree on; on the table, each meld then as the likeliest valid one, as
+    // between turns they all are.
     let turned = Recognizer.turned(found)
     let seen = part == .rack ? onRack(turned) : Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self)
     readings[part] = Array(((readings[part] ?? []) + [seen]).suffix(5))
@@ -252,7 +245,6 @@ import UniformTypeIdentifiers
   /// The rack's tiles. Tiles under a third of the tallest one's height are the table behind it: in rack captures those
   /// were 18–37 px tall, and the rack's 52 and up, but for one mostly hidden behind another. And the rack's two rows
   /// lie within a tile or so of its five tallest tiles, so anything farther above or below is something else.
-
   private func onRack(_ found: [Detection]) -> [Detection] {
     let tall = found.sorted { $0.frame.height > $1.frame.height }.prefix(5)
     let tallest = tall.first?.frame.height ?? 0

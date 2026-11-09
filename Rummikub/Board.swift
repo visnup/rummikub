@@ -83,7 +83,7 @@ struct Board: View {
           context.stroke(face, with: .color(.black.opacity(0.2)))
         }
         context.draw(
-          Text(tile.tile.value.map(String.init) ?? "☺")
+          Text(tile.tile.face)
             .font(.system(size: min(rect.width, rect.height) * 0.55, weight: .bold))
             .foregroundStyle(Overlay.color(tile.tile)),
           at: CGPoint(x: rect.midX, y: rect.midY))

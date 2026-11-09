@@ -38,6 +38,9 @@ public enum Tile: Hashable, Sendable {
   public var color: TileColor? {
     if case .number(let color, _) = self { color } else { nil }
   }
+
+  /// What's printed on it: its number, or a smiley for the joker.
+  public var face: String { value.map(String.init) ?? "☺" }
 }
 
 extension Tile: CustomStringConvertible {

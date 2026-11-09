@@ -10,12 +10,6 @@ public struct Scene: Sendable {
     self.rack = rack
   }
 
-  /// Splits detections into the rack, below `rackY`, and the table's melds above it.
-  public init(_ detections: [Detection], rackY: CGFloat) {
-    table = Recognizer.melds(detections.filter { $0.frame.midY < rackY })
-    rack = detections.filter { $0.frame.midY >= rackY }.sorted { $0.frame.minX < $1.frame.minX }
-  }
-
   public var tableTiles: [[Tile]] { table.map { $0.map(\.tile) } }
   public var rackTiles: [Tile] { rack.map(\.tile) }
 
@@ -53,8 +47,6 @@ public enum Mark: Hashable, Sendable {
   case arrow(from: CGPoint, to: CGPoint)
   /// "Step 2 of 5" and the like.
   case caption(String)
-  /// What a tile was read as.
-  case label(CGRect, Tile)
 }
 
 extension Play {

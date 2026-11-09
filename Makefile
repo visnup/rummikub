@@ -47,11 +47,11 @@ timing:
 	tail -qn +2 Timing/*.csv | awk -F, '{ r += $$3; f += $$4; n++; if ($$3 > rm) rm = $$3; if ($$4 > fm) fm = $$4 } \
 	  END { printf "%d frames: read %.0f ms (max %d), find %.0f ms (max %d)\n", n, r / n, rm, f / n, fm }'
 
-# Labels what the reader agrees with and boxes what the finder finds, then serves the page for the rest at
+# Boxes what the finder finds and fills in what Values reads, then serves the pages to check them at
 # http://localhost:8765.
 labels:
-	cd RummikubKit && swift run -c release label ../$(dir)
 	uv run Labeler/prelabel.py
+	cd RummikubKit && swift run -c release fill ../$(dir)
 	uv run Labeler/server.py
 
 # Retrains the finder and Values side by side, then scores them: a little over an hour, nearly all the finder's.
@@ -74,7 +74,7 @@ values:
 # Trains the scene classifier, rack or table, on whole frames labeled in scene.txt, and gives the app it.
 scene:
 	uv run Labeler/scene.py $(dir) $(dir)/.scene
-	cd RummikubKit && swift run -c release values ../$(dir)/.scene ../$(dir)/RackOrTable.mlmodel
+	cd RummikubKit && swift run -c release scene ../$(dir)/.scene ../$(dir)/RackOrTable.mlmodel
 	cp $(dir)/RackOrTable.mlmodel Rummikub/
 
 # Lists where the models disagree with the done captures' labels, for the labeler's Check section.

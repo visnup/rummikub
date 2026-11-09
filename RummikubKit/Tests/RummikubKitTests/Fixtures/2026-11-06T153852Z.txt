@@ -1,7 +1,0 @@
-table
-o2 o3 o7 o10 r4 b3 b8 b6
-k1 k10 b10 b13
-r12 o12 b12
-k4 k5 k6
-r5 r6 r7
-k11 o11 j

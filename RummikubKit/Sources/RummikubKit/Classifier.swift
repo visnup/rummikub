@@ -14,12 +14,12 @@ extension VNRequest {
   }
 }
 
-/// An image classifier: one trained on tile crops reads each of the finder's boxes, its classes tiles (k1…r13, j);
-/// one trained on whole frames says whether it's a rack or the table.
+/// An image classifier: Values reads each of the finder's boxes, its classes tiles at an orientation ("k6@2");
+/// RackOrTable says from a whole frame whether it's a rack or the table.
 public struct Classifier: @unchecked Sendable {
   /// An image classifier, run through Vision.
   let request: VNCoreMLRequest?
-  /// Or one over Vision's feature print, as the `values` tool trains them, with the print as its "features" input.
+  /// Or one over Vision's feature print, as the `scene` tool trains them, with the print as its "features" input.
   let model: MLModel?
 
   public init(model: MLModel) throws {
@@ -59,16 +59,15 @@ public struct Classifier: @unchecked Sendable {
       uniquingKeysWith: max)
   }
 
-  /// The most likely tile in each box, where the classifier is at least `least` sure. On 1048 held-out tiles, a class
-  /// per tile and turn with `Recognizer.turned` read 886 right with 76 extras at .5, 822 with 41 at .7, 898 with 85 at
-  /// .4; a class per tile, turn blind, read 838 with 77 at .7.
+  /// The most likely tile in each box, where the image classifier is at least `least` sure, with its odds at each
+  /// orientation for `Recognizer.turned`.
   public func tiles(in image: CGImage, boxes: [CGRect], least: Float = 0.5) throws -> [Detection] {
     let whole = CGRect(x: 0, y: 0, width: image.width, height: image.height)
     let kept = boxes.filter { let r = $0.intersection(whole).integral; return r.width >= 8 && r.height >= 8 }
     // A frame's worth of requests at a time: Vision's buffers otherwise pile up until it fails with "Failed to
     // create CVPixelBufferPool", as it did over thousands of crops.
     let read: [[String: Float]] = try autoreleasepool {
-      guard let request else { return try kept.map { try probabilities(of: image.cropping(to: $0.intersection(whole).integral)!) } }
+      guard let request else { return [] }
       // One handler for the frame, a request per box, so the frame is prepared once.
       let requests = kept.map { box in
         let r = box.intersection(whole).integral

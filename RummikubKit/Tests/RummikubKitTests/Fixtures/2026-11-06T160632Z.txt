@@ -1,6 +1,0 @@
-table
-r12 o12 b12
-k4 k5 k6
-r5 r6 r7
-k11 o11 j
-o2 o3 o7 o10 b3 b8 b6

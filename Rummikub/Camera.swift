@@ -54,17 +54,17 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         await AVCaptureDevice.requestAccess(for: .video),
         let input = try? AVCaptureDeviceInput(device: device)
       else { return false }
-    self.device = device
-    // A zoom factor of 1 is the ultra wide; the wide lens, "1×", starts at the first switch-over.
-    wide = device.virtualDeviceSwitchOverVideoZoomFactors.first.map { CGFloat($0.doubleValue) } ?? 1
-    // Widest first: a whole table fits from closer.
-    zoom(to: zooms[0])
-    session.sessionPreset = .hd1920x1080
-    session.addInput(input)
-    let output = AVCaptureVideoDataOutput()
-    output.setSampleBufferDelegate(self, queue: DispatchQueue(label: "camera"))
-    session.addOutput(output)
-    output.connection(with: .video)?.videoRotationAngle = 90
+      self.device = device
+      // A zoom factor of 1 is the ultra wide; the wide lens, "1×", starts at the first switch-over.
+      wide = device.virtualDeviceSwitchOverVideoZoomFactors.first.map { CGFloat($0.doubleValue) } ?? 1
+      // Widest first: a whole table fits from closer.
+      zoom(to: zooms[0])
+      session.sessionPreset = .hd1920x1080
+      session.addInput(input)
+      let output = AVCaptureVideoDataOutput()
+      output.setSampleBufferDelegate(self, queue: DispatchQueue(label: "camera"))
+      session.addOutput(output)
+      output.connection(with: .video)?.videoRotationAngle = 90
       session.startRunning()
       return true
     #endif

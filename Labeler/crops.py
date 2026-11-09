@@ -14,16 +14,10 @@ from pathlib import Path
 
 from PIL import Image
 
+from held import held
+
 captures, out = Path(sys.argv[1]), Path(sys.argv[2])
 outside = [Path(p) for p in sys.argv[3:]]
-
-
-def held(name: str) -> bool:
-    """The same as Finder.isHeldOut."""
-    h = 14695981039346656037
-    for b in name.encode():
-        h = ((h ^ b) * 1099511628211) % 2**64
-    return h % 5 == 0
 
 
 def crop(image, frame):

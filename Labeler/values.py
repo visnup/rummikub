@@ -21,6 +21,8 @@ import torchvision
 from PIL import Image
 from torchvision.transforms import v2
 
+from held import held
+
 captures = Path(sys.argv[1])
 crops = captures / ".crops"
 SIZE = 128
@@ -62,14 +64,6 @@ class Values(torch.nn.Module):
     def forward(self, x):
         out = self.net((x - self.mean) / self.std)
         return out[:, :len(tiles)], out[:, len(tiles):]
-
-
-def held(name):
-    """The same as Finder.isHeldOut."""
-    h = 14695981039346656037
-    for b in name.encode():
-        h = ((h ^ b) * 1099511628211) % 2**64
-    return h % 5 == 0
 
 
 def held_out():

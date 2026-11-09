@@ -4,6 +4,15 @@ What was tried and dropped, so nobody repeats it.
 
 ## Recognition
 
+- **The hand-built reader** (`Recognizer.tiles`, 2026-11-06 to 11-09, removed once the finder and `Values` were the
+  only path the app used). It found numerals, not tiles: ink blobs with tile face all around, joined into numbers,
+  matched against glyphs rendered in bold fonts and baked into `References.bin` on macOS (iOS renders fonts
+  differently), colored by the ink's hue, at all four quarter turns. The face color was the peak of a
+  saturation/value histogram, since white balance varies too much for fixed thresholds. On the 12 fixtures it made
+  65 misreads; on held-out captures it read 509 of 1048 right with 305 extras, where `Values` on the finder's boxes
+  read 993 with 10. It did best on a plain dark surface, tiles upright in rows, top-down from 30–50 cm; light wood
+  grain gave false reads, shaded tile edges misses, and printed text and playing cards read as tiles. The entries
+  below are what tuning it tried.
 - **Vision's text recognition** (`RecognizeTextRequest`, 2026-11-06). On rendered tables it skipped most lone digits
   (1–4 and the 1s of a group), and per-tile `regionOfInterest` passes found nothing. On the real board photo it still
   missed every lone 1, 3 and 9, and its first call took 54 s while the model loaded.

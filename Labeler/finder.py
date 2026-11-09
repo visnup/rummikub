@@ -24,18 +24,12 @@ from pathlib import Path
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 import torch
+
+from held import held
 from PIL import Image
 from torchvision.transforms.functional import pil_to_tensor
 
 size = 640
-
-
-def held(name: str) -> bool:
-    """The same as Finder.isHeldOut."""
-    h = 14695981039346656037
-    for b in name.encode():
-        h = ((h ^ b) * 1099511628211) % 2**64
-    return h % 5 == 0
 
 
 def frames(labels: Path) -> list[list[float]]:

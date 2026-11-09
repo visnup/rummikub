@@ -4,9 +4,9 @@
   import ImageIO
   import RummikubKit
 
-  // Scores the finder and the reader on the held-out captures whose boxes are done, which training never sees. A
-  // tile is found when a box overlaps its true box by half. Reads with and without dropping readings outside the
-  // finder's boxes, as the app does, and with a `Values.mlpackage` beside the captures, by classifying the boxes.
+  // Scores the finder, and with a `Values.mlpackage` beside the captures the finder's boxes read by it, on the
+  // held-out captures whose boxes are done, which training never sees. A tile is found when a box overlaps its true
+  // box by half.
   //   score <captures>
   setvbuf(stdout, nil, _IOLBF, 0)
   let captures = URL(filePath: CommandLine.arguments[1])
@@ -15,7 +15,7 @@
   var finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: tiles)))
   // WHOLE=1 looks in the whole image only, without crops.
   finder.cropped = (ProcessInfo.processInfo.environment["WHOLE"] ?? "").isEmpty
-  // SIDE=1 crops squares the short side of the image, rather than half of it.
+  // SIDE=0.5 crops squares half the short side of the image, rather than all of it.
   if let side = ProcessInfo.processInfo.environment["SIDE"].flatMap(Double.init) { finder.side = side }
   // Tiles out of scope aren't counted, and a box on one isn't extra. MIN=40 moves the cutoff, MIN=0 counts them all.
   let smallest = ProcessInfo.processInfo.environment["MIN"].flatMap(Double.init) ?? Finder.smallest
@@ -26,25 +26,21 @@
     .split(separator: "\n").map(String.init)
 
   struct Score {
-    var tiles = 0, found = 0, extraBoxes = 0, valued = 0, read = 0, filtered = 0, extraReads = 0, extraFiltered = 0
-    var classified = 0, extraClassified = 0, valid = 0, extraValid = 0
+    var tiles = 0, found = 0, extraBoxes = 0, valued = 0, classified = 0, extraClassified = 0, valid = 0, extraValid = 0
 
     static func += (a: inout Score, b: Score) {
       a = Score(
         tiles: a.tiles + b.tiles, found: a.found + b.found, extraBoxes: a.extraBoxes + b.extraBoxes,
-        valued: a.valued + b.valued, read: a.read + b.read, filtered: a.filtered + b.filtered,
-        extraReads: a.extraReads + b.extraReads, extraFiltered: a.extraFiltered + b.extraFiltered,
-        classified: a.classified + b.classified, extraClassified: a.extraClassified + b.extraClassified,
-        valid: a.valid + b.valid, extraValid: a.extraValid + b.extraValid)
+        valued: a.valued + b.valued, classified: a.classified + b.classified,
+        extraClassified: a.extraClassified + b.extraClassified, valid: a.valid + b.valid, extraValid: a.extraValid + b.extraValid)
     }
 
     var columns: [String] {
-      ["\(found)/\(tiles) +\(extraBoxes)", "\(read)/\(valued) +\(extraReads)", "\(filtered)/\(valued) +\(extraFiltered)",
-        "\(classified)/\(valued) +\(extraClassified)", "\(valid)/\(valued) +\(extraValid)"]
+      ["\(found)/\(tiles) +\(extraBoxes)", "\(classified)/\(valued) +\(extraClassified)", "\(valid)/\(valued) +\(extraValid)"]
     }
   }
   var total = Score()
-  print("capture", "found/tiles +extra", "read/valued +extra", "with finder +extra", "classified +extra", "valid melds +extra", separator: "\t")
+  print("capture", "found/tiles +extra", "classified +extra", "valid melds +extra", separator: "\t")
   for name in done.filter(Finder.isHeldOut).sorted() {
     let truth = try (JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
       as! [[String: Any]]).map { t in
@@ -54,8 +50,6 @@
     let url = captures.appending(path: name + ".png")
     let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
     let boxes = try finder.tiles(in: image)
-    let readings = Recognizer.tiles(in: image)
-    let filtered = readings.filter { d in boxes.contains { $0.intersects(d.frame) } }
 
     let lines = try String(contentsOf: url.deletingPathExtension().appendingPathExtension("txt"), encoding: .utf8)
       .split(separator: "\n")
@@ -73,8 +67,7 @@
         s.extraBoxes += 1
       }
     }
-    /// Tiles read right and extra, against the truth written for the capture. Not against values in `tiles.json`,
-    /// which are mostly the reader's own.
+    /// Tiles read right and extra, against the truth written for the capture.
     func score(_ readings: [Detection]) -> (right: Int, extra: Int) {
       var left = written
       let right = readings.filter { d in
@@ -84,12 +77,8 @@
       }.count
       return (right, readings.count - right)
     }
-    (s.read, s.extraReads) = score(readings)
-    (s.filtered, s.extraFiltered) = score(filtered)
     if let classifier {
-      let classified = try ProcessInfo.processInfo.environment["LEAST"].flatMap(Float.init).map {
-        try classifier.tiles(in: image, boxes: boxes, least: $0)
-      } ?? classifier.tiles(in: image, boxes: boxes)
+      let classified = try classifier.tiles(in: image, boxes: boxes)
       // READS=1 prints each confirmed tile's reading, for a breakdown of what's misread.
       if ProcessInfo.processInfo.environment["READS"] != nil {
         let all = Recognizer.turned(try classifier.tiles(in: image, boxes: boxes, least: 0))
@@ -110,9 +99,7 @@
       }
       (s.classified, s.extraClassified) = score(classified)
       let table = lines.first?.hasPrefix("table") ?? false
-      // UPRIGHT=1 reads racks at turn 0 rather than the turn they agree on.
-      let rack = lines.first?.hasPrefix("rack") == true && ProcessInfo.processInfo.environment["UPRIGHT"] != nil
-      let turned = rack ? Recognizer.upright(classified) : Recognizer.turned(classified)
+      let turned = Recognizer.turned(classified)
       (s.valid, s.extraValid) = score(table ? Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self) : turned)
     }
     print(([name] + s.columns).joined(separator: "\t"))

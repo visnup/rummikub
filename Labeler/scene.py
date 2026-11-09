@@ -12,15 +12,9 @@ from pathlib import Path
 
 from PIL import Image
 
+from held import held
+
 captures, out = Path(sys.argv[1]), Path(sys.argv[2])
-
-
-def held(name: str) -> bool:
-    """The same as Finder.isHeldOut."""
-    h = 14695981039346656037
-    for b in name.encode():
-        h = ((h ^ b) * 1099511628211) % 2**64
-    return h % 5 == 0
 
 
 shutil.rmtree(out, ignore_errors=True)

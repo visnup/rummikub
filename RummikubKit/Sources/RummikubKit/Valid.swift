@@ -21,9 +21,6 @@ extension Recognizer {
     return turned
   }
 
-  /// Tiles read upright, as on a rack.
-  public static func upright(_ detections: [Detection]) -> [Detection] { oneTurn(detections, at: 0) }
-
   /// One patch at its likeliest turn, or at `turn`.
   static func oneTurn(_ patch: [Detection], at turn: Int? = nil) -> [Detection] {
     guard turn != nil || patch.count >= 2, patch.allSatisfy({ !$0.turned.isEmpty }) else { return patch }

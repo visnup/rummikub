@@ -21,11 +21,14 @@ extension Recognizer {
     return turned
   }
 
-  /// One patch at its likeliest turn.
-  static func oneTurn(_ patch: [Detection]) -> [Detection] {
-    guard patch.count >= 2, patch.allSatisfy({ !$0.turned.isEmpty }) else { return patch }
+  /// Tiles read upright, as on a rack.
+  public static func upright(_ detections: [Detection]) -> [Detection] { oneTurn(detections, at: 0) }
+
+  /// One patch at its likeliest turn, or at `turn`.
+  static func oneTurn(_ patch: [Detection], at turn: Int? = nil) -> [Detection] {
+    guard turn != nil || patch.count >= 2, patch.allSatisfy({ !$0.turned.isEmpty }) else { return patch }
     func fit(_ k: Int) -> Float { patch.reduce(0) { $0 + log(max($1.turned.values.reduce(0) { $0 + $1[k] }, 1e-4)) } }
-    let turn = (0..<4).max { fit($0) < fit($1) }!
+    let turn = turn ?? (0..<4).max { fit($0) < fit($1) }!
     return patch.map { d in
       let odds = d.turned.mapValues { $0[turn] }
       let total = odds.values.reduce(0, +)

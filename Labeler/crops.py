@@ -70,6 +70,7 @@ for line in known.read_text().splitlines() if known.exists() else []:
     tile, name = path.split("/")
     if float(share) >= 0.9 and tile[1:] not in ("6", "9") and (out / "outside" / path).exists():
         upright = Image.open(out / "outside" / path).rotate(-90 * int(turns))
+        save(upright, "upright", tile, name.removesuffix(".jpg"))
         for turn in range(4):
             save(upright.rotate(90 * turn), "turned", f"{tile}@{turn}", f"{name.removesuffix('.jpg')}-{turn}")
 for kind in ("upright", "turned", "outside"):

@@ -52,10 +52,13 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     `Values` read 809 right with 75 extras.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles, or tiles at a turn.
     `make values` builds two with `crops.py` and the `values` tool: `Values` for tables, a class per tile and turn
-    ("k6@2"), from our confirmed crops at all four quarter turns, and `RackValues` for racks, upright, ours alone.
+    ("k6@2"), from our confirmed crops at all four quarter turns, and `RackValues` for racks, a class per tile, from
+    the same crops upright. On 161 held-out rack tiles `RackValues` read 142 right with 14 extras, `Values` 131 with
+    11, and `RackValues` from our crops alone 137 with 23. `score` reads rack captures with `RackValues` when it's
+    beside the captures.
     A class blind to turns can't tell our 6 from a 9 turned half around (they differ only in the logo under the
     numeral): of 625 held-out confirmed tiles, 19 of its 62 misreads were 6↔9. The outside sets' turns aren't
-    written down, so they join `Values` at the turn the last `Values` gives them (`values --turns`, into
+    written down, so they join both at the turn the last `Values` gives them (`values --turns`, into
     `.crops/outside.turns`), where it's .9 sure, but not their 6s and 9s. `Recognizer.turned` then reads each patch
     of touching tiles at the turn they agree on, any direction, since a meld seen sideways runs down the photo. On
     1048 held-out tiles that read 886 right with 76 extras over .5 sure, where turn-blind `Values` read 838 with 77
@@ -76,10 +79,11 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     never trains on held-out captures (`Finder.isHeldOut`, a fifth of them by a hash of the name, so finishing more
     never moves one in or out). It runs `MINUTES` (60) on the Mac's GPU, then converts to
     `Captures/Tiles.mlpackage`, swapping out three parts coremltools 9.0 can't convert. `make train` runs it and
-    copies the model to `Rummikub/`; `make retrain` runs it beside `make values`, then `score`. Training time
-    matters more than our captures now: in 15 minutes, a quarter of them took it from 856 found with 169 extras
-    (outside sets alone) to 895 with 67, and all of them to 894 with 62; 60 minutes found 950 with 45. `QUARTERS`
-    (0–4) and `SIZE` (`nano`, `small`) are for those comparisons.
+    copies the model to `Rummikub/`; `make retrain` runs it beside `make values`, then `score`. In 15 minutes, a
+    quarter of our captures took it from 856 found with 169 extras (outside sets alone) to 895 with 67, and all of
+    them to 894 with 62; 60 minutes found 950 with 45. 120 minutes did worse, one run each: 966 of 1051 with 47
+    against 60 minutes' 988 with 44. Nano found 905 with 103 in 60 minutes, small 950, for about a fifth less time.
+    `QUARTERS` (0–4) and `SIZE` (`nano`, `small`) are for those comparisons.
   - `make labels` runs `label`, then `prelabel.py`, then serves the page at http://localhost:8765 (also `labeler`
     in `.claude/launch.json`).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each

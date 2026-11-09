@@ -16,6 +16,10 @@
   let values = captures.appending(path: "Values.mlmodel")
   let classifier = FileManager.default.fileExists(atPath: values.path)
     ? try Classifier(model: MLModel(contentsOf: MLModel.compileModel(at: values))) : nil
+  // RackValues reads the rack captures, as in the app, when it's beside the captures too.
+  let rackValues = captures.appending(path: "RackValues.mlmodel")
+  let rackClassifier = FileManager.default.fileExists(atPath: rackValues.path)
+    ? try Classifier(model: MLModel(contentsOf: MLModel.compileModel(at: rackValues))) : nil
   let done = ((try? String(contentsOf: captures.appending(path: "boxed.txt"), encoding: .utf8)) ?? "")
     .split(separator: "\n").map(String.init)
 
@@ -79,13 +83,13 @@
     }
     (s.read, s.extraReads) = score(readings)
     (s.filtered, s.extraFiltered) = score(filtered)
-    if let classifier {
+    if let classifier = (lines.first?.hasPrefix("rack") == true ? rackClassifier : nil) ?? classifier {
       let classified = try ProcessInfo.processInfo.environment["LEAST"].flatMap(Float.init).map {
         try classifier.tiles(in: image, boxes: boxes, least: $0)
       } ?? classifier.tiles(in: image, boxes: boxes)
       // READS=1 prints each confirmed tile's reading, for a breakdown of what's misread.
       if ProcessInfo.processInfo.environment["READS"] != nil {
-        let all = try classifier.tiles(in: image, boxes: boxes, least: 0)
+        let all = Recognizer.turned(try classifier.tiles(in: image, boxes: boxes, least: 0))
         let tiles = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
           as! [[String: Any]]
         for t in tiles where t["confirmed"] as? Bool == true {
@@ -98,12 +102,14 @@
             continue
           }
           print("read", name, lines[0], tile, read.tile, read.odds[read.tile] ?? 0, read.odds[tile] ?? 0,
-            Int(frame.height), t["turns"] as? Int ?? 0, separator: "\t")
+            Int(frame.height), t["turns"] as? Int ?? 0, read.turns, separator: "\t")
         }
       }
       (s.classified, s.extraClassified) = score(classified)
       let table = lines.first?.hasPrefix("table") ?? false
-      let turned = Recognizer.turned(classified)
+      // UPRIGHT=1 reads racks at turn 0 rather than the turn they agree on.
+      let rack = lines.first?.hasPrefix("rack") == true && ProcessInfo.processInfo.environment["UPRIGHT"] != nil
+      let turned = rack ? Recognizer.upright(classified) : Recognizer.turned(classified)
       (s.valid, s.extraValid) = score(table ? Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self) : turned)
     }
     print(([name] + s.columns).joined(separator: "\t"))

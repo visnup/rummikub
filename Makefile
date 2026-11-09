@@ -67,7 +67,7 @@ train:
 	rm -rf Rummikub/Tiles.mlpackage && cp -R $(dir)/Tiles.mlpackage Rummikub/
 
 # Trains the value classifiers on tile crops and gives the app them: Values for tables, a class per tile and turn,
-# with the outside sets at the turns the last Values gave them; RackValues for racks, upright, ours alone. Over
+# with the outside sets at the turns the last Values gave them; RackValues for racks, upright, with the outside sets too. Over
 # Vision's feature prints, kept by crop in `.crops/*.features`, so a rerun only reads new crops.
 values:
 	uv run Labeler/crops.py $(dir) $(dir)/.crops $(wildcard Outside/*-train Outside/*-values)

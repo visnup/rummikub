@@ -114,7 +114,7 @@ struct ContentView: View {
         // No camera, as in the simulator: read a photo of whichever the picker says, as often as a camera would.
         while !Task.isCancelled {
           if tab == 0 || !game.onBoard, let image = Demo.photos[game.looking] { await game.see(image) }
-          try? await Task.sleep(for: .seconds(0.3))
+          try? await Task.sleep(for: .seconds(0.2))
         }
       }
     }

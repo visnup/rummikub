@@ -2,7 +2,7 @@ app := DerivedData/Build/Products
 
 files := --device Yam --domain-type appDataContainer --domain-identifier com.visnup.Rummikub
 
-.PHONY: all sim test captures watch timing upload labels retrain train values scene check score
+.PHONY: all sim test captures watch timing upload labels train finder values rack-or-table check score
 
 all:
 	xcodebuild -scheme Rummikub -destination generic/platform=iOS -derivedDataPath DerivedData \
@@ -54,14 +54,14 @@ labels:
 	cd RummikubKit && swift run -c release fill ../$(dir)
 	uv run Labeler/server.py
 
-# Retrains the finder and Values side by side, then scores them: a little over an hour, nearly all the finder's.
+# Trains the finder and Values side by side, then scores them: a little over an hour, nearly all the finder's.
 # After labeling values alone, `make values score` takes about 8 minutes.
-retrain:
-	$(MAKE) -j2 train values
+train:
+	$(MAKE) -j2 finder values
 	$(MAKE) score
 
 # Trains the tile finder on captures whose boxes are done and the outside sets for MINUTES (60), and gives the app it.
-train:
+finder:
 	uv run Labeler/finder.py $(dir) $(wildcard Outside/*-train)
 	rm -rf Rummikub/Tiles.mlpackage && cp -R $(dir)/Tiles.mlpackage Rummikub/
 
@@ -71,8 +71,9 @@ values:
 	uv run Labeler/values.py $(dir)
 	rm -rf Rummikub/Values.mlpackage && cp -R $(dir)/Values.mlpackage Rummikub/
 
-# Trains the scene classifier, rack or table, on whole frames labeled in scene.txt, and gives the app it.
-scene:
+# Trains RackOrTable, which says whether a frame shows a rack or the table, on whole frames labeled in scene.txt,
+# and gives the app it.
+rack-or-table:
 	uv run Labeler/scene.py $(dir) $(dir)/.scene
 	cd RummikubKit && swift run -c release scene ../$(dir)/.scene ../$(dir)/RackOrTable.mlmodel
 	cp $(dir)/RackOrTable.mlmodel Rummikub/

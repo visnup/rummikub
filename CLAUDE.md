@@ -49,7 +49,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     patch of touching tiles at the orientation they agree on, any direction, since a meld seen sideways runs down
     the photo. The feature-print classifiers it replaced are in `ARCHIVE.md`.
     The `scene` tool trains `RackOrTable`: logistic regression over Vision's feature print of each frame.
-  - `make scene` trains `RackOrTable` on whole frames labeled in `Captures/scene.txt`: by eye between 30° and 55°,
+  - `make rack-or-table` trains `RackOrTable` on whole frames labeled in `Captures/scene.txt`: by eye between 30° and 55°,
     else by tilt (two low ones were tables). Tilt alone can't say: racks were shot at 24–48°, tables from 35° up, and
     box shape doesn't separate them either. 21 of 24 held-out frames right, two of the misses judgment calls.
 
@@ -59,8 +59,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     squares of the done captures (listed in `Captures/boxed.txt`) and the outside sets, at random quarter turns. It
     never trains on held-out captures (`Finder.isHeldOut`, a fifth of them by a hash of the name, so finishing more
     never moves one in or out). It runs `MINUTES` (60) on the Mac's GPU, then converts to
-    `Captures/Tiles.mlpackage`, swapping out three parts coremltools 9.0 can't convert. `make train` runs it and
-    copies the model to `Rummikub/`; `make retrain` runs it beside `make values`, then `score`. In 15 minutes, a
+    `Captures/Tiles.mlpackage`, swapping out three parts coremltools 9.0 can't convert. `make finder` runs it and
+    copies the model to `Rummikub/`; `make train` runs it beside `make values`, then `score`. In 15 minutes, a
     quarter of our captures took it from 856 found with 169 extras (outside sets alone) to 895 with 67, and all of
     them to 894 with 62; 60 minutes found 950 with 45. 120 minutes did worse, one run each: 966 of 1051 with 47
     against 60 minutes' 988 with 44, and so did 60 minutes with the rate falling along a half cosine: 974 with 50.
@@ -75,7 +75,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
     round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet. `make watch` runs it
     every 30 s while capturing, beside `make labels`, which takes the app's pushes. It's the finder, from the
-    checkpoint `finder.py` leaves in `Captures/.finder`, read as `Finder` reads, so it improves only as `make train`
+    checkpoint `finder.py` leaves in `Captures/.finder`, read as `Finder` reads, so it improves only as `make finder`
     reruns. It replaced OWLv2 with a linear probe, which found 897 of 1013 held-out tiles with 153 extras to its 950
     with 45.
   - On the capture page, every tile needs a box and nothing else may have one. Click adds an average-sized box, drag draws
@@ -112,7 +112,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     (credited), MIT, Apache. `outside.py` converts [sverrela/rummikub](https://www.kaggle.com/datasets/sverrela/rummikub)
     (Kaggle, CC0; from arXiv 2411.18172, KU Leuven): 382 phone photos of melds, 4,434 tiles boxed with value and
     color, 378 of them jokers. Download it by hand (it needs a Kaggle account), unzip into `Outside/sverrela`, then
-    `uv run Labeler/outside.py Outside/sverrela Outside/sverrela-train`; `make train` adds every `Outside/*-train`,
+    `uv run Labeler/outside.py Outside/sverrela Outside/sverrela-train`; `make finder` adds every `Outside/*-train`,
     and `make values` those and every `Outside/*-values`, sets whose tiles aren't all boxed.
     Not christophrus/rummikub, which is GPL-3.0.
   - Roboflow Universe sets, all CC BY 4.0, so credit them: arthurvanmeerbeeck/rummikub-p8akb, jonasbuehler/rummikub-nvypk,
@@ -126,8 +126,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     arthurvanmeerbeeck), ferhatcelik/test (konstantin's), rummikub/rummikub-pvln1 (a suited tile design, numerals
     boxed), bluebox (NC-SA), Okey sets (another game's tiles).
 
-- `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames about three
-  times a second; `Game` decides rack or table (`RackOrTable`), finds the tiles (`Tiles`), reads each box
+- `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames at most five
+  times a second, fewer when a frame takes longer to read; `Game` decides rack or table (`RackOrTable`), finds the tiles (`Tiles`), reads each box
   and its orientation (`Values`), keeps the table and rack, solves, and
   tracks the step shown; `ContentView`
   draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table

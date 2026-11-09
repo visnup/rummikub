@@ -84,7 +84,7 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
   }
 
   func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-    guard Date().timeIntervalSince(last) > 0.3, let buffer = sampleBuffer.imageBuffer else { return }
+    guard Date().timeIntervalSince(last) > 0.2, let buffer = sampleBuffer.imageBuffer else { return }
     let image = CIImage(cvPixelBuffer: buffer)
     guard let frame = context.createCGImage(image, from: image.extent) else { return }
     last = Date()

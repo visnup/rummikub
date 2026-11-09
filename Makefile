@@ -2,7 +2,7 @@ app := DerivedData/Build/Products
 
 files := --device Yam --domain-type appDataContainer --domain-identifier com.visnup.Rummikub
 
-.PHONY: all sim test captures watch timing upload labels train finder values rack-or-table check score
+.PHONY: all sim test captures watch timing upload labels train finder values looking check score
 
 all:
 	xcodebuild -scheme Rummikub -destination generic/platform=iOS -derivedDataPath DerivedData \
@@ -71,12 +71,12 @@ values:
 	uv run Labeler/values.py $(dir)
 	rm -rf Rummikub/Values.mlpackage && cp -R $(dir)/Values.mlpackage Rummikub/
 
-# Trains RackOrTable, which says whether a frame shows a rack or the table, on whole frames labeled in scene.txt,
-# and gives the app it.
-rack-or-table:
-	uv run Labeler/scene.py $(dir) $(dir)/.scene
-	cd RummikubKit && swift run -c release scene ../$(dir)/.scene ../$(dir)/RackOrTable.mlmodel
-	cp $(dir)/RackOrTable.mlmodel Rummikub/
+# Trains Looking, which says whether a frame shows a rack or the table, on whole frames labeled in looking.txt, and
+# gives the app it.
+looking:
+	uv run Labeler/looking.py $(dir) $(dir)/.looking
+	cd RummikubKit && swift run -c release looking ../$(dir)/.looking ../$(dir)/Looking.mlmodel
+	cp $(dir)/Looking.mlmodel Rummikub/
 
 # Lists where the models disagree with the done captures' labels, for the labeler's Check section.
 check:
@@ -91,5 +91,5 @@ score:
 upload:
 	uvx --from huggingface_hub hf upload visnup/rummikub-captures $(dir) . --repo-type dataset --exclude .files.json \
 	  --exclude .removed --exclude .DS_Store --exclude .words.txt --exclude review.txt \
-	  --exclude ".crops/*" --exclude ".scene/*" --exclude ".finder/*" --exclude "*.mlmodel" \
+	  --exclude ".crops/*" --exclude ".looking/*" --exclude ".finder/*" --exclude "*.mlmodel" \
 	  --exclude "Tiles.mlpackage/*" --exclude "Values.mlpackage/*" --exclude ids.txt --exclude .check.json --exclude checked.txt

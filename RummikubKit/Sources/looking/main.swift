@@ -9,7 +9,7 @@
   // Trains a classifier on folders of crops named by their class, as `Labeler/crops.py` writes them: Vision's feature
   // print of each crop, then logistic regression on those. Feature prints are kept by crop content in `<crops>.features`,
   // so a rerun only reads new crops: Create ML's own image classifier redid all 13,000 every time (about 8 minutes).
-  //   scene <crops> <model>
+  //   looking <crops> <model>
   setvbuf(stdout, nil, _IOLBF, 0)
   let crops = URL(filePath: CommandLine.arguments[1]), model = URL(filePath: CommandLine.arguments[2])
   let cacheURL = crops.appendingPathExtension("features")

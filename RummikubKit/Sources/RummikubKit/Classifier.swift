@@ -15,11 +15,11 @@ extension VNRequest {
 }
 
 /// An image classifier: Values reads each of the finder's boxes, its classes tiles at an orientation ("k6@2");
-/// RackOrTable says from a whole frame whether it's a rack or the table.
+/// Looking says from a whole frame whether it's a rack or the table.
 public struct Classifier: @unchecked Sendable {
   /// An image classifier, run through Vision.
   let request: VNCoreMLRequest?
-  /// Or one over Vision's feature print, as the `scene` tool trains them, with the print as its "features" input.
+  /// Or one over Vision's feature print, as the `looking` tool trains them, with the print as its "features" input.
   let model: MLModel?
 
   public init(model: MLModel) throws {

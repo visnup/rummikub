@@ -40,7 +40,7 @@ import UniformTypeIdentifiers
   private var models: Models?
   private var finder: Finder? { models?.finder }
   private var values: Classifier? { models?.values }
-  private var rackOrTable: Classifier? { models?.rackOrTable }
+  private var lookingModel: Classifier? { models?.looking }
 
   private nonisolated struct Models: Sendable {
     let finder = Game.model("Tiles").flatMap { try? Finder(model: $0) }
@@ -48,7 +48,7 @@ import UniformTypeIdentifiers
     let values = Game.model("Values").flatMap { try? Classifier(model: $0) }
     /// Whether a frame shows a rack or the table, from the whole picture: tilt alone can't say, since racks were shot
     /// at 24–48° and tables from 35° up. On held-out frames it got 21 of 24, two of them judgment calls.
-    let rackOrTable = Game.model("RackOrTable").flatMap { try? Classifier(model: $0) }
+    let looking = Game.model("Looking").flatMap { try? Classifier(model: $0) }
   }
 
   init() {
@@ -71,14 +71,14 @@ import UniformTypeIdentifiers
     }
   }
   /// How far the camera points below the horizon, in degrees. Looking down at the table it's steep; at the rack,
-  /// nearly level. Below 30° and above 55° it decides; between, the rack-or-table model does, or without it a cutoff at
+  /// nearly level. Below 30° and above 55° it decides; between, the Looking model does, or without it a cutoff at
   /// 45°. A pick by hand holds until that part locks.
   var tilt: Double? {
     didSet {
       guard let tilt, picked == nil else { return }
       if tilt > 55 {
         looking = .table
-      } else if tilt < 30 || tilt < 45 && rackOrTable == nil {
+      } else if tilt < 30 || tilt < 45 && lookingModel == nil {
         looking = .rack
       }
     }
@@ -117,8 +117,8 @@ import UniformTypeIdentifiers
     if locked.contains(looking), step == nil, Date.now.timeIntervalSince(lastSeen) < 1 { return }
     lastSeen = .now
     // Only where tilt can't say: below 30° it's always been a rack, above 55° a table.
-    if picked == nil, let rackOrTable, (30...55).contains(tilt ?? 40),
-      let (label, confidence) = await Task.detached(operation: { try? rackOrTable.label(of: image) }).value,
+    if picked == nil, let lookingModel, (30...55).contains(tilt ?? 40),
+      let (label, confidence) = await Task.detached(operation: { try? lookingModel.label(of: image) }).value,
       confidence >= 0.8, let seen = Looking(rawValue: label)
     {
       looking = seen

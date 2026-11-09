@@ -48,8 +48,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     (`.crops/outside.turns`), where it's .9 sure, but not their 6s and 9s. `Recognizer.turned` then reads each
     patch of touching tiles at the orientation they agree on, any direction, since a meld seen sideways runs down
     the photo. The feature-print classifiers it replaced are in `ARCHIVE.md`.
-    The `scene` tool trains `RackOrTable`: logistic regression over Vision's feature print of each frame.
-  - `make rack-or-table` trains `RackOrTable` on whole frames labeled in `Captures/scene.txt`: by eye between 30° and 55°,
+    The `looking` tool trains `Looking`: logistic regression over Vision's feature print of each frame.
+  - `make looking` trains `Looking` on whole frames labeled in `Captures/looking.txt`: by eye between 30° and 55°,
     else by tilt (two low ones were tables). Tilt alone can't say: racks were shot at 24–48°, tables from 35° up, and
     box shape doesn't separate them either. 21 of 24 held-out frames right, two of the misses judgment calls.
 
@@ -127,7 +127,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     boxed), bluebox (NC-SA), Okey sets (another game's tiles).
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames at most five
-  times a second, fewer when a frame takes longer to read; `Game` decides rack or table (`RackOrTable`), finds the tiles (`Tiles`), reads each box
+  times a second, fewer when a frame takes longer to read; `Game` decides rack or table (`Looking`), finds the tiles (`Tiles`), reads each box
   and its orientation (`Values`), keeps the table and rack, solves, and
   tracks the step shown; `ContentView`
   draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table
@@ -135,7 +135,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   and lock once the vote holds for two seconds: then frames stop changing them and the plays are solved once. A locked
   part that reads differently for three seconds shows "changed?"; its chip in the Solver panel scans it again. While a play is being shown, readings don't re-solve; they advance the step instead
   (`Play.stepsDone`). The simulator never uses a camera: it reads a photo in `Demo/` of whichever the Table/Rack switch
-  says, straight off the Mac's disk. On the phone, Table/Rack follows `RackOrTable` when it's .8 sure, or
+  says, straight off the Mac's disk. On the phone, Table/Rack follows `Looking` when it's .8 sure, or
   without it the tilt from CoreMotion (`Game.tilt`), shown in degrees in the top pill and written into each capture.
   A pick by hand holds until that part locks. In the Simulator, Vision requests are pinned to the
   CPU, else it can't create an inference context; the finder's boxes there still come out wrong, so check on the phone.

@@ -2,9 +2,9 @@
 # requires-python = ">=3.12"
 # dependencies = ["pillow"]
 # ///
-"""Whole frames for the scene classifier, by `scene.txt`'s label for each capture: rack, or table. Shrunk to 299 px
+"""Whole frames for Looking, by `looking.txt`'s label for each capture: rack, or table. Shrunk to 299 px
 square, as the classifier sees them. Held-out captures are left out.
-uv run Labeler/scene.py <captures> <out>"""
+uv run Labeler/looking.py <captures> <out>"""
 
 import shutil
 import sys
@@ -19,7 +19,7 @@ captures, out = Path(sys.argv[1]), Path(sys.argv[2])
 
 shutil.rmtree(out, ignore_errors=True)
 counts = {}
-for line in (captures / "scene.txt").read_text().splitlines():
+for line in (captures / "looking.txt").read_text().splitlines():
     name, label = line.split()
     if held(name):
         continue

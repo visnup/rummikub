@@ -29,7 +29,7 @@
   Every tile needs a box and nothing else does. Click empty space to add a box the size of those nearby, or drag to
   draw one; drag a box to move it, its corner to resize. Click a box to select it, shift-drag around several to select
   them, or <kbd>a</kbd> to select every unconfirmed one. Type a tile (<kbd>r12</kbd>, <kbd>j</kbd>) and
-  <kbd>Enter</kbd> to set and confirm it, or just <kbd>Enter</kbd> to confirm what it shows; one box then goes on to
+  <kbd>Enter</kbd> to set and confirm it, <kbd>?</kbd> for one you can't read, or just <kbd>Enter</kbd> to confirm what it shows; one box then goes on to
   the next unconfirmed. <kbd>←</kbd><kbd>→</kbd> turn its orientation, <kbd>⌫</kbd> deletes it, <kbd>Esc</kbd>
   selects none. With nothing selected, <kbd>Enter</kbd> marks the capture done and opens the next, <kbd>u</kbd>
   unmarks it, and <kbd>D</kbd> deletes it, to the Trash.
@@ -133,7 +133,7 @@ function summary() {
   const left = {};
   for (const t of c.truth) left[t] = (left[t] || 0) + 1;
   const extra = [];
-  for (const t of tiles.filter(t => t.confirmed)) left[t.tile] ? left[t.tile]-- : extra.push(t.tile);
+  for (const t of tiles.filter(t => t.confirmed && t.tile !== "?")) left[t.tile] ? left[t.tile]-- : extra.push(t.tile);
   const names = Object.entries(left).filter(([, n]) => n).map(([t, n]) => n > 1 ? `${t}×${n}` : t);
   const k = c.check;
   const disagree = k && [[k.missed, "boxes the finder misses"], [k.extra, "found unboxed"], [k.values, "values read otherwise"]]
@@ -324,10 +324,11 @@ function add(frame) {
 window.onkeydown = e => {
   if (e.metaKey || e.ctrlKey) return;
   const s = tiles[selected];
-  if (s && (/^[kborj]$/.test(e.key) || typed && /^[0-9]$/.test(e.key))) typed += e.key;
+  if (s && (!typed && /^[kborj?]$/.test(e.key) || typed && /^[0-9]$/.test(e.key))) typed += e.key;
   else if (e.key === "Enter" && typed) {
-    if (!valid.test(typed) || !s) return flash();
-    s.tile = typed; s.confirmed = true;
+    const fields = typedFields(typed);
+    if (!fields || !s) return flash();
+    Object.assign(s, fields);
     typed = ""; save();
     selectNext(1);
   } else if (e.key === "Enter" && s) {

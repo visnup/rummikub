@@ -1,4 +1,6 @@
 const valid = /^([kbor](1[0-3]|[1-9])|j)$/;
+/** What typing sets, confirmed: a tile, or `?` for one too cut off or blurred to read. */
+const typedFields = typed => typed === "?" || valid.test(typed) ? { tile: typed, confirmed: true } : null;
 const ink = { k: "#111", b: "#0a62d0", o: "#e07800", r: "#d0102a", j: "#d0102a" };
 /** Which way is up, by orientation: the quarter turns clockwise that make the tile upright. */
 const arrows = ["↑", "←", "↓", "→"];

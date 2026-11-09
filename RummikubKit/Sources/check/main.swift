@@ -45,6 +45,8 @@
           "odds": (read.odds[read.tile]! * 100).rounded() / 100])
       }
     }
+    // A box on a tile out of scope isn't extra, nor is one the finder misses there missed.
+    left.removeAll { !Finder.inScope(truth[$0], width: image.width, height: image.height) }
     if !left.isEmpty || !extra.isEmpty || !misread.isEmpty {
       out[name] = ["missed": left.map { array(truth[$0]) }, "extra": extra, "values": misread]
     }

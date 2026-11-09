@@ -12,7 +12,13 @@
   let captures = URL(filePath: CommandLine.arguments[1])
   let package = captures.appending(path: "Tiles.mlpackage")
   let tiles = FileManager.default.fileExists(atPath: package.path) ? package : captures.appending(path: "Tiles.mlmodel")
-  let finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: tiles)))
+  var finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: tiles)))
+  // WHOLE=1 looks in the whole image only, without crops.
+  finder.cropped = (ProcessInfo.processInfo.environment["WHOLE"] ?? "").isEmpty
+  // SIDE=1 crops squares the short side of the image, rather than half of it.
+  if let side = ProcessInfo.processInfo.environment["SIDE"].flatMap(Double.init) { finder.side = side }
+  // Tiles out of scope aren't counted, and a box on one isn't extra. MIN=40 moves the cutoff, MIN=0 counts them all.
+  let smallest = ProcessInfo.processInfo.environment["MIN"].flatMap(Double.init) ?? Finder.smallest
   let values = captures.appending(path: "Values.mlpackage")
   let classifier = FileManager.default.fileExists(atPath: values.path)
     ? try Classifier(model: MLModel(contentsOf: MLModel.compileModel(at: values))) : nil
@@ -54,14 +60,15 @@
     let lines = try String(contentsOf: url.deletingPathExtension().appendingPathExtension("txt"), encoding: .utf8)
       .split(separator: "\n")
     let written = Dictionary(Tile.parse(lines.dropFirst().joined(separator: " ")).map { ($0, 1) }, uniquingKeysWith: +)
-    var s = Score(tiles: truth.count, valued: written.values.reduce(0, +))
+    let small = { (r: CGRect) in !Finder.inScope(r, width: image.width, height: image.height, smallest: smallest) }
+    var s = Score(tiles: truth.count { !small($0) }, valued: written.values.reduce(0, +))
     var left = truth
     for box in boxes {
       if let i = left.indices.max(by: { Finder.overlap(left[$0], box) < Finder.overlap(left[$1], box) }),
         Finder.overlap(left[i], box) > 0.5
       {
+        if !small(left[i]) { s.found += 1 }
         left.remove(at: i)
-        s.found += 1
       } else {
         s.extraBoxes += 1
       }

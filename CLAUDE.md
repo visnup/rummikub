@@ -30,10 +30,13 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     saturation/value histogram, since white balance varies too much between photos for fixed thresholds. Vision's
     text recognition skips lone digits, both rendered and photographed, so it isn't used.
   - `Finder.swift`: finds tiles, not values, with the detector `Labeler/finder.py` makes, through Vision. It runs on
-    the whole image and on overlapping crops half its short side, since small tiles are missed whole; a box cut by a
-    crop's edge is left to the neighboring crop. It keeps boxes over .6 confidence and drops any that overlap a kept
+    the whole image and on squares its short side, three down a 1080p frame, overlapping by about half; a box cut by
+    a crop's edge is left to the neighboring crop. It keeps boxes over .6 confidence and drops any that overlap a kept
     one by over a tenth (IoU). On the Simulator the model must run on the CPU, or Vision can't create an inference
-    context. On the phone it takes 290–500 ms a frame for the 19 regions of a 1080p frame (2026-11-09).
+    context. With crops half the short side, 19 regions, it took 290–500 ms a frame on the phone (2026-11-09).
+    Tiles under 30 px on their short side in a 1920 px frame (`Finder.smallest`) are out of scope: far ones, like
+    the table behind a rack, which a table panned with ARKit won't need. Of 1054 held-out tiles 960 are in scope.
+    There the 4 regions found 932 with 14 extras, the 19 found 937 with 16, and the whole image alone 908 with 12.
   - `Overlay.swift`: what to draw for each step of a play over the image: the tile to pick up, its target slot as a
     ghost, and an arrow.
   - `Render.swift`: synthetic table images for tests, and drawing overlays onto images.

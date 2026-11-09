@@ -6,6 +6,14 @@ import Vision
 /// `boxes` Vision can't read as objects. Tiles small in a photo are found in its crops.
 public struct Finder: @unchecked Sendable {
   let request: VNCoreMLRequest
+  /// Whether to look in crops too, for tiles too small to find in the whole image.
+  public var cropped = true
+  /// The crops' side, as a share of the image's short side. Squares the whole short side, three down a 1080p frame,
+  /// found 932 of 960 held-out tiles in scope with 14 extras, where half of it (19 regions) found 937 with 16.
+  public var side = 1.0
+  /// Tiles under this many px on their short side, in a frame 1920 px long, are out of scope: far ones, like the table
+  /// behind a rack. `score` and `check` leave them out.
+  public static let smallest = 30.0
 
   public init(model: MLModel) throws {
     request = VNCoreMLRequest(model: try VNCoreMLModel(for: model))
@@ -20,7 +28,7 @@ public struct Finder: @unchecked Sendable {
     let whole = CGRect(x: 0, y: 0, width: w, height: h)
     let handler = VNImageRequestHandler(cgImage: image)
     var found = [(box: CGRect, confidence: Float)]()
-    for region in [whole] + Self.crops(width: w, height: h) {
+    for region in [whole] + (cropped ? Self.crops(width: w, height: h, side: side) : []) {
       request.regionOfInterest = VNNormalizedRectForImageRect(
         CGRect(x: region.minX, y: Double(h) - region.maxY, width: region.width, height: region.height), w, h)
       try handler.perform([request])
@@ -57,19 +65,25 @@ public struct Finder: @unchecked Sendable {
     }
   }
 
-  /// Squares half the short side, overlapping by half.
-  static func crops(width: Int, height: Int) -> [CGRect] {
-    let side = min(width, height) / 2
-    let step = side / 2
-    return stride(from: 0, through: height - side, by: step).flatMap { y in
-      stride(from: 0, through: width - side, by: step).map { x in CGRect(x: x, y: y, width: side, height: side) }
+  /// Squares `side` of the short side, overlapping by about half, spread evenly from edge to edge.
+  static func crops(width: Int, height: Int, side: Double) -> [CGRect] {
+    let s = Int(Double(min(width, height)) * side)
+    func starts(_ length: Int) -> [Int] {
+      let n = Int((Double(length - s) / Double(s / 2)).rounded(.up)) + 1
+      return n == 1 ? [0] : (0..<n).map { (length - s) * $0 / (n - 1) }
     }
+    return starts(height).flatMap { y in starts(width).map { x in CGRect(x: x, y: y, width: s, height: s) } }
   }
 
   /// Whether a capture is kept out of training to score on: a fifth of them, by a hash of its name, so finishing
   /// more captures never moves one in or out.
   public static func isHeldOut(_ name: String) -> Bool {
     name.utf8.reduce(14_695_981_039_346_656_037 as UInt64) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 } % 5 == 0
+  }
+
+  /// Whether a tile's box is big enough to be in scope, in an image this size.
+  public static func inScope(_ box: CGRect, width: Int, height: Int, smallest: Double = smallest) -> Bool {
+    min(box.width, box.height) * 1920 / Double(max(width, height)) >= smallest
   }
 
   /// Intersection over union.

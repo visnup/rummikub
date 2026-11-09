@@ -47,6 +47,10 @@ What was tried and dropped, so nobody repeats it.
 
 ## Tile finder
 
+- **Training on whole frames, with tiles under 30 px as background** (2026-11-09), for a finder that reads the whole
+  frame alone: 60 minutes found 897 of 960 held-out tiles in scope with 26 extras, where the finder trained on random
+  squares, run on the whole frame alone, found 908 with 12. Squares the short side, 4 regions, found 932 instead.
+
 - **Bootstrapping on [christophrus/rummikub](https://huggingface.co/datasets/christophrus/rummikub)** (2026-11-07):
   828 boxed photos of a similar tile set, trained with ours, took held-out tiles found from 83% to 92% with 44 extra
   boxes, against 129 on ours alone (29 captures). It's GPL-3.0, so its model only pre-labeled, never shipped. Dropped

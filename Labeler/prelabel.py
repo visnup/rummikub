@@ -53,19 +53,24 @@ if not todo:
 from transformers import DFineForObjectDetection
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
+# Whether to look in crops too, as `Finder.cropped`.
+cropped = True
 model = DFineForObjectDetection.from_pretrained(captures / ".finder").to(device).eval()
 
 
 @torch.no_grad()
 def detect(image, least=0.6):
-    """As `Finder` does: the whole photo and squares half its short side overlapping by half, each at 640 px; a box
+    """As `Finder` does: the whole photo and squares its short side overlapping by about half, each at 640 px; a box
     cut by a square's edge left to the square it's whole in, and one overlapping a likelier box by over a tenth
     (IoU) dropped."""
     w, h = image.size
-    side = min(w, h) // 2
-    regions = [(0, 0, w, h)] + [
-        (x, y, side, side) for y in range(0, h - side + 1, side // 2) for x in range(0, w - side + 1, side // 2)
-    ]
+    side = min(w, h)
+
+    def starts(length):
+        n = -(-(length - side) // (side // 2)) + 1
+        return [0] if n == 1 else [(length - side) * i // (n - 1) for i in range(n)]
+
+    regions = [(0, 0, w, h)] + [(x, y, side, side) for y in starts(h) for x in starts(w)] * cropped
     pixels = torch.stack([
         pil_to_tensor(image.crop((x, y, x + rw, y + rh)).resize((640, 640), Image.BILINEAR)) for x, y, rw, rh in regions
     ])

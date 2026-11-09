@@ -64,14 +64,30 @@ public struct Classifier: @unchecked Sendable {
   /// .4; a class per tile, turn blind, read 838 with 77 at .7.
   public func tiles(in image: CGImage, boxes: [CGRect], least: Float = 0.5) throws -> [Detection] {
     let whole = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+    let kept = boxes.filter { let r = $0.intersection(whole).integral; return r.width >= 8 && r.height >= 8 }
     // A frame's worth of requests at a time: Vision's buffers otherwise pile up until it fails with "Failed to
     // create CVPixelBufferPool", as it did over thousands of crops.
-    return try autoreleasepool { try boxes.compactMap { box in
-      guard let crop = image.cropping(to: box.intersection(whole).integral), crop.width >= 8, crop.height >= 8
-      else { return nil }
+    let read: [[String: Float]] = try autoreleasepool {
+      guard let request else { return try kept.map { try probabilities(of: image.cropping(to: $0.intersection(whole).integral)!) } }
+      // One handler for the frame, a request per box, so the frame is prepared once.
+      let requests = kept.map { box in
+        let r = box.intersection(whole).integral
+        let each = VNCoreMLRequest(model: request.model)
+        each.imageCropAndScaleOption = .scaleFill
+        each.regionOfInterest = VNNormalizedRectForImageRect(
+          CGRect(x: r.minX, y: whole.height - r.maxY, width: r.width, height: r.height), image.width, image.height)
+        each.onCPUInSimulator()
+        return each
+      }
+      try VNImageRequestHandler(cgImage: image).perform(requests)
+      return requests.map { r in
+        Dictionary(((r.results as? [VNClassificationObservation]) ?? []).map { ($0.identifier, $0.confidence) }, uniquingKeysWith: max)
+      }
+    }
+    return zip(kept, read).compactMap { box, probabilities in
       // Classes are tiles, or tiles at a turn ("k6@2"), summed over turns.
       var turned = [Tile: [Float]]()
-      for (label, p) in try probabilities(of: crop) {
+      for (label, p) in probabilities {
         let parts = label.split(separator: "@")
         guard let tile = Tile(parts[0]) else { continue }
         turned[tile, default: [0, 0, 0, 0]][parts.count > 1 ? Int(parts[1])! : 0] += p
@@ -79,6 +95,6 @@ public struct Classifier: @unchecked Sendable {
       let odds = turned.mapValues { $0.reduce(0, +) }.filter { $0.value >= 0.001 }
       guard let (tile, confidence) = odds.max(by: { $0.value < $1.value }), confidence >= least else { return nil }
       return Detection(tile: tile, frame: box, odds: odds, turned: turned)
-    } }
+    }
   }
 }

@@ -33,7 +33,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     the whole image and on overlapping crops half its short side, since small tiles are missed whole; a box cut by a
     crop's edge is left to the neighboring crop. It keeps boxes over .6 confidence and drops any that overlap a kept
     one by over a tenth (IoU). On the Simulator the model must run on the CPU, or Vision can't create an inference
-    context. On the phone it takes about 490 ms a frame for the 19 regions of a 1080p frame.
+    context. On the phone it takes 290–500 ms a frame for the 19 regions of a 1080p frame (2026-11-09).
   - `Overlay.swift`: what to draw for each step of a play over the image: the tile to pick up, its target slot as a
     ghost, and an arrow.
   - `Render.swift`: synthetic table images for tests, and drawing overlays onto images.
@@ -54,8 +54,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks
     alike: `crops.py` crops confirmed tiles upright, and `Labeler/values.py` trains MobileNetV3 (ImageNet) at 128 px
     with a head for the tile and one for the orientation, on those crops at random orientations, for 5 minutes on
-    the Mac's GPU, then converts it with each class p(tile)·p(orientation). It's 6.8 MB. Read at the labeled boxes,
-    it gets about 612 of 628 held-out confirmed tiles and 595 orientations right; it levels off after about 3
+    the Mac's GPU, then converts it with each class p(tile)·p(orientation). It's 6.8 MB, and reads about 1.2 ms a
+    tile on the phone (72 in 84 ms). Read at the labeled boxes, it gets about 612 of 628 held-out confirmed tiles and 595 orientations right; it levels off after about 3
     minutes. Orientation matters because our 6 and 9 differ only in the logo under the numeral. The outside sets'
     orientations aren't written down, so they join at the orientation the last `Values` gives them
     (`.crops/outside.turns`), where it's .9 sure, but not their 6s and 9s. `Recognizer.turned` then reads each
@@ -100,7 +100,11 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     marks each spot, which `n` zooms to in turn; Enter there records the capture in `Captures/checked.txt`. On 2026-11-08 it flagged 120 of
     174: 470 boxes missed, 456 extra, 57 values. 279 of the misses had a finder box on them (median IoU .44), mostly
     our click-placed boxes sitting loose or off center, which `f` snaps to the finder's. Of the rest, most were real
-    tiles at a low angle, and a few weren't tiles at all (keyboard keys, an app icon).
+    tiles at a low angle, and a few weren't tiles at all (keyboard keys, an app icon). After a day of fixes, on
+    2026-11-09 it flagged 100: 275 missed, 250 extra and 3 values, though `Values` now learns most training labels,
+    so it flags few of theirs. Of the finder's 54 held-out misses that day, 14 were tiles fanned 30–45° in two full
+    sets (22:35:58, 22:49:45) with boxes off their tiles, 32 small or low-angle tiles (10–45 px, rows sheared or
+    overlapping), 3 motion-blurred, 4 large tiles partly covered by another, and 1 cut by the edge.
   - The app pushes each capture to `server.py` (`PUT /api/capture/<file>`, notes before the photo), which keeps one
     already there or in `.removed` and moves "As read" ones to `unlabeled/`. The phone deletes each file once the
     server has it, so Documents holds only what hasn't gone; that's retried on the next capture, launch or return to

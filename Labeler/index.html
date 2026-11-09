@@ -19,7 +19,7 @@
   header { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
   header b { font-size: 14px; }
   #missing { color: var(--muted); }
-  #missing .extra { color: #d33; }
+  #missing .extra, #missing .dispute, nav .dispute { color: #d33; }
   #view { flex: 1; overflow: auto; position: relative; display: flex; }
   canvas { display: block; cursor: crosshair; margin: auto; flex: none; }
   header small { color: var(--muted); }
@@ -44,7 +44,12 @@
 <details id="keys"><summary>Keys</summary><div>
       Every tile needs a box and nothing else does. Click empty space to add a box the size of those nearby, or drag to draw one; click one and <kbd>⌫</kbd> to
       delete it, or shift-drag a rectangle around several and <kbd>⌫</kbd>; drag a box to move it, its corner to resize. <kbd>Enter</kbd> marks the capture done and opens the next.
-      Values are optional: click a box, type its tile (<kbd>r12</kbd>, <kbd>j</kbd>) and <kbd>Enter</kbd>.
+      Values are optional: click a box, type its tile (<kbd>r12</kbd>, <kbd>j</kbd>) and <kbd>Enter</kbd>, or just <kbd>Enter</kbd> to confirm the
+      value it shows; either goes on to the next box without one. <kbd>Esc</kbd> deselects, so <kbd>Enter</kbd> marks the capture;
+      <kbd>u</kbd> unmarks it.
+      Under Check, dashed red marks a box the finder misses, dashed blue a box it finds that has none (double-click to adopt it, or <kbd>f</kbd> on a box
+      to snap it to the one it overlaps), and a red tag a value the classifier reads otherwise. <kbd>n</kbd> zooms to the next mark,
+      <kbd>N</kbd> the previous; <kbd>Tab</kbd> selects the next box without a value; <kbd>Enter</kbd> marks the capture looked over.
       <kbd>←</kbd><kbd>→</kbd> turn which way is up. <kbd>+</kbd><kbd>−</kbd> zoom, <kbd>0</kbd> fit. <kbd>[</kbd><kbd>]</kbd> previous and next capture.
 </div></details>
 <script>
@@ -69,15 +74,24 @@ async function load() {
   const pending = captures.findIndex(c => !c.boxed);
   open(pending < 0 ? 0 : pending);
 }
-/** Indices in the order listed: pending, then done when shown, each newest first. */
-const order = () => [...captures.keys()].filter(i => !captures[i].boxed).concat(
-  [...captures.keys()].filter(i => captures[i].boxed && (showDone || i === current)));
+/** How many places the models disagree with a done capture's labels, until it's looked over. */
+const disputes = c => c.boxed && c.check && !c.checked ? c.check.missed.length + c.check.extra.length + c.check.values.length : 0;
+const sections = () => {
+  const all = [...captures.keys()];
+  return {
+    pending: all.filter(i => !captures[i].boxed),
+    check: all.filter(i => disputes(captures[i])).sort((a, b) => disputes(captures[a]) - disputes(captures[b])),
+    done: all.filter(i => captures[i].boxed && !disputes(captures[i])),
+  };
+};
+/** Indices in the order listed: pending, newest first, then to check, least disputed first, then done when shown. */
+const order = () => { const s = sections(); return [...s.pending, ...s.check, ...s.done.filter(i => showDone || i === current)]; };
 
 async function open(i) {
   current = i;
   const c = captures[current];
   tiles = await (await fetch(`/api/tiles/${encodeURIComponent(c.name)}`)).json();
-  selected = null; typed = ""; many.clear(); fit = true;
+  selected = null; typed = ""; many.clear(); fit = true; mark = -1;
   image = new Image();
   image.onload = draw;
   image.src = `/captures/${encodeURIComponent(c.name).replace("%2F", "/")}.png?${c.modified}`;
@@ -90,7 +104,9 @@ function list() {
   const button = i => {
     const c = captures[i], b = document.createElement("button");
     b.className = i === current ? "current" : "";
-    b.innerHTML = `<span>#${c.id} <small>${time(c)}</small></span><span class="${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</span>`;
+    b.innerHTML = disputes(c)
+      ? `<span>#${c.id} <small>${day(c)}</small></span><span class="dispute">${disputes(c)}</span>`
+      : `<span>#${c.id} <small>${time(c)}</small></span><span class="${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</span>`;
     b.onclick = () => open(i);
     return b;
   };
@@ -99,16 +115,19 @@ function list() {
     h.textContent = day(captures[i]);
     return n === 0 || day(captures[indices[n - 1]]) !== day(captures[i]) ? [h, button(i)] : [button(i)];
   });
-  const pending = [...captures.keys()].filter(i => !captures[i].boxed), done = [...captures.keys()].filter(i => captures[i].boxed);
+  const { pending, check, done } = sections();
   const heading = document.createElement("h2");
   heading.textContent = `Pending ${pending.length}`;
+  const checking = document.createElement("h2");
+  checking.textContent = `Check ${check.length}`;
+  checking.title = "Done captures where the models disagree with the labels, fewest first";
   const details = document.createElement("details");
   details.open = showDone || captures[current]?.boxed;
   details.ontoggle = () => { showDone = details.open; try { localStorage.showDone = showDone ? "1" : "0"; } catch {} };
   const summary = document.createElement("summary");
   summary.textContent = `Done ${done.length}`;
   details.replaceChildren(summary, ...days(done));
-  document.getElementById("list").replaceChildren(heading, ...days(pending), details);
+  document.getElementById("list").replaceChildren(heading, ...days(pending), ...(check.length ? [checking, ...check.map(button)] : []), details);
 }
 
 function summary() {
@@ -123,8 +142,12 @@ function summary() {
   const extra = [];
   for (const t of tiles.filter(t => t.confirmed)) left[t.tile] ? left[t.tile]-- : extra.push(t.tile);
   const names = Object.entries(left).filter(([, n]) => n).map(([t, n]) => n > 1 ? `${t}×${n}` : t);
+  const k = c.check;
+  const disagree = k && [[k.missed, "boxes the finder misses"], [k.extra, "found unboxed"], [k.values, "values read otherwise"]]
+    .filter(([a]) => a.length).map(([a, what]) => `${a.length} ${what}`).join(", ");
   missing.innerHTML = (names.length ? `values not yet confirmed: ${names.join(" ")}` : "all values confirmed") +
-    (extra.length ? ` <span class="extra">not in truth ${extra.join(" ")}</span>` : "");
+    (extra.length ? ` <span class="extra">not in truth ${extra.join(" ")}</span>` : "") +
+    (disagree ? ` <span class="dispute">${disagree}${c.checked ? ", looked over" : ""}</span>` : "");
   list();
 }
 
@@ -148,6 +171,25 @@ function draw() {
     ctx.fillStyle = ink[t.tile[0]] ?? "#888";
     ctx.fillText(label, x + w / 2, y + h - 6);
   });
+  const k = marks();
+  if (k) {
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = "#f33";
+    for (const f of k.missed) { const [x, y, w, h] = f.map(v => v * scale); ctx.strokeRect(x - 4, y - 4, w + 8, h + 8); }
+    ctx.strokeStyle = "#0cf";
+    for (const f of k.extra) { const [x, y, w, h] = f.map(v => v * scale); ctx.strokeRect(x, y, w, h); }
+    ctx.setLineDash([]);
+    for (const v of k.values) {
+      const [x, y, w] = v.frame.map(n => n * scale), label = `${v.read}? ${v.odds.toFixed(2)}`, width = ctx.measureText(label).width + 6;
+      // Inside the photo, for a tile its edge cuts off.
+      const cx = Math.min(Math.max(x + w / 2, width / 2), canvas.width - width / 2), top = Math.max(y - 18, 0);
+      ctx.fillStyle = "#f33";
+      ctx.fillRect(cx - width / 2, top, width, 16);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(label, cx, top + 12);
+    }
+  }
   if (drag?.mode === "create" || drag?.mode === "select") {
     const [x, y, w, h] = rect(drag).map(v => v * scale);
     ctx.strokeStyle = "#f0f";
@@ -210,6 +252,8 @@ window.onmouseup = () => {
       const cx = t.frame[0] + t.frame[2] / 2, cy = t.frame[1] + t.frame[3] / 2;
       if (cx >= sx && cx <= sx + sw && cy >= sy && cy <= sy + sh) many.add(i);
     });
+  } else if (drag.mode === "create" && !drag.moved && unboxed(drag.x0, drag.y0)) {
+    // A click in a box the finder found unboxed does nothing; a double-click adopts it.
   } else if (drag.mode === "create" && (drag.moved || tiles.length)) {
     // Sized like the nearest boxes, since tiles shrink with distance.
     const nearest = [...tiles].sort((a, b) => dist(a, drag.x0, drag.y0) - dist(b, drag.x0, drag.y0)).slice(0, 10);
@@ -224,6 +268,50 @@ window.onmouseup = () => {
   drag = null;
   draw();
 };
+/** Where the models disagree that's still so: a missed box not yet moved or deleted, an extra no box has taken, a
+ * value not yet changed. */
+function marks() {
+  const k = captures[current]?.check;
+  return k && {
+    missed: k.missed.filter(f => tiles.some(t => iou(t.frame, f) > 0.95)),
+    extra: k.extra.filter(f => !tiles.some(t => iou(t.frame, f) > 0.5)),
+    values: k.values.filter(v => tiles.some(t => iou(t.frame, v.frame) > 0.95 && t.tile === v.tile)),
+  };
+}
+let mark = -1;
+/** Zooms to the next mark, top to bottom, selecting its box if it has one. */
+function nextMark(by) {
+  const k = marks();
+  const all = k ? [...k.missed, ...k.extra, ...k.values.map(v => v.frame)].sort((a, b) => a[1] - b[1] || a[0] - b[0]) : [];
+  if (!all.length) return flash();
+  mark = (mark + by + all.length) % all.length;
+  const hit = tiles.findIndex(t => iou(t.frame, all[mark]) > 0.95);
+  selected = hit < 0 ? null : hit; typed = "";
+  zoomTo(all[mark]);
+}
+/** Zooms so a box is about a sixth of the view, centered. */
+function zoomTo([x, y, w, h]) {
+  fit = false;
+  scale = Math.min(4, Math.min(view.clientWidth, view.clientHeight) / (Math.max(w, h) * 6));
+  draw();
+  view.scrollTo({ left: canvas.offsetLeft + (x + w / 2) * scale - view.clientWidth / 2, top: canvas.offsetTop + (y + h / 2) * scale - view.clientHeight / 2 });
+}
+/** The finder's box at a point that no box has taken. */
+const unboxed = (x, y) => marks()?.extra.find(f => inside({ frame: f }, x, y));
+canvas.ondblclick = e => {
+  const [x, y] = point(e), frame = unboxed(x, y);
+  if (!frame) return;
+  const near = [...tiles].sort((a, b) => dist(a, x, y) - dist(b, x, y))[0];
+  tiles.push({ tile: "?", frame: [...frame], turns: near ? near.turns : 0, confirmed: false });
+  selected = tiles.length - 1;
+  save();
+  draw();
+};
+const iou = (a, b) => {
+  const w = Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]), h = Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]);
+  const i = Math.max(0, w) * Math.max(0, h);
+  return i / (a[2] * a[3] + b[2] * b[3] - i);
+};
 const dist = (t, x, y) => Math.hypot(t.frame[0] + t.frame[2] / 2 - x, t.frame[1] + t.frame[3] / 2 - y);
 
 window.onkeydown = e => {
@@ -233,16 +321,30 @@ window.onkeydown = e => {
   else if (e.key === "Enter" && typed) {
     if (!valid.test(typed) || !s) return flash();
     s.tile = typed; s.confirmed = true;
-    typed = ""; selected = null; save();
+    typed = ""; save();
+    selectNext(1);
+  } else if (e.key === "Enter" && s) {
+    // Confirms the value it has, then on to the next without one.
+    if (!valid.test(s.tile)) return flash();
+    s.confirmed = true; save();
+    selectNext(1);
   } else if (e.key === "Enter") return finish();
   else if (e.key === "Backspace" || e.key === "Delete") {
     if (typed) typed = typed.slice(0, -1);
     else if (many.size) { tiles = tiles.filter((t, i) => !many.has(i)); many.clear(); save(); }
     else if (s) { tiles.splice(selected, 1); selected = null; save(); }
   } else if (e.key === "Escape") { typed ? typed = "" : (selected = null, many.clear()); }
+  else if (e.key === "f" && s && !typed) {
+    // Snaps to the finder's box that overlaps it most, mostly tighter than one placed by a click.
+    const found = captures[current].check?.extra.map(f => [f, iou(f, s.frame)]).sort((a, b) => b[1] - a[1])[0];
+    if (!found || found[1] < 0.1) return flash();
+    s.frame = [...found[0]]; save();
+  }
   else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && s) {
     s.turns = ((s.turns || 0) + (e.key === "ArrowLeft" ? 1 : 3)) % 4; save();
   } else if (e.key === "Tab") selectNext(e.shiftKey ? -1 : 1);
+  else if ((e.key === "n" || e.key === "N") && !typed) return nextMark(e.key === "n" ? 1 : -1);
+  else if (e.key === "u" && !typed) return unmark();
   else if (e.key === "+" || e.key === "=") { fit = false; scale = Math.min(4, scale * 1.25); }
   else if (e.key === "-") { fit = false; scale = Math.max(0.1, scale / 1.25); }
   else if (e.key === "0") fit = true;
@@ -256,10 +358,25 @@ window.onkeydown = e => {
 async function finish() {
   const c = captures[current];
   await save();
+  if (disputes(c)) {
+    // Looked over: opens the next one to check.
+    await fetch(`/api/checked/${encodeURIComponent(c.name)}`, { method: "POST" });
+    c.checked = true;
+    const { check } = sections();
+    return open(check.length ? check[0] : current);
+  }
   await fetch(`/api/boxed/${encodeURIComponent(c.name)}`, { method: "POST" });
   c.boxed = true;
   const next = captures.findIndex((d, i) => i > current && !d.boxed);
   open(next < 0 ? Math.max(0, captures.findIndex(d => !d.boxed)) : next);
+}
+/** Undoes Enter on this capture: looked over first, else done. */
+async function unmark() {
+  const c = captures[current], kind = c.checked ? "checked" : c.boxed ? "boxed" : null;
+  if (!kind) return;
+  await fetch(`/api/${kind}/${encodeURIComponent(c.name)}?done=0`, { method: "POST" });
+  c[kind] = false;
+  draw();
 }
 window.onresize = () => fit && draw();
 const flash = () => { typedEl.style.background = "#d33"; setTimeout(() => typedEl.style.background = "#111", 300); };
@@ -272,9 +389,7 @@ function selectNext(step) {
   const at = order.indexOf(selected);
   const after = step > 0 ? todo.find(i => order.indexOf(i) > at) : [...todo].reverse().find(i => order.indexOf(i) < at);
   selected = after ?? todo[step > 0 ? 0 : todo.length - 1];
-  const [x, y, w, h] = tiles[selected].frame.map(v => v * scale);
-  if (y < view.scrollTop || y + h > view.scrollTop + view.clientHeight || x < view.scrollLeft || x + w > view.scrollLeft + view.clientWidth)
-    view.scrollTo({ left: x - view.clientWidth / 2, top: y - view.clientHeight / 2 });
+  zoomTo(tiles[selected].frame);
 }
 
 async function save() {

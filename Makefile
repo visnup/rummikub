@@ -2,7 +2,7 @@ app := DerivedData/Build/Products
 
 files := --device Yam --domain-type appDataContainer --domain-identifier com.visnup.Rummikub
 
-.PHONY: all sim test captures watch timing upload labels retrain train values scene score
+.PHONY: all sim test captures watch timing upload labels retrain train values scene check score
 
 all:
 	xcodebuild -scheme Rummikub -destination generic/platform=iOS -derivedDataPath DerivedData \
@@ -83,6 +83,10 @@ scene:
 	cd RummikubKit && swift run -c release values ../$(dir)/.scene ../$(dir)/RackOrTable.mlmodel
 	cp $(dir)/RackOrTable.mlmodel Rummikub/
 
+# Lists where the models disagree with the done captures' labels, for the labeler's Check section.
+check:
+	cd RummikubKit && swift run -c release check ../$(dir)
+
 # Scores the finder and the reader on the held-out captures, a fifth of the done ones, which training never sees.
 score:
 	cd RummikubKit && swift run -c release score ../$(dir)
@@ -93,4 +97,4 @@ upload:
 	uvx --from huggingface_hub hf upload visnup/rummikub-captures $(dir) . --repo-type dataset --exclude .files.json \
 	  --exclude .removed --exclude .DS_Store --exclude .words.txt --exclude review.txt \
 	  --exclude ".crops/*" --exclude ".scene/*" --exclude ".finder/*" --exclude "*.mlmodel" \
-	  --exclude "Tiles.mlpackage/*" --exclude ids.txt
+	  --exclude "Tiles.mlpackage/*" --exclude ids.txt --exclude .check.json --exclude checked.txt

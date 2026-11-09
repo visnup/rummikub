@@ -82,7 +82,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     copies the model to `Rummikub/`; `make retrain` runs it beside `make values`, then `score`. In 15 minutes, a
     quarter of our captures took it from 856 found with 169 extras (outside sets alone) to 895 with 67, and all of
     them to 894 with 62; 60 minutes found 950 with 45. 120 minutes did worse, one run each: 966 of 1051 with 47
-    against 60 minutes' 988 with 44. Nano found 905 with 103 in 60 minutes, small 950, for about a fifth less time.
+    against 60 minutes' 988 with 44, and so did 60 minutes with the rate falling along a half cosine: 974 with 50. Nano found 905 with 103 in 60 minutes, small 950, for about a fifth less time.
     `QUARTERS` (0–4) and `SIZE` (`nano`, `small`) are for those comparisons.
   - `make labels` runs `label`, then `prelabel.py`, then serves the page at http://localhost:8765 (also `labeler`
     in `.claude/launch.json`).
@@ -97,6 +97,13 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     may run past the edge.
   - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
+  - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones
+    too, the boxes the finder misses, the boxes it finds that have none, and confirmed values `Values` (`RackValues`
+    for racks) reads as another tile at least .8 sure. The page lists those captures under Check, fewest first, and
+    marks each spot, which `n` zooms to in turn; Enter there records the capture in `Captures/checked.txt`. On 2026-11-08 it flagged 120 of
+    174: 470 boxes missed, 456 extra, 57 values. 279 of the misses had a finder box on them (median IoU .44), mostly
+    our click-placed boxes sitting loose or off center, which `f` snaps to the finder's. Of the rest, most were real
+    tiles at a low angle, and a few weren't tiles at all (keyboard keys, an app icon).
   - The app pushes each capture to `server.py` (`PUT /api/capture/<file>`, notes before the photo), which keeps one
     already there or in `.removed` and moves "As read" ones to `unlabeled/`. The phone deletes each file once the
     server has it, so Documents holds only what hasn't gone; that's retried on the next capture, launch or return to

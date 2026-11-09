@@ -22,12 +22,23 @@ def truth(png: Path) -> list[str] | None:
     return " ".join(txt.read_text().splitlines()[1:]).split()
 
 
+# Captures whose boxes have all been checked: one around every tile and nothing else.
 boxed = captures / "boxed.txt"
+# Done captures looked over again where the models disagree with them, as `check` lists in .check.json.
+checked = captures / "checked.txt"
+
+
+def names(path: Path) -> set[str]:
+    return set(path.read_text().split()) if path.exists() else set()
 
 
 def done() -> set[str]:
-    """Captures whose boxes have all been checked: one around every tile and nothing else."""
-    return set(boxed.read_text().split()) if boxed.exists() else set()
+    return names(boxed)
+
+
+def disagreements() -> dict:
+    path = captures / ".check.json"
+    return json.loads(path.read_text()) if path.exists() else {}
 
 
 numbered = captures / "ids.txt"
@@ -43,7 +54,7 @@ def ids(pngs: list[Path]) -> dict[str, int]:
     return {n: i + 1 for i, n in enumerate(known)}
 
 
-def summary(png: Path, number: int) -> dict:
+def summary(png: Path, number: int, check: dict, looked: set[str]) -> dict:
     name = str(png.relative_to(captures).with_suffix(""))
     tiles = json.loads(png.with_suffix(".tiles.json").read_text()) if png.with_suffix(".tiles.json").exists() else []
     return {
@@ -52,6 +63,8 @@ def summary(png: Path, number: int) -> dict:
         "truth": truth(png),
         "boxes": len(tiles),
         "boxed": name in done(),
+        "check": check.get(name),
+        "checked": name in looked,
         "modified": png.stat().st_mtime,
     }
 
@@ -75,8 +88,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.path = "/index.html"
         if self.path == "/api/captures":
             pngs = sorted(captures.glob("*.png")) + sorted(captures.glob("unlabeled/*.png"))
-            number = ids(pngs)
-            return self.send_json([s for p in pngs if (s := summary(p, number[p.stem]))["truth"] != []])
+            number, check, looked = ids(pngs), disagreements(), names(checked)
+            return self.send_json([s for p in pngs if (s := summary(p, number[p.stem], check, looked))["truth"] != []])
         if self.path.startswith("/api/tiles/"):
             path = self.labels()
             if path is None:
@@ -85,13 +98,16 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
-        """Marks a capture's boxes done, or not: POST /api/boxed/<name>?done=0."""
-        if not self.path.startswith("/api/boxed/"):
+        """Marks a capture's boxes done, or looked over where the models disagree, or not: POST
+        /api/boxed/<name>?done=0, /api/checked/<name>."""
+        kind, _, rest = self.path.removeprefix("/api/").partition("/")
+        path = {"boxed": boxed, "checked": checked}.get(kind)
+        if path is None:
             return self.send_error(404)
-        name, _, query = unquote(self.path.removeprefix("/api/boxed/")).partition("?")
-        names = done() - {name} if query == "done=0" else done() | {name}
-        boxed.write_text("".join(f"{n}\n" for n in sorted(names)))
-        self.send_json({"boxed": name in names})
+        name, _, query = unquote(rest).partition("?")
+        listed = names(path) - {name} if query == "done=0" else names(path) | {name}
+        path.write_text("".join(f"{n}\n" for n in sorted(listed)))
+        self.send_json({kind: name in listed})
 
     def do_PUT(self):
         if self.path.startswith("/api/capture/"):

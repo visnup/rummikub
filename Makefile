@@ -31,12 +31,12 @@ captures:
 	for j in $(dir)/*.json; do b=$${j%.json}; [ -e "$$b.tiles.json" ] || [ "$$(jq -r .layout "$$j" 2>/dev/null)" != "As read" ] || \
 	  grep -qxF "$${b#$(dir)/}" $(dir)/boxed.txt || mv "$$b".* $(dir)/unlabeled/; done
 
-# Pre-labels new captures and flags readable text in them every half minute, while capturing. The app pushes
-# captures to the labeler (`make labels`), so run both.
+# Boxes new captures, fills in what Values reads in each box, and flags readable text in them every half minute,
+# while capturing. The app pushes captures to the labeler (`make labels`), so run both.
 watch:
-	cd RummikubKit && swift build -c release --product words
+	cd RummikubKit && swift build -c release --product words --product fill
 	while true; do uv run Labeler/prelabel.py --new 2>&1 | grep -v "Loading\|NOTE\|^\s*$$"; \
-	  RummikubKit/.build/release/words $(dir); sleep 30; done
+	  RummikubKit/.build/release/fill --new $(dir); RummikubKit/.build/release/words $(dir); sleep 30; done
 
 # Copies the app's per-frame timing logs, one a launch, every time, since they grow, then sums them up.
 timing:

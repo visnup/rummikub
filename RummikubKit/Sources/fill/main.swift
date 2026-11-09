@@ -6,10 +6,13 @@
 
   // Writes what Values reads into every unconfirmed box of every capture: its tile, orientation, and how sure it is
   // ("odds"), for the labeler to confirm. Confirmed boxes are left alone.
-  //   fill <captures> [<Values.mlpackage>]
+  // With --new, only boxes with no value yet, as the finder draws them, so `make watch` can run it every pass.
+  //   fill [--new] <captures> [<Values.mlpackage>]
   setvbuf(stdout, nil, _IOLBF, 0)
-  let captures = URL(filePath: CommandLine.arguments[1])
-  let model = CommandLine.arguments.count > 2 ? URL(filePath: CommandLine.arguments[2]) : captures.appending(path: "Values.mlpackage")
+  let new = CommandLine.arguments.contains("--new")
+  let arguments = CommandLine.arguments.dropFirst().filter { $0 != "--new" }
+  let captures = URL(filePath: arguments.first!)
+  let model = arguments.count > 1 ? URL(filePath: arguments.last!) : captures.appending(path: "Values.mlpackage")
   let values = try Classifier(model: MLModel(contentsOf: MLModel.compileModel(at: model)))
   let files = try [captures, captures.appending(path: "unlabeled")].flatMap { folder in
     try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
@@ -19,7 +22,7 @@
   var filled = 0
   for file in files {
     var labels = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [[String: Any]]
-    let open = labels.indices.filter { labels[$0]["confirmed"] as? Bool != true }
+    let open = labels.indices.filter { labels[$0]["confirmed"] as? Bool != true && (!new || labels[$0]["tile"] as? String == "?") }
     let png = URL(filePath: file.path.replacingOccurrences(of: ".tiles.json", with: ".png"))
     guard !open.isEmpty, let source = CGImageSourceCreateWithURL(png as CFURL, nil),
       let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
@@ -44,5 +47,5 @@
     try JSONSerialization.data(withJSONObject: labels, options: [.prettyPrinted, .sortedKeys]).write(to: file)
     print(file.lastPathComponent, open.count, separator: "\t")
   }
-  print("filled", filled)
+  if filled > 0 || !new { print("filled", filled) }
 #endif

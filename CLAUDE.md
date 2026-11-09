@@ -99,7 +99,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - http://localhost:8765/values/r6 shows every r6 in the done captures as a grid, each crop turned upright by its
     orientation, so a wrong orientation or value stands out; "Least sure" lists the unconfirmed ones `Values` is least
     sure of. The `fill` tool (`swift run -c release fill ../Captures`) writes what `Values` reads, with its odds,
-    into every unconfirmed box; on 2026-11-09 that was 2905.
+    into every unconfirmed box; on 2026-11-09 that was 2905. `make watch` runs `fill --new` after `prelabel.py`, so
+    a new capture's boxes arrive with values too.
   - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones

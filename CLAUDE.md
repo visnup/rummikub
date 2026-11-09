@@ -103,7 +103,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     tiles at a low angle, and a few weren't tiles at all (keyboard keys, an app icon). After a day of fixes, on
     2026-11-09 it flagged 100: 275 missed, 250 extra and 3 values, though `Values` now learns most training labels,
     so it flags few of theirs. Of the finder's 54 held-out misses that day, 14 were tiles fanned 30–45° in two full
-    sets (22:35:58, 22:49:45) with boxes off their tiles, 32 small or low-angle tiles (10–45 px, rows sheared or
+    sets (#48, #62) with boxes off their tiles, 32 small or low-angle tiles (10–45 px, rows sheared or
     overlapping), 3 motion-blurred, 4 large tiles partly covered by another, and 1 cut by the edge.
   - The app pushes each capture to `server.py` (`PUT /api/capture/<file>`, notes before the photo), which keeps one
     already there or in `.removed` and moves "As read" ones to `unlabeled/`. The phone deletes each file once the

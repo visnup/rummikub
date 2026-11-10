@@ -43,6 +43,13 @@ def layout(png: Path) -> str | None:
     return info(png).get("layout")
 
 
+def looking(png: Path) -> str | None:
+    """"rack" or "table", the first word of the .txt."""
+    txt = png.with_suffix(".txt")
+    words = txt.read_text().split(maxsplit=1) if txt.exists() else []
+    return words[0] if words else None
+
+
 def truth(png: Path) -> list[str] | None:
     """The true tiles, or None when they're unknown: an "As read" capture in unlabeled/, or with none written."""
     txt = png.with_suffix(".txt")
@@ -119,6 +126,7 @@ def summary(png: Path, number: int, check: dict, done: set[str], looked: set[str
         "name": name,
         "truth": truth(png),
         "layout": layout(png),
+        "looking": looking(png),
         "tags": (info(png).get("notes") or "").split(),
         "boxes": len(tiles),
         "boxed": name in done,
@@ -189,6 +197,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.change()
         if self.path.startswith("/api/layout/"):
             return self.relayout()
+        if self.path.startswith("/api/looking/"):
+            return self.relook()
         kind, _, rest = self.path.removeprefix("/api/").partition("/")
         path = {"boxed": boxed, "checked": checked}.get(kind)
         if path is None:
@@ -250,6 +260,20 @@ class Handler(SimpleHTTPRequestHandler):
         first = txt.read_text().splitlines()[0] if txt.exists() else ""
         txt.write_text("".join(f"{line}\n" for line in [first, *melds.get(new, [])]))
         self.send_json({"layout": new, "truth": truth(png)})
+
+    def relook(self):
+        """Sets whether a capture shows the rack or the table: POST /api/looking/<name> with "rack" or "table". It's the
+        first word of the .txt, before the tilt, and "looking" in the .json."""
+        png = inside(unquote(self.path.removeprefix("/api/looking/")), ".png")
+        new = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if png is None or not png.exists() or new not in ("rack", "table"):
+            return self.send_error(400)
+        txt = png.with_suffix(".txt")
+        lines = txt.read_text().splitlines() if txt.exists() else [""]
+        lines[0] = " ".join([new, *lines[0].split()[1:]])
+        txt.write_text("".join(f"{line}\n" for line in lines))
+        png.with_suffix(".json").write_text(json.dumps({**info(png), "looking": new}, indent=2, sort_keys=True) + "\n")
+        self.send_json({"looking": new})
 
     def do_DELETE(self):
         """Deletes a capture: DELETE /api/capture/<name>. Its files go to the Trash, and .removed keeps the app from

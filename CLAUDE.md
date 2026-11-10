@@ -29,16 +29,21 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     boxes over .1), and on 2026-11-10 .3 found 1308 of 1324 held-out tiles with 23 extra, against .1's 1301 with 22
     and .5's 1308 with 37. On the Simulator the model must run on the CPU, or Vision can't create an inference
     context. With crops half the short side, 19 regions, it took 290–500 ms a frame on the phone (2026-11-09).
-    Tiles under 30 px on their short side in a 1920 px frame (`Finder.smallest`) are out of scope: far ones, like
-    the table behind a rack, which a table panned with ARKit won't need. Of 1054 held-out tiles 960 are in scope.
+    Tiles under 30 px on their short side in a 1920 px frame (`Finder.smallest`) are out of scope for `score` and
+    `check`: the far end of a table, which a table panned with ARKit won't need. The app doesn't apply it. The table
+    behind a rack is nearer (37–55 px in #280), and the app leaves that out by `Finder.nearest` instead. Of 1054
+    held-out tiles 960 are in scope.
     There the 4 regions found 932 with 14 extras, the 19 found 937 with 16, and the whole image alone 908 with 12.
   - `Overlay.swift`: what to draw for each step of a play over the image: the tile to pick up, its target slot as a
     ghost, and an arrow.
   - `Render.swift`: table images and where their tiles lie, for tests, and drawing overlays onto images.
   - `score` (`make score`) runs the finder on the held-out done captures, through `Finder`: tiles found (a box
     overlapping a true one by half) and extra boxes, then the finder's boxes read by `Values.mlpackage` when it's
-    beside the captures, right and extra against the written truth. It takes `Captures/Tiles.mlpackage`. On 2026-11-09, with every tile's value and orientation confirmed, the finder
-    found 1016 of 1054 held-out tiles with 52 extras, and with `Values` read 1009 of 1072 right with 31 extras.
+    beside the captures: right on a confirmed box with its value, extra on another value or no box. It takes
+    `Captures/Tiles.mlpackage`. Against the written truth instead, on 2026-11-10, the same models read 1842 of 1926
+    right with 202 extras, and against the boxes 1940 of 1997 with 39: the written truth was short on "As read"
+    captures and listed the table behind racks. For rack captures with boxes marked background (`X` in the labeler),
+    it also counts the rack's tiles `Finder.nearest` keeps and the background ones it lets through.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks
     alike: `crops.py` crops confirmed tiles upright, and `Labeler/values.py` trains MobileNetV3 (ImageNet) at 128 px
@@ -135,7 +140,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     boxed), bluebox (NC-SA), Okey sets (another game's tiles).
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames at most five
-  times a second, fewer when a frame takes longer to read; `Game` decides rack or table (`Looking`), finds the tiles (`Tiles`), reads each box
+  times a second, fewer when a frame takes longer to read; `Game` decides rack or table (`Looking`), finds the tiles (`Tiles`; at the rack, only those at least half as tall as the tallest,
+  `Finder.nearest`, to leave out the table behind it), reads each box
   and its orientation (`Values`), keeps the table and rack, solves, and
   tracks the step shown; `ContentView`
   draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table

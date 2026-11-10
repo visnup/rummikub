@@ -29,6 +29,7 @@
   aside canvas { width: 30px; height: 40px; border-bottom: 3px solid var(--unconfirmed); cursor: pointer; }
   aside canvas.confirmed { border-color: var(--confirmed); }
   aside canvas.extra { border-color: var(--dispute); }
+  aside canvas.background { opacity: 0.35; }
   aside canvas.selected { outline: 2px solid var(--selected); }
   aside div { width: 30px; height: 43px; box-sizing: border-box; border: 1px dashed var(--muted); }
 </style>
@@ -41,6 +42,9 @@
     <select id="layout" title="What the capture was meant to show, which sets its truth">
       <option>Full set</option><option>As read</option><option>No tiles</option>
     </select>
+    <select id="looking" title="Whether it shows the rack or the table">
+      <option value="rack">Rack</option><option value="table">Table</option>
+    </select>
     <span id="count"></span>
     <span id="missing"></span>
   </header>
@@ -52,7 +56,7 @@
   draw one; drag a box to move it, its corner to resize. Click a box to select it, shift-drag around several to select
   them, or <kbd>a</kbd> to select every unconfirmed one. Type a tile (<kbd>r12</kbd>, <kbd>j</kbd>) and
   <kbd>Enter</kbd> to set and confirm it, <kbd>?</kbd> for one you can't read, or just <kbd>Enter</kbd> to confirm what it shows; one box then goes on to
-  the next unconfirmed, unless it's <kbd>⇧Enter</kbd>. <kbd>←</kbd><kbd>→</kbd> turn its orientation, <kbd>⌫</kbd> deletes it, <kbd>Esc</kbd>
+  the next unconfirmed, unless it's <kbd>⇧Enter</kbd>. <kbd>←</kbd><kbd>→</kbd> turn its orientation, <kbd>X</kbd> marks it background (box it anyway: the table behind a rack, a rack at a table's edge), <kbd>⌫</kbd> deletes it, <kbd>Esc</kbd>
   selects none. With nothing selected, <kbd>Enter</kbd> marks the capture done and opens the next, <kbd>u</kbd>
   unmarks it, and <kbd>D</kbd> deletes it, to the Trash.
   Under Check, dashed red marks a box the finder misses, dashed blue a box it finds that has none (double-click to
@@ -70,6 +74,13 @@ layoutEl.onchange = async () => {
   const c = captures[current];
   Object.assign(c, await (await fetch(`/api/layout/${encodeURIComponent(c.name)}`, { method: "POST", body: JSON.stringify(layoutEl.value) })).json());
   layoutEl.blur();
+  draw();
+};
+const lookingEl = document.getElementById("looking");
+lookingEl.onchange = async () => {
+  const c = captures[current];
+  Object.assign(c, await (await fetch(`/api/looking/${encodeURIComponent(c.name)}`, { method: "POST", body: JSON.stringify(lookingEl.value) })).json());
+  lookingEl.blur();
   draw();
 };
 const color = name => getComputedStyle(document.documentElement).getPropertyValue(name);
@@ -141,7 +152,7 @@ function list() {
     tr.className = i === current ? "current" : "";
     const at = when(c).toLocaleString(undefined, sortBy ? { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" } : { hour: "numeric", minute: "2-digit" });
     const k = kind => `<td class="n k ${c.checked ? "" : "dispute"}">${c.boxed && c.check ? c.check[kind].length || "" : ""}</td>`;
-    tr.innerHTML = `<td class="n">${c.id}</td><td title="${c.tags.join(" ")}"><small>${c.tags.map(t => t[0]).join("")}</small></td>` +
+    tr.innerHTML = `<td class="n">${c.id}</td><td title="${[c.looking, ...c.tags].join(" ")}"><small>${(c.looking?.[0] ?? "").toUpperCase()}${c.tags.map(t => t[0]).join("")}</small></td>` +
       `<td class="n"><small>${at}</small></td>${k("missed")}${k("extra")}${k("values")}` +
       `<td class="n ${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</td>`;
     tr.onclick = () => open(i);
@@ -175,6 +186,7 @@ function summary() {
   c.boxes = tiles.length;
   document.getElementById("name").innerHTML = `#${c.id} · ${day(c)} ${time(c)} <small>${c.name}</small>`;
   layoutEl.value = c.layout ?? "As read";
+  lookingEl.value = c.looking ?? "";
   document.getElementById("count").textContent = `${tiles.length} boxes${c.truth ? ` for ${c.truth.length} tiles` : ""}${c.boxed ? ", done" : ""}`;
   const missing = document.getElementById("missing");
   const open = tiles.filter(t => !t.confirmed).length;
@@ -197,6 +209,7 @@ function draw() {
     const [x, y, w, h] = t.frame.map(v => v * scale);
     ctx.lineWidth = i === selected || many.has(i) ? 3 : 2;
     ctx.strokeStyle = color(i === selected || many.has(i) ? "--selected" : t.confirmed ? "--confirmed" : "--unconfirmed");
+    ctx.globalAlpha = t.background ? 0.45 : 1;
     ctx.strokeRect(x, y, w, h);
     const turns = t.turns || 0, text = label(t), width = ctx.measureText(text).width + 6;
     // Against the edge that's the tile's bottom at its orientation.
@@ -211,6 +224,7 @@ function draw() {
     ctx.fillStyle = ink[t.tile[0]] ?? "#888";
     ctx.fillText(text, lx + width / 2, ly + 12);
     if (value) ctx.fillRect(lx + 1, ly + 16, (width - 2) * value / 13, 4);
+    ctx.globalAlpha = 1;
   });
   const k = marks();
   if (k) {
@@ -298,7 +312,7 @@ function crop(t, i) {
   g.translate(c.width / 2, c.height / 2);
   g.rotate(turns * Math.PI / 2);
   g.drawImage(image, x, y, w, h, -w * k / 2, -h * k / 2, w * k, h * k);
-  c.className = (t.confirmed ? "confirmed" : "") + (i === selected ? " selected" : "");
+  c.className = (t.confirmed ? "confirmed" : "") + (i === selected ? " selected" : "") + (t.background ? " background" : "");
   c.title = label(t);
   c.onclick = () => { selected = i; many.clear(); typed = ""; zoomTo(t.frame); };
   return c;
@@ -464,6 +478,10 @@ window.onkeydown = e => {
   }
   else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && (s || many.size)) {
     for (const t of s ? [s] : [...many].map(i => tiles[i])) t.turns = turn(t.turns, e.key);
+    save();
+  } else if (e.key === "X" && (s || many.size)) {
+    const marked = s ? [s] : [...many].map(i => tiles[i]), on = !marked.every(t => t.background);
+    for (const t of marked) on ? t.background = true : delete t.background;
     save();
   } else if (e.key === "a" && !typed) {
     selected = null; many = new Set(tiles.flatMap((t, i) => t.confirmed ? [] : [i]));

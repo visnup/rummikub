@@ -44,12 +44,14 @@
   }
   var total = Score()
   print("capture", "found/tiles +extra", "classified +extra", "valid melds +extra", separator: "\t")
+  var rackTotal = (tiles: 0, kept: 0, table: 0)
   for name in done.filter(Finder.isHeldOut).sorted() {
-    let truth = try (JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
-      as! [[String: Any]]).map { t in
-        let f = t["frame"] as! [Double]
-        return CGRect(x: f[0], y: f[1], width: f[2], height: f[3])
-      }
+    let labels = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
+      as! [[String: Any]]
+    let truth = labels.map { t in
+      let f = t["frame"] as! [Double]
+      return CGRect(x: f[0], y: f[1], width: f[2], height: f[3])
+    }
     let url = captures.appending(path: name + ".png")
     let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
     let (boxes, used) = try finder.find(in: image)
@@ -58,9 +60,13 @@
 
     let lines = try String(contentsOf: url.deletingPathExtension().appendingPathExtension("txt"), encoding: .utf8)
       .split(separator: "\n")
-    let written = Dictionary(Tile.parse(lines.dropFirst().joined(separator: " ")).map { ($0, 1) }, uniquingKeysWith: +)
     let small = { (r: CGRect) in !Finder.inScope(r, width: image.width, height: image.height, smallest: smallest) }
-    var s = Score(tiles: truth.count { !small($0) }, valued: written.values.reduce(0, +))
+    // Each confirmed box's value is the truth for that box.
+    let known = Dictionary(uniqueKeysWithValues: labels.indices.compactMap { i -> (Int, Tile)? in
+      guard labels[i]["confirmed"] as? Bool == true, !small(truth[i]), let tile = Tile(labels[i]["tile"] as! String) else { return nil }
+      return (i, tile)
+    })
+    var s = Score(tiles: truth.count { !small($0) }, valued: known.count)
     var left = truth
     for box in boxes {
       if let i = left.indices.max(by: { Finder.overlap(left[$0], box) < Finder.overlap(left[$1], box) }),
@@ -72,15 +78,40 @@
         s.extraBoxes += 1
       }
     }
-    /// Tiles read right and extra, against the truth written for the capture.
+    /// Readings right and extra: right on a confirmed box with its value, extra on a box with another value or on no
+    /// box. One on an unconfirmed box or a tile out of scope counts as neither.
     func score(_ readings: [Detection]) -> (right: Int, extra: Int) {
-      var left = written
-      let right = readings.filter { d in
-        guard left[d.tile, default: 0] > 0 else { return false }
-        left[d.tile]! -= 1
-        return true
-      }.count
-      return (right, readings.count - right)
+      var left = Set(truth.indices), right = 0, extra = 0
+      for d in readings {
+        guard let i = left.max(by: { Finder.overlap(truth[$0], d.frame) < Finder.overlap(truth[$1], d.frame) }),
+          Finder.overlap(truth[i], d.frame) > 0.5
+        else {
+          extra += 1
+          continue
+        }
+        left.remove(i)
+        guard let tile = known[i] else { continue }
+        if d.tile == tile { right += 1 } else { extra += 1 }
+      }
+      return (right, extra)
+    }
+    // At the rack the app keeps only `Finder.nearest`'s boxes: how many of the rack's tiles survive it, and how many of
+    // those marked background, the table behind it, do too. Only rack captures with background marked, since
+    // unmarked ones may not have been looked at.
+    let background = Set(labels.indices.filter { labels[$0]["background"] as? Bool == true })
+    if lines.first?.hasPrefix("rack") == true, !background.isEmpty {
+      var left = Set(truth.indices)
+      let rack = Set(truth.indices).subtracting(background)
+      var kept = 0, table = 0
+      for box in Finder.nearest(boxes) {
+        guard let i = left.max(by: { Finder.overlap(truth[$0], box) < Finder.overlap(truth[$1], box) }),
+          Finder.overlap(truth[i], box) > 0.5
+        else { continue }
+        left.remove(i)
+        if rack.contains(i) { kept += 1 } else { table += 1 }
+      }
+      print("rack", name, "\(kept)/\(rack.count) +\(table)", separator: "\t")
+      rackTotal = (rackTotal.tiles + rack.count, rackTotal.kept + kept, rackTotal.table + table)
     }
     if let classifier {
       let classified = try classifier.tiles(in: image, boxes: boxes)
@@ -112,4 +143,5 @@
   }
   print((["total"] + total.columns).joined(separator: "\t"))
   print("regions", regions, "in", frames, "frames")
+  if rackTotal.tiles > 0 { print("rack tiles kept", "\(rackTotal.kept)/\(rackTotal.tiles) +\(rackTotal.table) table") }
 #endif

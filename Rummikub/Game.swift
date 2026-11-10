@@ -135,12 +135,13 @@ import UniformTypeIdentifiers
     {
       looking = seen
     }
-    let finder = finder, classifier = values
+    let finder = finder, classifier = values, rack = looking == .rack
     // The finder's boxes read by Values.
     let (found, boxes, findTime, time) = await Task.detached {
       let clock = ContinuousClock()
       var boxes: [CGRect]?
       let findTime = clock.measure { boxes = try? finder?.tiles(in: image) }
+      if rack { boxes = boxes.map(Finder.nearest) }
       var found = [Detection]()
       let time = clock.measure { found = boxes.flatMap { try? classifier?.tiles(in: image, boxes: $0) } ?? [] }
       return (found, boxes, findTime, time)

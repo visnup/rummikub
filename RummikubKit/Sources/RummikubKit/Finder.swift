@@ -11,8 +11,9 @@ public struct Finder: @unchecked Sendable {
   /// The crops' side, as a share of the image's short side. Squares the whole short side, three down a 1080p frame,
   /// found 932 of 960 held-out tiles in scope with 14 extras, where half of it (19 regions) found 937 with 16.
   public var side = 1.0
-  /// Tiles under this many px on their short side, in a frame 1920 px long, are out of scope: far ones, like the table
-  /// behind a rack. `score` and `check` leave them out.
+  /// Tiles under this many px on their short side, in a frame 1920 px long, are out of scope for `score` and `check`:
+  /// the far end of a table, which a table panned with ARKit won't need. The table behind a rack is nearer, and
+  /// `nearest` leaves it out.
   public static let smallest = 30.0
   /// Skips the crops when every box the whole image finds is at least this many px on its short side, in a frame
   /// 1920 px long, since then there are no small tiles to look closer for.
@@ -94,6 +95,15 @@ public struct Finder: @unchecked Sendable {
   /// more captures never moves one in or out.
   public static func isHeldOut(_ name: String) -> Bool {
     name.utf8.reduce(14_695_981_039_346_656_037 as UInt64) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 } % 5 == 0
+  }
+
+  /// The boxes at least half as tall as the tallest. A rack's tiles stand nearest, so this drops the table's behind it,
+  /// which lie flat: in #280 the rack's were 115–156 px tall and the table's 37–55. Height, not the short side, since
+  /// flat tiles near the rack can be as wide as standing ones. It still drops a back-row tile hidden by the one in
+  /// front (#141's 8 and 13), and keeps a table tile tilted up (#86's joker).
+  public static func nearest(_ boxes: [CGRect]) -> [CGRect] {
+    let tallest = boxes.map(\.height).max() ?? 0
+    return boxes.filter { $0.height >= tallest / 2 }
   }
 
   /// Whether a tile's box is big enough to be in scope, in an image this size.

@@ -86,11 +86,13 @@ def photo(path: Path) -> Image.Image:
 
 
 def values() -> list[dict]:
-    """Every tile with a value in the done captures, for the values page."""
-    number = ids(pngs())
+    """Every tile with a value, done captures or not, for the values page."""
+    photos = pngs()
+    number = ids(photos)
     out = []
-    for name in sorted(names(boxed)):
-        path = captures / f"{name}.tiles.json"
+    for png in photos:
+        name = str(png.relative_to(captures).with_suffix(""))
+        path = png.with_suffix(".tiles.json")
         for t in json.loads(path.read_text()) if path.exists() else []:
             if t.get("tile", "?") != "?":
                 out.append({"name": name, "id": number.get(name.removeprefix("unlabeled/")), "frame": t["frame"],

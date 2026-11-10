@@ -84,7 +84,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     one. Enter marks a capture done. Values are optional. A tile cut off by the photo's edge gets a box too, which
     may run past the edge. Its layout picker rewrites the truth: Full set and No tiles write theirs, and As read
     clears it, to be written by hand. Tab follows the grid, a line at a time along most boxes' orientation.
-  - http://localhost:8765/values/r6 shows every r6 in the done captures as a grid, each crop turned upright by its
+  - http://localhost:8765/values/r6 shows every r6 in the captures, done or not, as a grid, each crop turned upright by its
     orientation, so a wrong orientation or value stands out; "Least sure" lists the unconfirmed ones `Values` is least
     sure of. The `fill` tool (`swift run -c release fill ../Captures`) writes what `Values` reads, with its odds,
     into every unconfirmed box; on 2026-11-09 that was 2905. `make watch` runs `fill --new` after `prelabel.py`, so

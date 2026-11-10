@@ -199,7 +199,7 @@ rearrangements. What we settled on:
     read, unless the Layout picker names a known layout.
   - `<ISO time>.json`: the layout, notes, gravity, camera settings, read time and every detection's box. Notes are
     single-word tags separated by spaces, which `check` totals by, and the app keeps the last ones typed. Each
-    capture is tagged with its tile set: `pouch`, `large` (#202–273) or `curved` (#80–89); No tiles ones have none.
+    capture is tagged with its tile set: `pouch`, `large` (#202–285) or `curved` (#80–89); No tiles ones have none.
 
   They land in `Captures/`, which git ignores since they're hundreds of MB. By cable, `make captures` copies them
   one file at a time, since `devicectl device copy from` with `--source Documents` copies nothing, and skips the

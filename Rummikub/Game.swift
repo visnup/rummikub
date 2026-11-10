@@ -45,8 +45,10 @@ import UniformTypeIdentifiers
   private var values: Classifier? { models?.values }
   private var lookingModel: Classifier? { models?.looking }
 
-  /// How many of the three models have loaded.
-  private(set) var loaded = 0
+  var loading: Bool { models == nil }
+  /// When the models started loading, and how long they took last launch, for the progress shown meanwhile.
+  let loadStart = Date.now
+  let loadEstimate = UserDefaults.standard.object(forKey: "loadTime") as? Double ?? 7
 
   private nonisolated struct Models: Sendable {
     let finder: Finder?
@@ -59,17 +61,14 @@ import UniformTypeIdentifiers
 
   init() {
     Task {
-      let start = Date.now
-      @MainActor func load<T: Sendable>(_ name: String, _ make: @escaping @Sendable (MLModel) throws -> T) async -> T? {
-        defer { loaded += 1 }
-        return await Task.detached { Game.model(name).flatMap { try? make($0) } }.value
-      }
-      let finder = await load("Tiles") { try Finder(model: $0) }
-      let values = await load("Values") { try Classifier(model: $0) }
-      let looking = await load("Looking") { try Classifier(model: $0) }
-      models = Models(finder: finder, values: values, looking: looking)
+      let finder = Task.detached { Game.model("Tiles").flatMap { try? Finder(model: $0) } }
+      let values = Task.detached { Game.model("Values").flatMap { try? Classifier(model: $0) } }
+      let looking = Task.detached { Game.model("Looking").flatMap { try? Classifier(model: $0) } }
+      models = Models(finder: await finder.value, values: await values.value, looking: await looking.value)
+      let time = Date.now.timeIntervalSince(loadStart)
+      UserDefaults.standard.set(time, forKey: "loadTime")
       _ = try? timing?.seekToEnd()
-      try? timing?.write(contentsOf: Data("\(Date.now.timeIntervalSince1970),load,0,\(Int(Date.now.timeIntervalSince(start) * 1000)),0,0\n".utf8))
+      try? timing?.write(contentsOf: Data("\(Date.now.timeIntervalSince1970),load,0,\(Int(time * 1000)),0,0\n".utf8))
     }
   }
 

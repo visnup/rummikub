@@ -10,7 +10,8 @@ the other folders with a .tiles.json, like the outside sets `outside.py` convert
 
 MINUTES (60) bounds training; on the held-out captures 4 minutes found 854 of 1013 tiles, 15 found 894, 60 found
 950. SIZE (small) picks the D-FINE size, and QUARTERS (4) trains on that many quarters of our captures, nested, for a
-learning curve.
+learning curve. SNAPSHOTS ("15 30") also saves the checkpoint at those minutes, beside it as .finder-15 and so on,
+for a curve over run lengths.
 """
 
 import json
@@ -100,6 +101,8 @@ def train(items, checkpoint: Path, minutes: float):
     )
     model.train()
     start, losses = time.time(), []
+    # The rate is constant, so a snapshot at 30 minutes stands in for a 30-minute run.
+    snapshots = sorted(float(m) for m in os.environ.get("SNAPSHOTS", "").split())
     for step, (pixels, labels) in enumerate(loader):
         labels = [{k: v.to("mps") for k, v in l.items()} for l in labels]
         loss = model(pixel_values=pixels.to("mps"), labels=labels).loss
@@ -111,6 +114,8 @@ def train(items, checkpoint: Path, minutes: float):
         if step % 200 == 0:
             print(f"step {step} loss {sum(losses) / len(losses):.2f} {time.time() - start:.0f}s", flush=True)
             losses = []
+        if snapshots and time.time() - start > snapshots[0] * 60:
+            model.save_pretrained(checkpoint.with_name(f"{checkpoint.name}-{snapshots.pop(0):g}"))
         if time.time() - start > minutes * 60:
             break
     model.save_pretrained(checkpoint)

@@ -21,9 +21,16 @@
   header { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
   header b { font-size: 14px; }
   header small, #missing { color: var(--muted); }
-  #missing .extra, #missing .dispute { color: var(--dispute); }
+  #missing .dispute { color: var(--dispute); }
   #view { flex: 1; overflow: auto; position: relative; display: flex; }
-  canvas { display: block; cursor: crosshair; margin: auto; flex: none; }
+  #canvas { display: block; cursor: crosshair; margin: auto; flex: none; }
+  aside { flex: none; overflow: auto; border-left: 1px solid var(--line); padding: 8px; display: grid; grid-template-columns: 14px repeat(13, 30px); gap: 3px; align-content: start; font: bold 11px ui-monospace, monospace; }
+  aside span { text-align: center; color: var(--muted); align-self: center; }
+  aside canvas { width: 30px; height: 40px; border-bottom: 3px solid var(--unconfirmed); cursor: pointer; }
+  aside canvas.confirmed { border-color: var(--confirmed); }
+  aside canvas.extra { border-color: var(--dispute); }
+  aside canvas.selected { outline: 2px solid var(--selected); }
+  aside div { width: 30px; height: 43px; box-sizing: border-box; border: 1px dashed var(--muted); }
 </style>
 </head>
 <body>
@@ -39,6 +46,7 @@
   </header>
   <div id="view"><canvas id="canvas"></canvas><div id="typed"></div></div>
 </main>
+<aside id="crops" title="Each box upright by its orientation: a row per color, a column per value"></aside>
 <details id="keys"><summary>Keys</summary><div>
   Every tile needs a box and nothing else does. Click empty space to add a box the size of those nearby, or drag to
   draw one; drag a box to move it, its corner to resize. Click a box to select it, shift-drag around several to select
@@ -115,10 +123,10 @@ async function open(i, push = true) {
   if (location.pathname !== `/captures/${c.id}`) history[push ? "pushState" : "replaceState"](null, "", `/captures/${c.id}`);
   selected = null; typed = ""; many.clear(); fit = true; mark = -1; focus = null; opened = Date.now();
   image = new Image();
-  // Three zoom steps in from fit, centered.
+  // One zoom step in from fit, centered.
   image.onload = () => {
     fit = true; draw();
-    fit = false; scale *= 1.25 ** 3; draw();
+    fit = false; scale *= 1.25; draw();
     view.scrollTo({ left: canvas.offsetLeft + (canvas.width - view.clientWidth) / 2, top: canvas.offsetTop + (canvas.height - view.clientHeight) / 2 });
   };
   image.src = `/photos/${encodeURIComponent(c.name).replace("%2F", "/")}.png?${c.modified}`;
@@ -169,17 +177,11 @@ function summary() {
   layoutEl.value = c.layout ?? "As read";
   document.getElementById("count").textContent = `${tiles.length} boxes${c.truth ? ` for ${c.truth.length} tiles` : ""}${c.boxed ? ", done" : ""}`;
   const missing = document.getElementById("missing");
-  if (!c.truth) { missing.textContent = "truth unknown: box every tile"; list(); return; }
-  const left = {};
-  for (const t of c.truth) left[t] = (left[t] || 0) + 1;
-  const extra = [];
-  for (const t of tiles.filter(t => t.confirmed && t.tile !== "?")) left[t.tile] ? left[t.tile]-- : extra.push(t.tile);
-  const names = Object.entries(left).filter(([, n]) => n).map(([t, n]) => n > 1 ? `${t}×${n}` : t);
+  const open = tiles.filter(t => !t.confirmed).length;
   const k = c.check;
   const disagree = k && [[k.missed, "boxes the finder misses"], [k.extra, "found unboxed"], [k.values, "values read otherwise"]]
     .filter(([a]) => a.length).map(([a, what]) => `${a.length} ${what}`).join(", ");
-  missing.innerHTML = (names.length ? `values not yet confirmed: ${names.join(" ")}` : "all values confirmed") +
-    (extra.length ? ` <span class="extra">not in truth ${extra.join(" ")}</span>` : "") +
+  missing.innerHTML = (c.truth ? "" : "truth unknown: box every tile, ") + (open ? `${open} unconfirmed` : "all confirmed") +
     (disagree ? ` <span class="dispute">${disagree}${c.checked ? ", looked over" : ""}</span>` : "");
   list();
 }
@@ -248,6 +250,58 @@ function draw() {
     typedEl.style.top = `${canvas.offsetTop + y + h + 4}px`;
   }
   summary();
+  crops();
+}
+
+let cropped = "";
+/** Every box cut from the photo and turned upright, a row per color and a column per value, so a misread or
+ * wrong orientation stands out; jokers and unknowns in rows at the end. A dashed slot is a tile in the truth no box
+ * reads as, and a red bar a box past the truth's count of its tile. Click one to select its box. */
+function crops() {
+  const truth = captures[current].truth, key = JSON.stringify([image.src, tiles, selected, truth]);
+  if (!image.width || key === cropped) return;
+  cropped = key;
+  const want = {};
+  for (const t of truth ?? []) want[t] = (want[t] ?? 0) + 1;
+  const cells = [document.createElement("span"), ...Array.from({ length: 13 }, (_, i) => Object.assign(document.createElement("span"), { textContent: i + 1 }))];
+  let row = 2;
+  for (const color of [..."kbor", "j", "?"]) {
+    const of = tiles.map((t, i) => [t, i]).filter(([t]) => (t.tile === "?" ? "?" : t.tile[0]) === color);
+    const wanted = Object.keys(want).filter(t => t[0] === color);
+    if (!of.length && !wanted.length) continue;
+    const valued = color !== "j" && color !== "?", used = {};
+    let rows = 1;
+    const place = (cell, tile, n) => {
+      const [r, column] = valued ? [n, Number(tile.slice(1)) + 1] : [Math.floor(n / 13), n % 13 + 2];
+      rows = Math.max(rows, r + 1);
+      cell.style.gridArea = `${row + r} / ${column}`;
+      cells.push(cell);
+    };
+    of.sort(([a], [b]) => a.frame[1] - b.frame[1] || a.frame[0] - b.frame[0]).forEach(([t, i]) => {
+      const n = used[t.tile] = (used[t.tile] ?? -1) + 1, c = crop(t, i);
+      if (truth && color !== "?" && n >= (want[t.tile] ?? 0)) c.classList.add("extra");
+      place(c, t.tile, n);
+    });
+    for (const t of wanted) for (let n = (used[t] ?? -1) + 1; n < want[t]; n++) place(Object.assign(document.createElement("div"), { title: t }), t, n);
+    const name = Object.assign(document.createElement("span"), { textContent: color });
+    name.style.cssText = `grid-area: ${row} / 1 / span ${rows}; color: ${color === "k" ? "var(--fg)" : ink[color] ?? "inherit"}`;
+    cells.push(name);
+    row += rows;
+  }
+  document.getElementById("crops").replaceChildren(...cells);
+}
+
+function crop(t, i) {
+  const c = document.createElement("canvas"), g = c.getContext("2d"), [x, y, w, h] = t.frame, turns = t.turns || 0;
+  c.width = 60; c.height = 80;
+  const k = Math.min(c.width / (turns % 2 ? h : w), c.height / (turns % 2 ? w : h));
+  g.translate(c.width / 2, c.height / 2);
+  g.rotate(turns * Math.PI / 2);
+  g.drawImage(image, x, y, w, h, -w * k / 2, -h * k / 2, w * k, h * k);
+  c.className = (t.confirmed ? "confirmed" : "") + (i === selected ? " selected" : "");
+  c.title = label(t);
+  c.onclick = () => { selected = i; many.clear(); typed = ""; zoomTo(t.frame); };
+  return c;
 }
 
 const point = e => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / scale, (e.clientY - r.top) / scale]; };

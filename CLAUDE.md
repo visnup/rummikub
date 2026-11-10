@@ -71,7 +71,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     change over several runs, not one. On 2026-11-09, after the box sizes were fixed, that model found 1016 of 1054
     with 52, and a fresh run 993 with 75; `Values` retrained then read 1006 of 1072 with 35 either way. Nano found
     905 with 103 in 60 minutes, small 950, for about a fifth less time. `QUARTERS` (0–4) and `SIZE` (`nano`,
-    `small`) are for those comparisons.
+    `small`) are for those comparisons, and `SNAPSHOTS` (`"15 30"`) saves checkpoints along one run for a curve over
+    run lengths, since the rate is constant. On 2026-11-10, with 1988 held-out tiles, a fresh run found 1964 with 36
+    against the earlier best's 1969 with 23; it was kept.
   - `make labels` runs `prelabel.py`, then `fill`, then serves the pages at http://localhost:8765/captures
     (`/captures/48` is #48; also `labeler` in `.claude/launch.json`).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
@@ -83,7 +85,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - On the capture page, every tile needs a box and nothing else may have one. Click adds an average-sized box, drag draws
     one. Enter marks a capture done. Values are optional. A tile cut off by the photo's edge gets a box too, which
     may run past the edge. Its layout picker rewrites the truth: Full set and No tiles write theirs, and As read
-    clears it, to be written by hand. Tab follows the grid, a line at a time along most boxes' orientation.
+    clears it, to be written by hand. Tab follows the grid, a line at a time along most boxes' orientation. Beside
+    the photo, every box is cropped upright, a row per color and a column per value: a dashed slot is a tile in the
+    truth no box reads as, and a red bar a box past the truth's count.
   - http://localhost:8765/values/r6 shows every r6 in the captures, done or not, as a grid, each crop turned upright by its
     orientation, so a wrong orientation or value stands out; "Least sure" lists the unconfirmed ones `Values` is least
     sure of. The `fill` tool (`swift run -c release fill ../Captures`) writes what `Values` reads, with its odds,
@@ -150,7 +154,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - Once table and rack are both locked, the Solver shows the Board (`Board.swift`) and the camera stops, to save
     battery: each part drawn as it sat in its frame, with the step shown drawn on it. Tapping a part scans it again.
     Finish on a play's last step takes its melds as the table (`Play.finished`, in the slots the steps put them) and
-    re-solves, with no rescan. Models load off the main thread, about 7 s on a cold launch; frames wait for them.
+    re-solves, with no rescan. Models load off the main thread, in parallel, about 7 s on a cold launch; frames wait for them, and the
+    top pill shows progress against the last launch's load time.
     Once the part in view is locked, frames are read a second apart.
   - A capture is a finger lifted off the camera (pressing hides everything drawn over it, to check the framing) or a
     second tap on the Capture tab. The tab's icon is a checkmark for 1.5 s after, so a burst doesn't make duplicates.

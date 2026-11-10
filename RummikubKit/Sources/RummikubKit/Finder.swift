@@ -25,7 +25,8 @@ public struct Finder: @unchecked Sendable {
   }
 
   /// Boxes in top-left-origin pixels, most confident first. A box cut by a crop's edge is left to the neighboring crop
-  /// it's whole in, and one that overlaps a more confident box by over a tenth (IoU) is dropped.
+  /// it's whole in, and one that overlaps a more confident box by over .3 (IoU) is dropped. Angled tiles' neighbors
+  /// overlap by up to .25; .1 dropped them, and .4 up let more duplicates through.
   public func tiles(in image: CGImage) throws -> [CGRect] { try find(in: image).boxes }
 
   /// The boxes, and how many regions it took to find them.
@@ -56,7 +57,7 @@ public struct Finder: @unchecked Sendable {
     }
     var kept = [(box: CGRect, confidence: Float)]()
     for f in found.sorted(by: { $0.confidence > $1.confidence })
-    where !kept.contains(where: { Self.overlap($0.box, f.box) > 0.1 }) {
+    where !kept.contains(where: { Self.overlap($0.box, f.box) > 0.3 }) {
       kept.append(f)
     }
     return (kept.map(\.box), regions)

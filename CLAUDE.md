@@ -25,7 +25,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `Finder.swift`: finds tiles, not values, with the detector `Labeler/finder.py` makes, through Vision. It runs on
     the whole image and on squares its short side, three down a 1080p frame, overlapping by about half; a box cut by
     a crop's edge is left to the neighboring crop. It keeps boxes over .6 confidence and drops any that overlap a kept
-    one by over a tenth (IoU). On the Simulator the model must run on the CPU, or Vision can't create an inference
+    one by over .3 (IoU): angled tiles' axis-aligned boxes overlap their neighbors by up to .25 (453 of 9916 labeled
+    boxes over .1), and on 2026-11-10 .3 found 1308 of 1324 held-out tiles with 23 extra, against .1's 1301 with 22
+    and .5's 1308 with 37. On the Simulator the model must run on the CPU, or Vision can't create an inference
     context. With crops half the short side, 19 regions, it took 290–500 ms a frame on the phone (2026-11-09).
     Tiles under 30 px on their short side in a 1920 px frame (`Finder.smallest`) are out of scope: far ones, like
     the table behind a rack, which a table panned with ARKit won't need. Of 1054 held-out tiles 960 are in scope.

@@ -44,7 +44,7 @@
   draw one; drag a box to move it, its corner to resize. Click a box to select it, shift-drag around several to select
   them, or <kbd>a</kbd> to select every unconfirmed one. Type a tile (<kbd>r12</kbd>, <kbd>j</kbd>) and
   <kbd>Enter</kbd> to set and confirm it, <kbd>?</kbd> for one you can't read, or just <kbd>Enter</kbd> to confirm what it shows; one box then goes on to
-  the next unconfirmed. <kbd>←</kbd><kbd>→</kbd> turn its orientation, <kbd>⌫</kbd> deletes it, <kbd>Esc</kbd>
+  the next unconfirmed, unless it's <kbd>⇧Enter</kbd>. <kbd>←</kbd><kbd>→</kbd> turn its orientation, <kbd>⌫</kbd> deletes it, <kbd>Esc</kbd>
   selects none. With nothing selected, <kbd>Enter</kbd> marks the capture done and opens the next, <kbd>u</kbd>
   unmarks it, and <kbd>D</kbd> deletes it, to the Trash.
   Under Check, dashed red marks a box the finder misses, dashed blue a box it finds that has none (double-click to
@@ -115,7 +115,12 @@ async function open(i, push = true) {
   if (location.pathname !== `/captures/${c.id}`) history[push ? "pushState" : "replaceState"](null, "", `/captures/${c.id}`);
   selected = null; typed = ""; many.clear(); fit = true; mark = -1; focus = null; opened = Date.now();
   image = new Image();
-  image.onload = draw;
+  // Three zoom steps in from fit, centered.
+  image.onload = () => {
+    fit = true; draw();
+    fit = false; scale *= 1.25 ** 3; draw();
+    view.scrollTo({ left: canvas.offsetLeft + (canvas.width - view.clientWidth) / 2, top: canvas.offsetTop + (canvas.height - view.clientHeight) / 2 });
+  };
   image.src = `/photos/${encodeURIComponent(c.name).replace("%2F", "/")}.png?${c.modified}`;
   list();
   document.querySelector("nav tr.current")?.scrollIntoView({ block: "nearest" });
@@ -193,14 +198,17 @@ function draw() {
     ctx.strokeRect(x, y, w, h);
     const turns = t.turns || 0, text = label(t), width = ctx.measureText(text).width + 6;
     // Against the edge that's the tile's bottom at its orientation.
-    const [lx, ly] = [[x + w / 2 - width / 2, y + h - 18], [x + w - width - 2, y + h / 2 - 8],
-      [x + w / 2 - width / 2, y + 2], [x + 2, y + h / 2 - 8]][turns];
+    // Under the text, a bar as long as the value, so a run's bars climb steadily and a misread stands out.
+    const value = Number(t.tile.slice(1)), tall = value ? 22 : 16;
+    const [lx, ly] = [[x + w / 2 - width / 2, y + h - tall - 2], [x + w - width - 2, y + h / 2 - tall / 2],
+      [x + w / 2 - width / 2, y + 2], [x + 2, y + h / 2 - tall / 2]][turns];
     ctx.fillStyle = "#fff";
-    ctx.fillRect(lx, ly, width, 16);
+    ctx.fillRect(lx, ly, width, tall);
     ctx.lineWidth = 1;
-    ctx.strokeRect(lx, ly, width, 16);
+    ctx.strokeRect(lx, ly, width, tall);
     ctx.fillStyle = ink[t.tile[0]] ?? "#888";
     ctx.fillText(text, lx + width / 2, ly + 12);
+    if (value) ctx.fillRect(lx + 1, ly + 16, (width - 2) * value / 13, 4);
   });
   const k = marks();
   if (k) {
@@ -365,12 +373,14 @@ window.onkeydown = e => {
     if (!fields || !s) return flash();
     Object.assign(s, fields);
     typed = ""; save();
-    selectNext(1);
+    if (!e.shiftKey) selectNext(1);
+    else draw();
   } else if (e.key === "Enter" && s) {
     // Confirms the value it has, then on to the next without one.
     if (!valid.test(s.tile)) return flash();
     s.confirmed = true; save();
-    selectNext(1);
+    if (!e.shiftKey) selectNext(1);
+    else draw();
   } else if (e.key === "Enter" && many.size) {
     // Confirms the shift-dragged boxes that have a value.
     for (const i of many) if (valid.test(tiles[i].tile)) tiles[i].confirmed = true;

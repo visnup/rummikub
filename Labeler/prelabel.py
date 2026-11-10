@@ -61,8 +61,8 @@ model = DFineForObjectDetection.from_pretrained(captures / ".finder").to(device)
 @torch.no_grad()
 def detect(image, least=0.6):
     """As `Finder` does: the whole photo and squares its short side overlapping by about half, each at 640 px; a box
-    cut by a square's edge left to the square it's whole in, and one overlapping a likelier box by over a tenth
-    (IoU) dropped."""
+    cut by a square's edge left to the square it's whole in, and one overlapping a likelier box by over .3 (IoU)
+    dropped."""
     w, h = image.size
     side = min(w, h)
 
@@ -87,7 +87,7 @@ def detect(image, least=0.6):
                 found.append((box, score))
     kept = []
     for f in sorted(found, key=lambda f: -f[1]):
-        if all(iou(f[0], k[0]) <= 0.1 for k in kept):
+        if all(iou(f[0], k[0]) <= 0.3 for k in kept):
             kept.append(f)
     return kept
 

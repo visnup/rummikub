@@ -44,7 +44,12 @@ struct ContentView: View {
               if let unsent {
                 if unsent > 0 { Label("\(unsent)", systemImage: "arrow.up.circle") } else { Image(systemName: "checkmark.circle") }
               }
-              Text("\(Int(game.readTime / .milliseconds(1))) / \(Int(game.findTime / .milliseconds(1))) ms")
+              if game.loaded < 3 {
+                ProgressView(value: Double(game.loaded), total: 3).frame(width: 40)
+                Text("Loading models")
+              } else {
+                Text("\(Int(game.readTime / .milliseconds(1))) / \(Int(game.findTime / .milliseconds(1))) ms")
+              }
             }
             .font(.caption.monospacedDigit())
             .padding(.horizontal, 10)

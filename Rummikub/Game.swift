@@ -45,19 +45,29 @@ import UniformTypeIdentifiers
   private var values: Classifier? { models?.values }
   private var lookingModel: Classifier? { models?.looking }
 
+  /// How many of the three models have loaded.
+  private(set) var loaded = 0
+
   private nonisolated struct Models: Sendable {
-    let finder = Game.model("Tiles").flatMap { try? Finder(model: $0) }
+    let finder: Finder?
     /// What reads the finder's boxes: each tile and its orientation.
-    let values = Game.model("Values").flatMap { try? Classifier(model: $0) }
+    let values: Classifier?
     /// Whether a frame shows a rack or the table, from the whole picture: tilt alone can't say, since racks were shot
     /// at 24–48° and tables from 35° up. On held-out frames it got 21 of 24, two of them judgment calls.
-    let looking = Game.model("Looking").flatMap { try? Classifier(model: $0) }
+    let looking: Classifier?
   }
 
   init() {
     Task {
       let start = Date.now
-      models = await Task.detached { Models() }.value
+      @MainActor func load<T: Sendable>(_ name: String, _ make: @escaping @Sendable (MLModel) throws -> T) async -> T? {
+        defer { loaded += 1 }
+        return await Task.detached { Game.model(name).flatMap { try? make($0) } }.value
+      }
+      let finder = await load("Tiles") { try Finder(model: $0) }
+      let values = await load("Values") { try Classifier(model: $0) }
+      let looking = await load("Looking") { try Classifier(model: $0) }
+      models = Models(finder: finder, values: values, looking: looking)
       _ = try? timing?.seekToEnd()
       try? timing?.write(contentsOf: Data("\(Date.now.timeIntervalSince1970),load,0,\(Int(Date.now.timeIntervalSince(start) * 1000)),0,0\n".utf8))
     }

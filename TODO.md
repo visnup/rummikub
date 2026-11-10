@@ -16,8 +16,8 @@
 
 ## Captures
 
-Unchecked kinds, roughly in order of what they unblock. Pick the layout before shooting and type the scene into
-notes; the app pushes each one to `Captures/`.
+Unchecked kinds, roughly in order of what they unblock. Pick the layout and tag the tile set before shooting; the
+app pushes each one to `Captures/`.
 
 - **The new tile set** (#206's): out of its wrap, the full set half at a time so tiles are 50 px or more, at a couple
   of angles and orientations; then racks and melds in play.

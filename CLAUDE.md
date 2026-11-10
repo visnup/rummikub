@@ -92,7 +92,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones
     too, the boxes the finder misses, the boxes it finds that have none, and confirmed values `Values` reads as another
     tile at least .8 sure. It takes 22 s for 194 captures, four at a time; one at a time took 31 s. `make train` reruns it, and `make watch` runs `check --new`
-    on captures newly done (those not in `.check.done`). The page lists those captures under Check, fewest first, and
+    on captures newly done (those not in `.check.done`). The page's "to check first" sort lists those captures fewest first, and
     marks each spot, which `n` zooms to in turn; Enter there records the capture in `Captures/checked.txt`. On 2026-11-08 it flagged 120 of
     174: 470 boxes missed, 456 extra, 57 values. 279 of the misses had a finder box on them (median IoU .44), mostly
     our click-placed boxes sitting loose or off center, which `f` snaps to the finder's. Of the rest, most were real
@@ -184,7 +184,9 @@ rearrangements. What we settled on:
     Mac.
   - `<ISO time>.txt`: what it was looking at and the tilt, then the truth, one meld per line. The truth is what was
     read, unless the Layout picker names a known layout.
-  - `<ISO time>.json`: the layout, notes, gravity, camera settings, read time and every detection's box.
+  - `<ISO time>.json`: the layout, notes, gravity, camera settings, read time and every detection's box. Notes are
+    single-word tags separated by spaces, which `check` totals by, and the app keeps the last ones typed. Each
+    capture is tagged with its tile set: `pouch`, `large` (#202–273) or `curved` (#80–89); No tiles ones have none.
 
   They land in `Captures/`, which git ignores since they're hundreds of MB. By cable, `make captures` copies them
   one file at a time, since `devicectl device copy from` with `--source Documents` copies nothing, and skips the

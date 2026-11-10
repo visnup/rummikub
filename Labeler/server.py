@@ -34,9 +34,13 @@ def write_tiles(path: Path, tiles: list[dict]):
     path.write_text(json.dumps(tiles, indent=2, sort_keys=True) + "\n")
 
 
-def layout(png: Path) -> str | None:
+def info(png: Path) -> dict:
     notes = png.with_suffix(".json")
-    return json.loads(notes.read_text()).get("layout") if notes.exists() else None
+    return json.loads(notes.read_text()) if notes.exists() else {}
+
+
+def layout(png: Path) -> str | None:
+    return info(png).get("layout")
 
 
 def truth(png: Path) -> list[str] | None:
@@ -113,6 +117,7 @@ def summary(png: Path, number: int, check: dict, done: set[str], looked: set[str
         "name": name,
         "truth": truth(png),
         "layout": layout(png),
+        "tags": (info(png).get("notes") or "").split(),
         "boxes": len(tiles),
         "boxed": name in done,
         "check": check.get(name),
@@ -147,7 +152,7 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/captures":
             photos = pngs()
             number, check, done, looked = ids(photos), disagreements(), names(boxed), names(checked)
-            return self.send_json([s for p in photos if (s := summary(p, number[p.stem], check, done, looked))["truth"] != []])
+            return self.send_json([summary(p, number[p.stem], check, done, looked) for p in photos])
         if self.path.startswith("/api/tiles/"):
             path = inside(unquote(self.path.removeprefix("/api/tiles/")), ".tiles.json")
             if path is None:
@@ -239,8 +244,7 @@ class Handler(SimpleHTTPRequestHandler):
         if png is None or not png.exists() or new not in (*melds, "As read"):
             return self.send_error(400)
         notes, txt = png.with_suffix(".json"), png.with_suffix(".txt")
-        info = json.loads(notes.read_text()) if notes.exists() else {}
-        notes.write_text(json.dumps({**info, "layout": new}, indent=2, sort_keys=True) + "\n")
+        notes.write_text(json.dumps({**info(png), "layout": new}, indent=2, sort_keys=True) + "\n")
         first = txt.read_text().splitlines()[0] if txt.exists() else ""
         txt.write_text("".join(f"{line}\n" for line in [first, *melds.get(new, [])]))
         self.send_json({"layout": new, "truth": truth(png)})

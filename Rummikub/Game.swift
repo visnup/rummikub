@@ -28,7 +28,10 @@ import UniformTypeIdentifiers
   var looking = Looking.table
   var layout = Layout.read
   /// What's around the tiles, like "lamp glare, wood", saved with each capture.
-  var notes = ""
+  /// Single-word tags, kept across launches, that `check` reports by.
+  var notes = UserDefaults.standard.string(forKey: "notes") ?? "" {
+    didSet { UserDefaults.standard.set(notes, forKey: "notes") }
+  }
   var gravity: [Double]?
   /// How long the last frame took to read: classifying the finder's boxes.
   var readTime = Duration.zero

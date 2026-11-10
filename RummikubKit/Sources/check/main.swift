@@ -85,6 +85,18 @@
       print("\(n)/\(todo.count)", id, left.count, extra.count, misread.count, separator: "\t")
     }
   }
+  // Every done capture by each tag in its notes, flagged or not.
+  var tagged = [String: [String]]()
+  for name in done {
+    let info = (try? JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".json")))) as? [String: Any]
+    for tag in ((info?["notes"] as? String) ?? "").split(whereSeparator: \.isWhitespace) { tagged[String(tag), default: []].append(name) }
+  }
+  print("\ntag", "captures", "flagged", "missed", "extra", "values", separator: "\t")
+  for (tag, names) in tagged.sorted(by: { $0.key < $1.key }) {
+    let flags = names.compactMap { out[$0] as? [String: [Any]] }
+    let sum = { (key: String) in flags.reduce(0) { $0 + $1[key]!.count } }
+    print(tag, names.count, flags.count, sum("missed"), sum("extra"), sum("values"), separator: "\t")
+  }
   try JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys]).write(to: outURL)
   try (checked.union(todo).sorted().joined(separator: "\n") + "\n").write(to: checkedURL, atomically: true, encoding: .utf8)
 #endif

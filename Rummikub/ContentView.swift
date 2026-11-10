@@ -207,7 +207,7 @@ struct ContentView: View {
       }
       .font(.caption)
       .alert("Notes", isPresented: $editingNotes) {
-        TextField("Light, surface, clutter", text: $game.notes)
+        TextField("Tags", text: $game.notes)
         Button("Done") {}
       }
     }

@@ -5,7 +5,18 @@
 <title>Captures</title>
 <link rel="stylesheet" href="/common.css">
 <style>
-  nav h3 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0; padding: 6px 10px 2px; position: sticky; top: 0; background: var(--bg); }
+  nav, #keys { width: 300px; }
+  nav select { margin: 0 10px 4px; }
+  nav table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  nav td, nav th { padding: 3px 4px; white-space: nowrap; }
+  nav td:first-child, nav th:first-child { padding-left: 10px; }
+  nav td:last-child, nav th:last-child { padding-right: 10px; }
+  nav thead th { font-size: 11px; font-weight: 600; color: var(--muted); position: sticky; top: 0; background: var(--bg); }
+  nav tbody th { font-size: 12px; font-weight: 600; color: var(--muted); text-align: left; padding-top: 8px; }
+  nav tbody tr:not(:has(th)) { cursor: pointer; }
+  nav tr.current { background: var(--pick); }
+  nav .n { text-align: right; }
+  nav .k { font-size: 11px; }
   main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   header { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
   header b { font-size: 14px; }
@@ -57,10 +68,10 @@ const color = name => getComputedStyle(document.documentElement).getPropertyValu
 let captures = [], current = 0, image = new Image(), tiles = [], selected = null, typed = "", scale = 1, fit = true, drag = null;
 /** Boxes selected together, by a shift-drag or `a`. */
 let many = new Set();
-let showDone = false, opened = 0;
-/** How the done captures are listed: by day, or by most boxes the finder misses, finds unboxed, or values read otherwise. */
+let opened = 0;
+/** How captures are listed: a key of `sorts`. */
 let sortBy = "";
-try { showDone = localStorage.showDone === "1"; sortBy = localStorage.sortBy ?? ""; } catch {}
+try { sortBy = localStorage.sortBy ?? ""; } catch {}
 
 const when = c => new Date(c.name.replace("unlabeled/", ""));
 const day = c => when(c).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
@@ -77,16 +88,23 @@ const numbered = () => { const i = captures.findIndex(c => `/captures/${c.id}` =
 addEventListener("popstate", () => { const i = numbered(); if (i !== null && i !== current) open(i, false); });
 /** How many places the models disagree with a done capture's labels, until it's looked over. */
 const disputes = c => c.boxed && c.check && !c.checked ? c.check.missed.length + c.check.extra.length + c.check.values.length : 0;
-const sections = () => {
-  const all = [...captures.keys()];
-  return {
-    pending: all.filter(i => !captures[i].boxed),
-    check: all.filter(i => disputes(captures[i])).sort((a, b) => disputes(captures[a]) - disputes(captures[b])),
-    done: all.filter(i => captures[i].boxed && !disputes(captures[i])),
-  };
+/** 0 pending, 1 done but to check, 2 done. */
+const stage = c => !c.boxed ? 0 : disputes(c) ? 1 : 2;
+const count = (c, kind) => c.check?.[kind].length ?? 0;
+const total = c => count(c, "missed") + count(c, "extra") + count(c, "values");
+const most = kind => (a, b) => count(b, kind) - count(a, kind) || total(b) - total(a);
+/** Each compares two captures; ties stay newest first. Those to check go fewest disagreements first. */
+const sorts = {
+  "": ["newest", () => 0],
+  pending: ["pending first", (a, b) => stage(a) - stage(b) || disputes(a) - disputes(b)],
+  check: ["to check first", (a, b) => (stage(a) !== 1) - (stage(b) !== 1) || disputes(a) - disputes(b)],
+  done: ["done first", (a, b) => (stage(b) === 2) - (stage(a) === 2)],
+  missed: ["most missed", most("missed")],
+  extra: ["most extra", most("extra")],
+  values: ["most values read otherwise", most("values")],
 };
-/** Indices in the order listed: pending, newest first, then to check, least disputed first, then done when shown. */
-const order = () => { const s = sections(); return [...s.pending, ...s.check, ...s.done.filter(i => showDone || i === current)]; };
+/** Indices in the order listed. */
+const order = () => [...captures.keys()].sort((i, j) => (sorts[sortBy] ?? sorts[""])[1](captures[i], captures[j]));
 
 async function open(i, push = true) {
   const c = captures[i];
@@ -100,47 +118,43 @@ async function open(i, push = true) {
   image.onload = draw;
   image.src = `/photos/${encodeURIComponent(c.name).replace("%2F", "/")}.png?${c.modified}`;
   list();
-  document.querySelector("nav button.current")?.scrollIntoView({ block: "nearest" });
+  document.querySelector("nav tr.current")?.scrollIntoView({ block: "nearest" });
 }
 const step = by => { const o = order(); open(o[(o.indexOf(current) + by + o.length) % o.length]); };
 
 function list() {
-  const button = i => {
-    const c = captures[i], b = document.createElement("button");
-    b.className = i === current ? "current" : "";
-    const k = c.boxed && c.check ? `<span class="${c.checked ? "" : "dispute"}" title="the finder misses · finds unboxed · values read otherwise">${c.check.missed.length}·${c.check.extra.length}·${c.check.values.length}</span>` : "";
-    b.innerHTML = disputes(c)
-      ? `<span>#${c.id} <small>${day(c)}</small></span>${k}`
-      : `<span>#${c.id} <small>${time(c)}</small></span><span><small>${k}</small> <span class="${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</span></span>`;
-    b.onclick = () => open(i);
-    return b;
+  const row = i => {
+    const c = captures[i], tr = document.createElement("tr");
+    tr.className = i === current ? "current" : "";
+    const at = when(c).toLocaleString(undefined, sortBy ? { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" } : { hour: "numeric", minute: "2-digit" });
+    const k = kind => `<td class="n k ${c.checked ? "" : "dispute"}">${c.boxed && c.check ? c.check[kind].length || "" : ""}</td>`;
+    tr.innerHTML = `<td class="n">${c.id}</td><td title="${c.tags.join(" ")}"><small>${c.tags.map(t => t[0]).join("")}</small></td>` +
+      `<td class="n"><small>${at}</small></td>${k("missed")}${k("extra")}${k("values")}` +
+      `<td class="n ${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</td>`;
+    tr.onclick = () => open(i);
+    return tr;
   };
   const days = indices => indices.flatMap((i, n) => {
-    const h = document.createElement("h3");
-    h.textContent = day(captures[i]);
-    return n === 0 || day(captures[indices[n - 1]]) !== day(captures[i]) ? [h, button(i)] : [button(i)];
+    if (n > 0 && day(captures[indices[n - 1]]) === day(captures[i])) return [row(i)];
+    const h = document.createElement("tr");
+    h.innerHTML = `<th colspan="7">${day(captures[i])}</th>`;
+    return [h, row(i)];
   });
-  const { pending, check, done } = sections();
-  const heading = document.createElement("h2");
-  heading.textContent = `Pending ${pending.length}`;
-  const checking = document.createElement("h2");
-  checking.textContent = `Check ${check.length}`;
-  checking.title = "Done captures where the models disagree with the labels, fewest first";
-  const details = document.createElement("details");
-  details.open = showDone || captures[current]?.boxed;
-  details.ontoggle = () => { showDone = details.open; try { localStorage.showDone = showDone ? "1" : "0"; } catch {} };
-  const summary = document.createElement("summary");
-  summary.textContent = `Done ${done.length}`;
+  const table = document.createElement("table");
+  table.innerHTML = `<thead><tr><th class="n">#</th><th></th><th></th><th class="n" title="boxes the finder misses">miss</th>` +
+    `<th class="n" title="boxes the finder finds that aren't labeled">extra</th><th class="n" title="values read otherwise">val</th><th class="n">boxes</th></tr></thead>`;
+  const stages = [0, 1, 2].map(s => captures.filter(c => stage(c) === s).length);
   const sort = document.createElement("select");
-  sort.innerHTML = `<option value="">newest</option><option value="missed">most missed</option><option value="extra">most extra</option><option value="values">most values read otherwise</option>`;
-  sort.value = sortBy;
+  sort.title = `${stages[0]} pending, ${stages[1]} to check, ${stages[2]} done`;
+  sort.innerHTML = Object.entries(sorts).map(([key, [name]]) =>
+    `<option value="${key}">${name}${{ pending: ` (${stages[0]})`, check: ` (${stages[1]})`, done: ` (${stages[2]})` }[key] ?? ""}</option>`).join("");
+  sort.value = sorts[sortBy] ? sortBy : "";
   sort.onchange = () => { sortBy = sort.value; try { localStorage.sortBy = sortBy; } catch {} list(); };
-  const count = (i, kind) => captures[i].check?.[kind].length ?? 0;
-  const total = i => count(i, "missed") + count(i, "extra") + count(i, "values");
-  details.replaceChildren(summary, sort, ...(sortBy
-    ? [...done].sort((a, b) => count(b, sortBy) - count(a, sortBy) || total(b) - total(a)).map(button)
-    : days(done)));
-  document.getElementById("list").replaceChildren(pages("/captures"), heading, ...days(pending), ...(check.length ? [checking, ...check.map(button)] : []), details);
+  const o = order();
+  const body = document.createElement("tbody");
+  body.replaceChildren(...(sortBy ? o.map(row) : days(o)));
+  table.append(body);
+  document.getElementById("list").replaceChildren(pages("/captures"), sort, table);
 }
 
 function summary() {
@@ -406,17 +420,11 @@ window.onkeydown = e => {
 async function finish() {
   const c = captures[current];
   await save();
-  if (disputes(c)) {
-    // Looked over: opens the next one to check.
-    await fetch(`/api/checked/${encodeURIComponent(c.name)}`, { method: "POST" });
-    c.checked = true;
-    const { check } = sections();
-    return open(check.length ? check[0] : current);
-  }
-  await fetch(`/api/boxed/${encodeURIComponent(c.name)}`, { method: "POST" });
-  c.boxed = true;
-  const next = captures.findIndex((d, i) => i > current && !d.boxed);
-  open(next < 0 ? Math.max(0, captures.findIndex(d => !d.boxed)) : next);
+  const kind = disputes(c) ? "checked" : "boxed";
+  await fetch(`/api/${kind}/${encodeURIComponent(c.name)}`, { method: "POST" });
+  c[kind] = true;
+  const o = order(), at = o.indexOf(current);
+  open([...o.slice(at + 1), ...o.slice(0, at)].find(i => stage(captures[i]) < 2) ?? current);
 }
 /** Undoes Enter on this capture: looked over first, else done. */
 async function unmark() {

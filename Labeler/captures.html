@@ -20,6 +20,9 @@
 <main>
   <header>
     <b id="name"></b>
+    <select id="layout" title="What the capture was meant to show, which sets its truth">
+      <option>Full set</option><option>As read</option><option>No tiles</option>
+    </select>
     <span id="count"></span>
     <span id="missing"></span>
   </header>
@@ -43,13 +46,21 @@
 <script src="/common.js"></script>
 <script>
 const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d"), view = document.getElementById("view");
-const typedEl = document.getElementById("typed");
+const typedEl = document.getElementById("typed"), layoutEl = document.getElementById("layout");
+layoutEl.onchange = async () => {
+  const c = captures[current];
+  Object.assign(c, await (await fetch(`/api/layout/${encodeURIComponent(c.name)}`, { method: "POST", body: JSON.stringify(layoutEl.value) })).json());
+  layoutEl.blur();
+  draw();
+};
 const color = name => getComputedStyle(document.documentElement).getPropertyValue(name);
 let captures = [], current = 0, image = new Image(), tiles = [], selected = null, typed = "", scale = 1, fit = true, drag = null;
 /** Boxes selected together, by a shift-drag or `a`. */
 let many = new Set();
 let showDone = false, opened = 0;
-try { showDone = localStorage.showDone === "1"; } catch {}
+/** How the done captures are listed: by day, or by most boxes the finder misses, finds unboxed, or values read otherwise. */
+let sortBy = "";
+try { showDone = localStorage.showDone === "1"; sortBy = localStorage.sortBy ?? ""; } catch {}
 
 const when = c => new Date(c.name.replace("unlabeled/", ""));
 const day = c => when(c).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
@@ -89,7 +100,7 @@ async function open(i, push = true) {
   image.onload = draw;
   image.src = `/photos/${encodeURIComponent(c.name).replace("%2F", "/")}.png?${c.modified}`;
   list();
-  document.querySelector("nav .current")?.scrollIntoView({ block: "nearest" });
+  document.querySelector("nav button.current")?.scrollIntoView({ block: "nearest" });
 }
 const step = by => { const o = order(); open(o[(o.indexOf(current) + by + o.length) % o.length]); };
 
@@ -97,9 +108,10 @@ function list() {
   const button = i => {
     const c = captures[i], b = document.createElement("button");
     b.className = i === current ? "current" : "";
+    const k = c.boxed && c.check ? `<span class="${c.checked ? "" : "dispute"}" title="the finder misses · finds unboxed · values read otherwise">${c.check.missed.length}·${c.check.extra.length}·${c.check.values.length}</span>` : "";
     b.innerHTML = disputes(c)
-      ? `<span>#${c.id} <small>${day(c)}</small></span><span class="dispute">${disputes(c)}</span>`
-      : `<span>#${c.id} <small>${time(c)}</small></span><span class="${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</span>`;
+      ? `<span>#${c.id} <small>${day(c)}</small></span>${k}`
+      : `<span>#${c.id} <small>${time(c)}</small></span><span><small>${k}</small> <span class="${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</span></span>`;
     b.onclick = () => open(i);
     return b;
   };
@@ -119,7 +131,15 @@ function list() {
   details.ontoggle = () => { showDone = details.open; try { localStorage.showDone = showDone ? "1" : "0"; } catch {} };
   const summary = document.createElement("summary");
   summary.textContent = `Done ${done.length}`;
-  details.replaceChildren(summary, ...days(done));
+  const sort = document.createElement("select");
+  sort.innerHTML = `<option value="">newest</option><option value="missed">most missed</option><option value="extra">most extra</option><option value="values">most values read otherwise</option>`;
+  sort.value = sortBy;
+  sort.onchange = () => { sortBy = sort.value; try { localStorage.sortBy = sortBy; } catch {} list(); };
+  const count = (i, kind) => captures[i].check?.[kind].length ?? 0;
+  const total = i => count(i, "missed") + count(i, "extra") + count(i, "values");
+  details.replaceChildren(summary, sort, ...(sortBy
+    ? [...done].sort((a, b) => count(b, sortBy) - count(a, sortBy) || total(b) - total(a)).map(button)
+    : days(done)));
   document.getElementById("list").replaceChildren(pages("/captures"), heading, ...days(pending), ...(check.length ? [checking, ...check.map(button)] : []), details);
 }
 
@@ -127,6 +147,7 @@ function summary() {
   const c = captures[current];
   c.boxes = tiles.length;
   document.getElementById("name").innerHTML = `#${c.id} · ${day(c)} ${time(c)} <small>${c.name}</small>`;
+  layoutEl.value = c.layout ?? "As read";
   document.getElementById("count").textContent = `${tiles.length} boxes${c.truth ? ` for ${c.truth.length} tiles` : ""}${c.boxed ? ", done" : ""}`;
   const missing = document.getElementById("missing");
   if (!c.truth) { missing.textContent = "truth unknown: box every tile"; list(); return; }
@@ -416,10 +437,32 @@ async function remove() {
 }
 window.onresize = () => fit && draw();
 
+/** Box indices a line at a time: each box followed by its neighbor along most boxes' orientation (sideways tiles'
+ * lines run down the photo), however skewed, then lines left to right or top to bottom. Most, since a box read
+ * wrong would turn its line. */
+function readingOrder() {
+  const center = t => [t.frame[0] + t.frame[2] / 2, t.frame[1] + t.frame[3] / 2];
+  const k = tiles.filter(t => (t.turns || 0) % 2).length > tiles.length / 2 ? 1 : 0;
+  const links = [];
+  tiles.forEach((a, i) => tiles.forEach((b, j) => {
+    const ahead = center(b)[k] - center(a)[k], aside = Math.abs(center(b)[1 - k] - center(a)[1 - k]);
+    if (ahead > 0.3 * a.frame[2 + k] && ahead < 2 * a.frame[2 + k] && aside < 0.6 * a.frame[3 - k]) links.push([ahead + 2 * aside, i, j]);
+  }));
+  const next = new Map(), prev = new Map();
+  for (const [, i, j] of links.sort((a, b) => a[0] - b[0])) if (!next.has(i) && !prev.has(j)) { next.set(i, j); prev.set(j, i); }
+  const lines = tiles.flatMap((t, i) => prev.has(i) ? [] : [[i]]);
+  for (const line of lines) while (next.has(line.at(-1))) line.push(next.get(line.at(-1)));
+  const key = line => { const t = tiles[line[0]]; return [center(t)[1 - k], center(t)[k], t.frame[3 - k]]; };
+  lines.sort((a, b) => { const [a1, a2, w] = key(a), [b1, b2] = key(b); return Math.abs(a1 - b1) < w / 2 ? a2 - b2 : a1 - b1; });
+  const order = lines.flat();
+  // Boxes in a loop of links, which no line starts.
+  return [...order, ...tiles.keys().filter(i => !order.includes(i))];
+}
+
 /** The next unconfirmed box in reading order after the selected one. */
 function selectNext(step) {
   focus = null;
-  const reading = tiles.map((t, i) => i).sort((a, b) => tiles[a].frame[1] - tiles[b].frame[1] || tiles[a].frame[0] - tiles[b].frame[0]);
+  const reading = readingOrder();
   const todo = reading.filter(i => !tiles[i].confirmed);
   if (!todo.length) { selected = null; return; }
   const at = reading.indexOf(selected);

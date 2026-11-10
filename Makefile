@@ -38,7 +38,7 @@ watch:
 	cd RummikubKit && swift build -c release --product words --product fill --product check
 	while true; do uv run Labeler/prelabel.py --new 2>&1 | grep -v "Loading\|NOTE\|^\s*$$"; \
 	  RummikubKit/.build/release/fill --new $(dir); \
-	  RummikubKit/.build/release/check --new $(dir) | grep -v "^[0-9]"; RummikubKit/.build/release/words $(dir); sleep 30; done
+	  RummikubKit/.build/release/check --new $(dir) > /dev/null; RummikubKit/.build/release/words $(dir); sleep 30; done
 
 # Copies the app's per-frame timing logs, one a launch, every time, since they grow, then sums them up.
 timing:

@@ -34,12 +34,22 @@ def write_tiles(path: Path, tiles: list[dict]):
     path.write_text(json.dumps(tiles, indent=2, sort_keys=True) + "\n")
 
 
+def layout(png: Path) -> str | None:
+    notes = png.with_suffix(".json")
+    return json.loads(notes.read_text()).get("layout") if notes.exists() else None
+
+
 def truth(png: Path) -> list[str] | None:
-    """The true tiles, or None when they're unknown, as for captures in unlabeled/."""
+    """The true tiles, or None when they're unknown: an "As read" capture in unlabeled/, or with none written."""
     txt = png.with_suffix(".txt")
-    if png.parent.name == "unlabeled" or not txt.exists():
+    if not txt.exists():
         return None
-    return " ".join(txt.read_text().splitlines()[1:]).split()
+    tiles = " ".join(txt.read_text().splitlines()[1:]).split()
+    return None if layout(png) in ("As read", None) and (png.parent.name == "unlabeled" or not tiles) else tiles
+
+
+# What each layout writes as the truth, as the app's Game.Layout does.
+melds = {"Full set": [" ".join(f"{c}{v}" for v in range(1, 14)) for c in "kkbboorr"] + ["j j"], "No tiles": []}
 
 
 # Captures whose boxes have all been checked: one around every tile and nothing else.
@@ -102,6 +112,7 @@ def summary(png: Path, number: int, check: dict, done: set[str], looked: set[str
         "id": number,
         "name": name,
         "truth": truth(png),
+        "layout": layout(png),
         "boxes": len(tiles),
         "boxed": name in done,
         "check": check.get(name),
@@ -166,9 +177,11 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         """Marks a capture's boxes done, or looked over where the models disagree, or not: POST
-        /api/boxed/<name>?done=0, /api/checked/<name>. Or changes tiles, as `change` says."""
+        /api/boxed/<name>?done=0, /api/checked/<name>. Or changes tiles, as `change` says, or a layout."""
         if self.path == "/api/tiles":
             return self.change()
+        if self.path.startswith("/api/layout/"):
+            return self.relayout()
         kind, _, rest = self.path.removeprefix("/api/").partition("/")
         path = {"boxed": boxed, "checked": checked}.get(kind)
         if path is None:
@@ -217,6 +230,20 @@ class Handler(SimpleHTTPRequestHandler):
                     changed += 1
             write_tiles(path, tiles)
         return changed
+
+    def relayout(self):
+        """Sets what a capture was meant to show: POST /api/layout/<name> with "Full set", "No tiles" or "As read".
+        The first two write their truth, and "As read" clears it, to be written by hand."""
+        png = inside(unquote(self.path.removeprefix("/api/layout/")), ".png")
+        new = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if png is None or not png.exists() or new not in (*melds, "As read"):
+            return self.send_error(400)
+        notes, txt = png.with_suffix(".json"), png.with_suffix(".txt")
+        info = json.loads(notes.read_text()) if notes.exists() else {}
+        notes.write_text(json.dumps({**info, "layout": new}, indent=2, sort_keys=True) + "\n")
+        first = txt.read_text().splitlines()[0] if txt.exists() else ""
+        txt.write_text("".join(f"{line}\n" for line in [first, *melds.get(new, [])]))
+        self.send_json({"layout": new, "truth": truth(png)})
 
     def do_DELETE(self):
         """Deletes a capture: DELETE /api/capture/<name>. Its files go to the Trash, and .removed keeps the app from

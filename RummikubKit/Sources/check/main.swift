@@ -20,14 +20,34 @@
   let todo = done.filter { !checked.contains($0) }
   if todo.isEmpty { exit(0) }
 
-  let compiled = { (name: String) in try MLModel(contentsOf: MLModel.compileModel(at: captures.appending(path: name))) }
-  let finder = try Finder(model: compiled("Tiles.mlpackage"))
-  let values = try Classifier(model: compiled("Values.mlpackage"))
-  let rect = { (f: [Double]) in CGRect(x: f[0], y: f[1], width: f[2], height: f[3]) }
-  let array = { (r: CGRect) in [r.minX, r.minY, r.width, r.height].map { Double(($0 * 10).rounded() / 10) } }
+  let tiles = try MLModel.compileModel(at: captures.appending(path: "Tiles.mlpackage"))
+  let classes = try MLModel.compileModel(at: captures.appending(path: "Values.mlpackage"))
+  func rect(_ f: [Double]) -> CGRect { CGRect(x: f[0], y: f[1], width: f[2], height: f[3]) }
+  func array(_ r: CGRect) -> [Double] { [r.minX, r.minY, r.width, r.height].map { Double(($0 * 10).rounded() / 10) } }
 
-  var out = new ? (try? JSONSerialization.jsonObject(with: Data(contentsOf: outURL))) as? [String: Any] ?? [:] : [:]
-  for (n, name) in todo.enumerated() {
+  // The labeler's numbers: line numbers in ids.txt.
+  let ids = Dictionary(
+    ((try? String(contentsOf: captures.appending(path: "ids.txt"), encoding: .utf8)) ?? "").split(separator: "\n")
+      .enumerated().map { (String($1), $0 + 1) }, uniquingKeysWith: { a, _ in a })
+
+  // Guarded by `lock`.
+  nonisolated(unsafe) var out =
+    new ? (try? JSONSerialization.jsonObject(with: Data(contentsOf: outURL))) as? [String: Any] ?? [:] : [:]
+  nonisolated(unsafe) var n = 0
+  let lock = NSLock()
+  print("checked", "#", "missed", "extra", "values", separator: "\t")
+  // Each worker its own models, since a Vision request isn't safe to share.
+  // 2 took 24 s for 194 captures, 4 and 8 22 s, against 31 s for one.
+  let workers = min(4, todo.count)
+  DispatchQueue.concurrentPerform(iterations: workers) { worker in
+    let finder = try! Finder(model: MLModel(contentsOf: tiles))
+    let values = try! Classifier(model: MLModel(contentsOf: classes))
+    for name in todo[worker...].enumerated().filter({ $0.offset % workers == 0 }).map(\.element) {
+      try! check(name, finder, values)
+    }
+  }
+
+  func check(_ name: String, _ finder: Finder, _ values: Classifier) throws {
     let labels = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
       as! [[String: Any]]
     let url = captures.appending(path: name + ".png")
@@ -57,9 +77,13 @@
     }
     // A box on a tile out of scope isn't extra, nor is one the finder misses there missed.
     left.removeAll { !Finder.inScope(truth[$0], width: image.width, height: image.height) }
-    out[name] = !left.isEmpty || !extra.isEmpty || !misread.isEmpty
-      ? ["missed": left.map { array(truth[$0]) }, "extra": extra, "values": misread] : nil
-    print(n + 1, todo.count, name, left.count, extra.count, misread.count, separator: "\t")
+    lock.withLock {
+      out[name] = !left.isEmpty || !extra.isEmpty || !misread.isEmpty
+        ? ["missed": left.map { array(truth[$0]) }, "extra": extra, "values": misread] : nil
+      n += 1
+      let id = ids[String(name.split(separator: "/").last!)].map { "#\($0)" } ?? name
+      print("\(n)/\(todo.count)", id, left.count, extra.count, misread.count, separator: "\t")
+    }
   }
   try JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys]).write(to: outURL)
   try (checked.union(todo).sorted().joined(separator: "\n") + "\n").write(to: checkedURL, atomically: true, encoding: .utf8)

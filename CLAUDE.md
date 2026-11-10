@@ -80,7 +80,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     with 45.
   - On the capture page, every tile needs a box and nothing else may have one. Click adds an average-sized box, drag draws
     one. Enter marks a capture done. Values are optional. A tile cut off by the photo's edge gets a box too, which
-    may run past the edge.
+    may run past the edge. Its layout picker rewrites the truth: Full set and No tiles write theirs, and As read
+    clears it, to be written by hand. Tab follows the grid, a line at a time along most boxes' orientation.
   - http://localhost:8765/values/r6 shows every r6 in the done captures as a grid, each crop turned upright by its
     orientation, so a wrong orientation or value stands out; "Least sure" lists the unconfirmed ones `Values` is least
     sure of. The `fill` tool (`swift run -c release fill ../Captures`) writes what `Values` reads, with its odds,
@@ -90,7 +91,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones
     too, the boxes the finder misses, the boxes it finds that have none, and confirmed values `Values` reads as another
-    tile at least .8 sure. It takes 30 s for 186 captures. `make train` reruns it, and `make watch` runs `check --new`
+    tile at least .8 sure. It takes 22 s for 194 captures, four at a time; one at a time took 31 s. `make train` reruns it, and `make watch` runs `check --new`
     on captures newly done (those not in `.check.done`). The page lists those captures under Check, fewest first, and
     marks each spot, which `n` zooms to in turn; Enter there records the capture in `Captures/checked.txt`. On 2026-11-08 it flagged 120 of
     174: 470 boxes missed, 456 extra, 57 values. 279 of the misses had a finder box on them (median IoU .44), mostly

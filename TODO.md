@@ -59,15 +59,16 @@ path with no pose. Each step ships on its own and keeps the non-AR path working 
    `ar.history`, so steps 3 and 4 can be tuned and tested off the phone. For rack or table, wave the phone a little
    over the rack before capturing, while it's still scanning.
 3. **Rack or table, by geometry.** One frame's footprint doesn't separate them at the angles racks are shot (40–45°:
-   rack tiles measured 31×42–50 mm, the same as flat ones; only at 25–33° were they 60–80 deep). Two better tests,
-   both untested:
-   - *Parallax.* A flat tile's footprint stays put as the phone moves; a standing tile's top casts onto the table at a
-     different place from each viewpoint, so its footprint slides and stretches. Over a second of normal hand motion
-     that should be millimetres against centimetres. Check on step 2's logs.
-   - *Place.* The rack sits at the table's edge nearest the player, a row of tiles a few cm wide, and doesn't move
-     during a game. Once it's found, any tile there is rack.
-   Either would replace `Looking`, the tilt and the Table/Rack switch, and `Finder.nearest`. Score it with the rack
-   captures whose background is marked, against `nearest`'s 111 of 114 kept and 5 let through.
+   rack tiles measured 31×42–50 mm, the same as flat ones; only at 25–33° were they 60–80 deep). Nor, on 2026-11-11,
+   did two other single-tile tests beat Values' rack head, which keeps 135 of 140 rack tiles and lets 4 table tiles
+   through after `nearest`:
+   - *Parallax.* Over 9 frames and 10–20 cm of motion, rack tiles' tops wandered 14–33 mm on the table plane against
+     table tiles' 1–11, but the two nearest rack tiles only 7–18.
+   - *Taper* (`Standing`, in `ARCHIVE.md`): kept 116 of 135 with 6 let through.
+   What's left is *place*: the rack sits at the table's edge nearest the player and doesn't move during a game, and
+   its tiles' bottom edges held still on the table plane to 2–9 mm. Once Values has found it, any tile there is rack,
+   at any angle. That belongs to step 4's world table, and with it `Looking`, the tilt and the Table/Rack switch can
+   go.
 4. **A world table.** Replace the five-frame vote and `Scene.following` with tiles keyed by place: a detection joins
    the tile within half a tile of it, or starts one; each tile keeps its own vote of reads. Two of each tile are told
    apart by place. A pan then builds a table bigger than any frame; the table locks per tile, not per frame; a read

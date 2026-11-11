@@ -57,20 +57,27 @@
   }
   var total = Score()
   print((["capture"] + Score.header).joined(separator: "\t"))
-  /// The rack's tiles kept, and the table's let through, by `Finder.nearest` and then by Values' rack-or-table.
+  /// The rack's tiles kept, and the table's let through, by `Finder.nearest` and then by Values' rack-or-table; and,
+  /// of `nearest`'s, by `Standing.taper` alone, with how many it found no corners for.
   struct Rack: CustomStringConvertible {
-    var tiles = 0, nearest = 0, nearestTable = 0, standing = 0, standingTable = 0
+    var tiles = 0, nearest = 0, nearestTable = 0, standing = 0, standingTable = 0, tapered = 0, taperedTable = 0,
+      cornerless = 0
 
     static func += (a: inout Rack, b: Rack) {
       a = Rack(
         tiles: a.tiles + b.tiles, nearest: a.nearest + b.nearest, nearestTable: a.nearestTable + b.nearestTable,
-        standing: a.standing + b.standing, standingTable: a.standingTable + b.standingTable)
+        standing: a.standing + b.standing, standingTable: a.standingTable + b.standingTable,
+        tapered: a.tapered + b.tapered, taperedTable: a.taperedTable + b.taperedTable,
+        cornerless: a.cornerless + b.cornerless)
     }
 
     var description: String {
-      "nearest \(nearest)/\(tiles) +\(nearestTable) table, then on a rack \(standing)/\(tiles) +\(standingTable) table"
+      "nearest \(nearest)/\(tiles) +\(nearestTable) table, then on a rack \(standing)/\(tiles) +\(standingTable) table, "
+        + "or tapered \(tapered)/\(tiles) +\(taperedTable) table (\(cornerless) without corners)"
     }
   }
+  // TAPER=1.1 is how much longer a tile's top edge must come out than its bottom to stand.
+  let taperCutoff = environment["TAPER"].flatMap(Double.init) ?? 1.08
   var rackTotal = Rack()
   for name in done.filter(Finder.isHeldOut).sorted() {
     let labels = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
@@ -135,12 +142,34 @@
       var left = Set(truth.indices)
       let rack = Set(truth.indices).subtracting(background)
       var n = Rack(tiles: rack.count)
+      // The camera from the capture's notes: ARKit's intrinsics, else the lens's field of view at its zoom.
+      let notes = try JSONSerialization.jsonObject(with: Data(contentsOf: url.deletingPathExtension().appendingPathExtension("json")))
+        as! [String: Any]
+      let gravity = (notes["gravity"] as? [Double]).flatMap { $0.count == 3 ? SIMD3($0[0], $0[1], $0[2]) : nil }
+      let camera = notes["camera"] as? [String: Any]
+      let lens: (focal: Double, center: CGPoint)? =
+        if let k = (notes["ar"] as? [String: Any])?["intrinsics"] as? [Double] {
+          (k[0], CGPoint(x: Double(image.width) - k[7], y: k[6]))
+        } else if let fov = camera?["fieldOfView"] as? Double {
+          (Double(image.height) / 2 / tan(fov * .pi / 360) * (camera?["zoom"] as? Double ?? 1),
+           CGPoint(x: Double(image.width) / 2, y: Double(image.height) / 2))
+        } else { nil }
       for box in Finder.nearest(boxes) {
         guard let i = left.max(by: { Finder.overlap(truth[$0], box) < Finder.overlap(truth[$1], box) }),
           Finder.overlap(truth[i], box) > 0.5
         else { continue }
         left.remove(i)
         let standing = (reads?.first { $0.frame == box }?.rack ?? 1) >= 0.5
+        let taper = Standing.corners(in: image, box: box).flatMap { corners in
+          gravity.flatMap { g in lens.flatMap { Standing.taper(corners, gravity: g, focal: $0.focal, center: $0.center) } }
+        }
+        // TAPERS=1 prints each tile's taper.
+        if environment["TAPERS"] != nil {
+          print("taper", name, rack.contains(i) ? "rack" : "table", taper.map { String(format: "%.3f", $0) } ?? "-",
+            Int(box.height), standing ? "on a rack" : "", separator: "\t")
+        }
+        if taper == nil { n.cornerless += 1 }
+        if let taper, taper >= taperCutoff { if rack.contains(i) { n.tapered += 1 } else { n.taperedTable += 1 } }
         if rack.contains(i) {
           n.nearest += 1
           if standing { n.standing += 1 }

@@ -16,6 +16,7 @@ struct ContentView: View {
   @State private var editingNotes = false
   @State private var zoom = 1.0
   @State private var unsent: Int?
+  @AppStorage("ar") private var ar = false
   @Environment(\.scenePhase) private var scenePhase
 
   var body: some View {
@@ -41,6 +42,9 @@ struct ContentView: View {
           .safeAreaBar(edge: .top) {
             HStack {
               if let tilt = game.tilt { Text("\(Int(tilt))°") }
+              if ar, let frame = game.ar {
+                Text(frame.pose?.plane == nil ? "no table" : frame.tracking == "normal" ? "table" : frame.tracking)
+              }
               if let unsent {
                 if unsent > 0 { Label("\(unsent)", systemImage: "arrow.up.circle") } else { Image(systemName: "checkmark.circle") }
               }
@@ -107,7 +111,8 @@ struct ContentView: View {
             game.tilt = asin(max(-1, min(1, -gravity.z))) * 180 / .pi
           }
         }
-        for await frame in camera.frames { await game.see(frame) }
+        if ar { camera.use(ar: true) }
+        for await frame in camera.frames { await game.see(frame.image, ar: frame.pose == nil ? nil : frame) }
       } else {
         // No camera, as in the simulator: read a photo of whichever the picker says, as often as a camera would.
         while !Task.isCancelled {
@@ -146,7 +151,9 @@ struct ContentView: View {
     GeometryReader { geometry in
       let size = geometry.size
       ZStack {
-        if live {
+        if live && ar {
+          ARPreview(session: camera.arSession)
+        } else if live {
           CameraPreview(session: camera.session)
         } else if let frame = game.frame {
           Image(decorative: frame, scale: 1)
@@ -157,7 +164,7 @@ struct ContentView: View {
         }
         if let frame = game.frame, !pressing {
           Overlay(
-            boxes: game.boxes, detections: tab == 1 ? game.settled : game.detections, marks: game.marks,
+            boxes: game.boxes, footprints: game.footprints, detections: tab == 1 ? game.settled : game.detections, marks: game.marks,
             fit: Fit(image: CGSize(width: frame.width, height: frame.height), view: size))
         }
       }
@@ -167,16 +174,28 @@ struct ContentView: View {
 
   var lenses: some View {
     HStack(spacing: 4) {
-      ForEach(camera.zooms, id: \.self) { z in
-        Button(z == 0.5 ? ".5×" : "\(Int(z))×") {
-          zoom = z
-          camera.zoom(to: z)
+      // ARKit tracks only with the wide lens.
+      if !ar {
+        ForEach(camera.zooms, id: \.self) { z in
+          Button(z == 0.5 ? ".5×" : "\(Int(z))×") {
+            zoom = z
+            camera.zoom(to: z)
+          }
+          .foregroundStyle(zoom == z ? .yellow : .primary)
+          .frame(width: 36, height: 36)
         }
-        .font(.caption.bold().monospacedDigit())
-        .foregroundStyle(zoom == z ? .yellow : .primary)
+      }
+      if Camera.arSupported {
+        Button("AR") {
+          ar.toggle()
+          camera.use(ar: ar)
+          if !ar { camera.zoom(to: zoom) }
+        }
+        .foregroundStyle(ar ? .yellow : .primary)
         .frame(width: 36, height: 36)
       }
     }
+    .font(.caption.bold().monospacedDigit())
     .padding(4)
     .glassEffect()
   }
@@ -366,6 +385,8 @@ struct Fit {
 
 struct Overlay: View {
   let boxes: [CGRect]
+  /// Each box's size on the table, in metres, with ARKit.
+  var footprints = [SIMD2<Float>?]()
   let detections: [Detection]
   let marks: [Mark]
   let fit: Fit
@@ -376,6 +397,16 @@ struct Overlay: View {
         context.stroke(
           Path(roundedRect: fit(box), cornerRadius: 4), with: .color(.cyan.opacity(0.6)),
           style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+      }
+      // In millimetres, green where it's about a tile's size, so lying on the table; "∞" never meets it.
+      for (box, size) in zip(boxes, footprints) {
+        guard let size else { continue }
+        let rect = fit(box)
+        let lying = max(size.x, size.y) < 0.06
+        let text = size.y.isFinite ? "\(Int(size.x * 1000))×\(Int(size.y * 1000))" : "\(Int(size.x * 1000))×∞"
+        context.draw(
+          Text(text).font(.system(size: 10, weight: .bold).monospacedDigit()).foregroundStyle(lying ? .green : .orange),
+          at: CGPoint(x: rect.midX, y: rect.maxY + 7))
       }
       for detection in detections {
         let rect = fit(detection.frame)

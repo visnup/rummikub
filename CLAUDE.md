@@ -169,6 +169,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     Once the part in view is locked, frames are read a second apart.
   - A capture is a finger lifted off the camera (pressing hides everything drawn over it, to check the framing) or a
     second tap on the Capture tab. The tab's icon is a checkmark for 1.5 s after, so a burst doesn't make duplicates.
+  - AR, beside the lens buttons, hands the camera to ARKit, an experiment (`Pose.swift`): it finds the table as a
+    plane and measures each box on it, in mm under the box, green when tile-sized, so lying on the table; a standing
+    rack tile reaches far behind it. Captures then record the pose, planes and footprints under `ar`. On the Duo
+    ARKit has no LiDAR and tracks only with the wide lens, at 1920×1080 here to match the models.
   - The camera is the virtual multi-lens device, so .5× reaches the ultra wide; it starts at the widest, since a whole
     table fits from closer. Captures record the zoom as labeled and the lens.
   - Each frame's read and find times go to `Documents/timing/`, a file a launch, for `make timing`.

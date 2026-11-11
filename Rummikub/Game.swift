@@ -4,6 +4,7 @@ import Foundation
 import ImageIO
 import Observation
 import RummikubKit
+import simd
 import UniformTypeIdentifiers
 
 /// What the camera has read of the table and rack, the plays for them, and the step being shown.
@@ -122,7 +123,11 @@ import UniformTypeIdentifiers
 
   var play: Play? { plays.indices.contains(choice) ? plays[choice] : nil }
 
-  func see(_ image: CGImage) async {
+  /// ARKit's frame, when it's running the camera, and each box's size on the table it found (`Pose.footprint`).
+  var ar: Frame?
+  var footprints = [SIMD2<Float>?]()
+
+  func see(_ image: CGImage, ar: Frame? = nil) async {
     guard models != nil else { return }
     // Once locked, frames only watch for changes, so a second apart is enough and the phone stays cooler; while
     // stepping through a play, every frame, to follow each move.
@@ -152,6 +157,8 @@ import UniformTypeIdentifiers
     readTime = time
     self.findTime = findTime
     self.boxes = boxes ?? []
+    self.ar = ar
+    footprints = ar?.pose.map { pose in self.boxes.map(pose.footprint) } ?? []
     detections = found
     _ = try? timing?.seekToEnd()
     try? timing?.write(contentsOf: Data(
@@ -293,7 +300,7 @@ import UniformTypeIdentifiers
     let tilt = tilt.map { " \(Int($0))°" } ?? ""
     try? (looking.rawValue + tilt + "\n" + (layout.melds ?? read).map { $0 + "\n" }.joined())
       .write(to: base.appendingPathExtension("txt"), atomically: true, encoding: .utf8)
-    let info: [String: Any] = [
+    var info: [String: Any] = [
       "looking": looking.rawValue, "layout": layout.rawValue, "notes": notes, "tilt": self.tilt ?? NSNull(),
       "gravity": gravity ?? [], "readMilliseconds": readTime / .milliseconds(1),
       "findMilliseconds": findTime / .milliseconds(1), "camera": camera, "read": read,
@@ -302,6 +309,20 @@ import UniformTypeIdentifiers
         ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]]
       },
     ]
+    // Matrices column by column, in metres; footprints a box at a time, each null where it never meets the table.
+    if let ar, let pose = ar.pose {
+      func columns(_ m: simd_float4x4) -> [Float] { [m.columns.0, m.columns.1, m.columns.2, m.columns.3].flatMap { [$0.x, $0.y, $0.z, $0.w] } }
+      let k = pose.intrinsics
+      info["ar"] = [
+        "transform": columns(pose.transform), "intrinsics": [k.columns.0, k.columns.1, k.columns.2].flatMap { [$0.x, $0.y, $0.z] },
+        "resolution": [pose.resolution.width, pose.resolution.height], "tracking": ar.tracking,
+        "plane": pose.plane.map(columns) ?? NSNull(),
+        "planes": ar.planes.map {
+          ["transform": columns($0.transform), "extent": [$0.extent.x, $0.extent.y], "classification": $0.classification]
+        },
+        "footprints": footprints.map { size -> Any in size.map { [$0.x, $0.y] } ?? NSNull() },
+      ]
+    }
     try? JSONSerialization.data(withJSONObject: finite(info), options: [.prettyPrinted, .sortedKeys])
       .write(to: base.appendingPathExtension("json"))
   }

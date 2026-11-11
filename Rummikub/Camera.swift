@@ -1,13 +1,31 @@
 import ARKit
 import AVFoundation
 import CoreImage
+import RummikubKit
 import SwiftUI
 
-/// The back camera, as a session to preview and a stream of upright frames a few times a second.
-nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+/// An upright frame, and with ARKit where the camera was and the planes it has found.
+nonisolated struct Frame: Sendable {
+  let image: CGImage
+  var pose: Pose?
+  var planes = [Plane]()
+  var tracking = ""
+
+  struct Plane: Sendable {
+    let transform: simd_float4x4
+    let extent: SIMD2<Float>
+    let classification: String
+  }
+}
+
+/// The back camera, as a session to preview and a stream of upright frames a few times a second. With `ar`, ARKit's
+/// session runs it instead, which can't zoom: it tracks only with the wide lens.
+nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, ARSessionDelegate, @unchecked Sendable {
   let session = AVCaptureSession()
-  let frames: AsyncStream<CGImage>
-  private let continuation: AsyncStream<CGImage>.Continuation
+  let arSession = ARSession()
+  private(set) var ar = false
+  let frames: AsyncStream<Frame>
+  private let continuation: AsyncStream<Frame>.Continuation
   private let context = CIContext()
   private var device: AVCaptureDevice?
   /// Only touched on the capture queue.
@@ -27,6 +45,7 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
 
   /// What the camera is set to right now, for a capture's notes.
   var settings: [String: Any] {
+    if ar { return ["lens": "arkit", "arkit": Self.arkit] }
     guard let device else { return [:] }
     let gains = device.deviceWhiteBalanceGains
     return [
@@ -85,8 +104,38 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
 
   private let control = DispatchQueue(label: "camera control")
 
+  static var arSupported: Bool { ARWorldTrackingConfiguration.isSupported }
+
+  /// Hands the camera between AVFoundation and ARKit, which can't both have it.
+  func use(ar: Bool) {
+    control.async {
+      self.ar = ar
+      if ar {
+        self.session.stopRunning()
+        let configuration = ARWorldTrackingConfiguration()
+        configuration.planeDetection = .horizontal
+        // The size the models were made on.
+        if let format = ARWorldTrackingConfiguration.supportedVideoFormats.first(where: {
+          $0.imageResolution == CGSize(width: 1920, height: 1080) && $0.framesPerSecond == 30
+        }) {
+          configuration.videoFormat = format
+        }
+        self.arSession.delegateQueue = DispatchQueue(label: "ar")
+        self.arSession.delegate = self
+        self.arSession.run(configuration)
+      } else {
+        self.arSession.pause()
+        self.session.startRunning()
+      }
+    }
+  }
+
   /// Starts or stops the camera, off the main thread, since starting blocks.
   func run(_ on: Bool) {
+    if ar {
+      on ? arSession.run(arSession.configuration!) : arSession.pause()
+      return
+    }
     control.async {
       if on && !self.session.isRunning {
         self.session.startRunning()
@@ -101,8 +150,47 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     let image = CIImage(cvPixelBuffer: buffer)
     guard let frame = context.createCGImage(image, from: image.extent) else { return }
     last = Date()
-    continuation.yield(frame)
+    continuation.yield(Frame(image: frame))
   }
+
+  /// Copies what's needed out of each frame, since holding an ARFrame stalls the session.
+  func session(_ session: ARSession, didUpdate frame: ARFrame) {
+    guard Date().timeIntervalSince(last) > 0.2 else { return }
+    let image = CIImage(cvPixelBuffer: frame.capturedImage).oriented(.right)
+    guard let upright = context.createCGImage(image, from: image.extent) else { return }
+    last = Date()
+    let planes = frame.anchors.compactMap { $0 as? ARPlaneAnchor }.filter { $0.alignment == .horizontal }
+    let camera = frame.camera
+    // The table: the largest plane below the camera.
+    let table = planes.filter { $0.transform.columns.3.y < camera.transform.columns.3.y }
+      .max { $0.planeExtent.width * $0.planeExtent.height < $1.planeExtent.width * $1.planeExtent.height }
+    continuation.yield(Frame(
+      image: upright,
+      pose: Pose(intrinsics: camera.intrinsics, resolution: camera.imageResolution, transform: camera.transform,
+        plane: table?.transform),
+      planes: planes.map {
+        Frame.Plane(transform: $0.transform, extent: [$0.planeExtent.width, $0.planeExtent.height],
+          classification: "\($0.classification)")
+      },
+      tracking: "\(camera.trackingState)"))
+  }
+}
+
+struct ARPreview: UIViewRepresentable {
+  let session: ARSession
+
+  private static var shared: ARSCNView?
+
+  func makeUIView(context: Context) -> ARSCNView {
+    if let view = Self.shared { return view }
+    let view = ARSCNView()
+    view.session = session
+    view.debugOptions = [.showFeaturePoints]
+    Self.shared = view
+    return view
+  }
+
+  func updateUIView(_ view: ARSCNView, context: Context) {}
 }
 
 struct CameraPreview: UIViewRepresentable {

@@ -145,6 +145,13 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def end_headers(self):
+        if self.path.startswith("/photos/"):
+            self.send_header("Cache-Control", "max-age=31536000, immutable")
+        elif not self.path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def do_GET(self):
         # /captures/48 is capture #48 in the labeler, /values/r6 the r6s in the values page.
         if self.path == "/":

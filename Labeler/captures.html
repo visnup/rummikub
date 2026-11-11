@@ -56,7 +56,7 @@
   draw one; drag a box to move it, its corner to resize. Click a box to select it, shift-drag around several to select
   them, or <kbd>a</kbd> to select every unconfirmed one. Type a tile (<kbd>r12</kbd>, <kbd>j</kbd>) and
   <kbd>Enter</kbd> to set and confirm it, <kbd>?</kbd> for one you can't read, or just <kbd>Enter</kbd> to confirm what it shows; one box then goes on to
-  the next unconfirmed, unless it's <kbd>⇧Enter</kbd>. <kbd>←</kbd><kbd>→</kbd> turn its orientation, <kbd>X</kbd> marks it background (box it anyway: the table behind a rack, a rack at a table's edge), <kbd>⌫</kbd> deletes it, <kbd>Esc</kbd>
+  the next unconfirmed, unless it's <kbd>⇧Enter</kbd>. <kbd>←</kbd><kbd>→</kbd> turn its orientation, <kbd>x</kbd> marks it background (box it anyway: the table behind a rack, a rack at a table's edge), <kbd>⌫</kbd> deletes it, <kbd>Esc</kbd>
   selects none. With nothing selected, <kbd>Enter</kbd> marks the capture done and opens the next, <kbd>u</kbd>
   unmarks it, and <kbd>D</kbd> deletes it, to the Trash.
   Under Check, dashed red marks a box the finder misses, dashed blue a box it finds that has none (double-click to
@@ -479,7 +479,7 @@ window.onkeydown = e => {
   else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && (s || many.size)) {
     for (const t of s ? [s] : [...many].map(i => tiles[i])) t.turns = turn(t.turns, e.key);
     save();
-  } else if (e.key === "X" && (s || many.size)) {
+  } else if (e.key === "x" && !typed && (s || many.size)) {
     const marked = s ? [s] : [...many].map(i => tiles[i]), on = !marked.every(t => t.background);
     for (const t of marked) on ? t.background = true : delete t.background;
     save();

@@ -42,7 +42,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     beside the captures: right on a confirmed box with its value, extra on another value or no box. It takes
     `Captures/Tiles.mlpackage`. Against the written truth instead, on 2026-11-10, the same models read 1842 of 1926
     right with 202 extras, and against the boxes 1940 of 1997 with 39: the written truth was short on "As read"
-    captures and listed the table behind racks. For rack captures with boxes marked background (`X` in the labeler),
+    captures and listed the table behind racks. For rack captures with boxes marked background (`x` in the labeler),
     it also counts the rack's tiles `Finder.nearest` keeps and the background ones it lets through.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks

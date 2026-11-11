@@ -153,6 +153,12 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     continuation.yield(Frame(image: frame))
   }
 
+  /// Where the camera is now, for drawing between reads; no plane, since only the read frame's is used.
+  var pose: Pose? {
+    guard ar, let camera = arSession.currentFrame?.camera else { return nil }
+    return Pose(intrinsics: camera.intrinsics, resolution: camera.imageResolution, transform: camera.transform, plane: nil)
+  }
+
   /// Copies what's needed out of each frame, since holding an ARFrame stalls the session.
   func session(_ session: ARSession, didUpdate frame: ARFrame) {
     guard Date().timeIntervalSince(last) > 0.2 else { return }

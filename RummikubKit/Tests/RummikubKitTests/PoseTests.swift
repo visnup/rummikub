@@ -17,6 +17,23 @@ let intrinsics = simd_float3x3(columns: ([1000, 0, 0], [0, 1000, 0], [960, 540, 
   #expect(abs(size.y - 0.035) < 1e-4)
 }
 
+@Test func staysOnTheTable() {
+  // Looking down at 45° from 40 cm, then 5 cm to the right.
+  var transform = simd_float4x4(simd_quatf(angle: -.pi / 4, axis: [1, 0, 0]) * simd_quatf(angle: -.pi / 2, axis: [0, 0, 1]))
+  transform.columns.3 = [0, 0.4, 0, 1]
+  let then = Pose(intrinsics: intrinsics, resolution: CGSize(width: 1920, height: 1080), transform: transform,
+    plane: matrix_identity_float4x4)
+  let box = CGRect(x: 600, y: 1100, width: 60, height: 80)
+  let same = then.follow(box, to: then)!
+  #expect(abs(same.minX - box.minX) < 0.01 && abs(same.minY - box.minY) < 0.01 && abs(same.width - box.width) < 0.01)
+  var now = then
+  now.transform.columns.3.x += 0.05
+  let moved = then.follow(box, to: now)!
+  #expect(moved.midX < box.midX - 50)
+  #expect(abs(moved.maxY - box.maxY) < 1)
+  #expect(abs(moved.width - box.width) < 1)
+}
+
 @Test func standingNeverMeetsTheTable() {
   // Level with the table, 10 cm above it: the lower half of the image meets it, the upper half never does.
   // Held upright, the captured image's x runs down the screen.

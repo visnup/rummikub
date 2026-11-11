@@ -163,9 +163,18 @@ struct ContentView: View {
             .clipped()
         }
         if let frame = game.frame, !pressing {
-          Overlay(
-            boxes: game.boxes, footprints: game.footprints, detections: tab == 1 ? game.settled : game.detections, marks: game.marks,
-            fit: Fit(image: CGSize(width: frame.width, height: frame.height), view: size))
+          let fit = Fit(image: CGSize(width: frame.width, height: frame.height), view: size)
+          let overlay = { (fit: Fit) in
+            Overlay(
+              boxes: game.boxes, footprints: game.footprints, detections: tab == 1 ? game.settled : game.detections,
+              marks: game.marks, fit: fit)
+          }
+          // With ARKit, redrawn every display frame where the camera is now, as if on the table, between reads.
+          if live && ar, let then = game.ar?.pose, then.plane != nil {
+            TimelineView(.animation) { _ in overlay(fit.following(then, to: camera.pose)) }
+          } else {
+            overlay(fit)
+          }
         }
       }
     }
@@ -359,6 +368,14 @@ extension Game.Layout {
 struct Fit {
   let scale: CGFloat
   let offset: CGPoint
+  /// The pose the image was taken from, and the camera's now: image positions move to where they show now.
+  private var follow: (then: Pose, now: Pose)?
+
+  func following(_ then: Pose, to now: Pose?) -> Fit {
+    var fit = self
+    fit.follow = now.map { (then, $0) }
+    return fit
+  }
 
   init(image: CGSize, view: CGSize) {
     scale = max(view.width / image.width, view.height / image.height)
@@ -374,13 +391,15 @@ struct Fit {
   }
 
   func callAsFunction(_ rect: CGRect) -> CGRect {
-    CGRect(
+    let rect = follow.flatMap { $0.then.follow(rect, to: $0.now) } ?? rect
+    return CGRect(
       x: rect.minX * scale + offset.x, y: rect.minY * scale + offset.y, width: rect.width * scale,
       height: rect.height * scale)
   }
 
   func callAsFunction(_ point: CGPoint) -> CGPoint {
-    CGPoint(x: point.x * scale + offset.x, y: point.y * scale + offset.y)
+    let point = follow.flatMap { $0.then.follow(point, to: $0.now) } ?? point
+    return CGPoint(x: point.x * scale + offset.x, y: point.y * scale + offset.y)
   }
 }
 

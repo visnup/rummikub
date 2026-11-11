@@ -44,9 +44,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     **correctly**, **misread** as another value, or **unread** (Values not sure enough); of those read correctly, the
     **wrong orientation**; and a **phantom read** on a phantom or duplicate box. Reads are scored against the
     confirmed boxes, not the written truth, which was short on "As read" captures and listed the table behind racks.
-    On 2026-11-10: 2016 tiles, 24 missed, 35 phantom, 0 duplicate; of 2010 confirmed, 1956 read correctly, 16
-    misread, 17 unread, 18 phantom reads, and 328 in the wrong orientation, nearly all in whole captures read upright
-    though they're upside down or sideways (#45, #271, #62). For rack captures with boxes marked background (`x` in the labeler),
+    On 2026-11-11: 2058 tiles, 9 missed, 38 phantom, 0 duplicate; of 2052 confirmed, 2010 read correctly, 18
+    misread, 17 unread, 19 phantom reads. For rack captures with boxes marked background (`x` in the labeler),
     it also counts the rack's tiles `Finder.nearest` keeps and the background ones it lets through.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks
@@ -82,7 +81,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     905 with 103 in 60 minutes, small 950, for about a fifth less time. `QUARTERS` (0–4) and `SIZE` (`nano`,
     `small`) are for those comparisons, and `SNAPSHOTS` (`"15 30"`) saves checkpoints along one run for a curve over
     run lengths, since the rate is constant. On 2026-11-10, with 1988 held-out tiles, a fresh run found 1964 with 36
-    against the earlier best's 1969 with 23; it was kept.
+    against the earlier best's 1969 with 23; it was kept. On 2026-11-11, with 2058, a fresh run missed 9 with 38
+    extras against its 24 with 35, and replaced it; nano, YOLO26s and OWLv2 were rerun too (`ARCHIVE.md`).
   - `make labels` runs `prelabel.py`, then `fill`, then serves the pages at http://localhost:8765/captures
     (`/captures/48` is #48; also `labeler` in `.claude/launch.json`).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each

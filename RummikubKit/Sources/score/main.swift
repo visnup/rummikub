@@ -10,9 +10,14 @@
   //   score <captures>
   setvbuf(stdout, nil, _IOLBF, 0)
   let captures = URL(filePath: CommandLine.arguments[1])
-  let package = captures.appending(path: "Tiles.mlpackage")
-  let tiles = FileManager.default.fileExists(atPath: package.path) ? package : captures.appending(path: "Tiles.mlmodel")
+  let environment = ProcessInfo.processInfo.environment
+  // TILES=<package> scores another finder.
+  let tiles = environment["TILES"].map { URL(filePath: $0) } ?? captures.appending(path: "Tiles.mlpackage")
   var finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: tiles)))
+  // CONFIDENCE=0.4 moves the finder's cutoff, for detectors whose scores run lower.
+  if let confidence = environment["CONFIDENCE"].flatMap(Float.init) { finder.confidence = confidence }
+  // BOXES=<folder> scores boxes found elsewhere, `<name>.json` a capture, each box [x, y, width, height] in pixels.
+  let found = environment["BOXES"].map { URL(filePath: $0) }
   // WHOLE=1 looks in the whole image only, without crops.
   finder.cropped = (ProcessInfo.processInfo.environment["WHOLE"] ?? "").isEmpty
   // SIDE=0.5 crops squares half the short side of the image, rather than all of it.
@@ -76,7 +81,10 @@
     }
     let url = captures.appending(path: name + ".png")
     let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
-    let (boxes, used) = try finder.find(in: image)
+    let (boxes, used) = try found.map { folder in
+      let frames = try JSONSerialization.jsonObject(with: Data(contentsOf: folder.appending(path: name + ".json"))) as! [[Double]]
+      return (frames.map { CGRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]) }, 0)
+    } ?? finder.find(in: image)
     regions += used
     frames += 1
 

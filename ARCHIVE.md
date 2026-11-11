@@ -71,6 +71,10 @@ What was tried and dropped, so nobody repeats it.
   read no more right, the extra tiles too small for the classifier; YOLO (darknet) at 416 px found 746 with 155 after
   32 minutes. D-FINE small found 950 with 45. Ultralytics YOLO26s, AGPL so only a benchmark, found 924 with 56 in
   the same hour.
+- **The detectors again, 2026-11-11**, an hour each on that day's captures, scored by `score` on 2058 held-out tiles
+  (missed, phantom): the kept D-FINE small 24 and 35; a fresh D-FINE small 9 and 38 at .6; D-FINE nano 34 and 46 at
+  .6, 28 and 95 at .5; YOLO26s 7 and 50 at .5, 22 and 37 at .6; OWLv2 with a probe 123 and 292. YOLO26s matches
+  D-FINE small's finds with a few more phantoms, but it's AGPL. The scripts were `yolo.py` and `owl.py`, not kept.
 - **Create ML's own pre-labels**: `train` used to draw its boxes on unchecked captures. On the same held-out captures
   it found 199 of 263 tiles with 110 extras; OWLv2 with a probe found 248 with 14.
 - **OWLv2 with a linear probe as the pre-labeler** (`prelabel.py`, replaced 2026-11-08 by the finder). Frozen OWLv2 on

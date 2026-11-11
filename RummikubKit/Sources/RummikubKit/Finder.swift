@@ -18,6 +18,8 @@ public struct Finder: @unchecked Sendable {
   /// Skips the crops when every box the whole image finds is at least this many px on its short side, in a frame
   /// 1920 px long, since then there are no small tiles to look closer for.
   public var enough: Double?
+  /// Boxes less confident than this are dropped.
+  public var confidence: Float = 0.6
 
   public init(model: MLModel) throws {
     request = VNCoreMLRequest(model: try VNCoreMLModel(for: model))
@@ -48,7 +50,7 @@ public struct Finder: @unchecked Sendable {
       request.regionOfInterest = VNNormalizedRectForImageRect(
         CGRect(x: region.minX, y: Double(h) - region.maxY, width: region.width, height: region.height), w, h)
       try handler.perform([request])
-      for (box, confidence) in detections(in: region) where confidence > 0.6 {
+      for (box, confidence) in detections(in: region) where confidence > self.confidence {
         let inner = region.insetBy(dx: 2, dy: 2)
         let cut =
           box.minX < inner.minX && region.minX > 0 || box.maxX > inner.maxX && region.maxX < whole.maxX

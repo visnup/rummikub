@@ -49,15 +49,15 @@ table takes a pan), more battery than a stopped camera, and the Simulator has no
 path with no pose. Each step ships on its own and keeps the non-AR path working until step 5.
 
 1. **Labels pinned to the table.** Built 2026-11-11 as `Pose.follow`, a box's bottom edge carried from the read
-   frame's pose to the camera's now; not yet tried on the phone. As planned: each detection gets a world point: its box's bottom edge cast onto the table plane
+   frame's pose to the camera's now; on the phone it feels much better than labels that jump at each read. As planned: each detection gets a world point: its box's bottom edge cast onto the table plane
    (`Pose.ground`). A flat tile's lies under it; a rack tile's bottom edge sits near the table, so its point is close
    too. The overlay redraws every ARFrame by projecting those points with the current camera, so labels and step
    arrows stay on their tiles between reads, which run at 5 a second or less. About 100 lines: the projection in
    `Pose` (tested on the Mac), a per-frame callback that doesn't run the models, and the overlay drawing from world
    points.
-2. **Log AR sessions for the Mac.** Like `Documents/timing/`, write each read frame's pose, planes and boxes (no
-   pixels) a file a session, pulled by a make target. Steps 3 and 4 need sequences, not single captures, to be tuned
-   and tested off the phone. About 40 lines.
+2. **Sequences for the Mac.** Built 2026-11-11: each AR capture carries the last 10 s of frames read, in
+   `ar.history`, so steps 3 and 4 can be tuned and tested off the phone. For rack or table, wave the phone a little
+   over the rack before capturing, while it's still scanning.
 3. **Rack or table, by geometry.** One frame's footprint doesn't separate them at the angles racks are shot (40–45°:
    rack tiles measured 31×42–50 mm, the same as flat ones; only at 25–33° were they 60–80 deep). Two better tests,
    both untested:

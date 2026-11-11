@@ -160,6 +160,17 @@ import UniformTypeIdentifiers
     self.ar = ar
     footprints = ar?.pose.map { pose in self.boxes.map(pose.footprint) } ?? []
     detections = found
+    if let ar, var info = Self.info(ar, footprints: footprints) {
+      info.removeValue(forKey: "planes")
+      info["time"] = Date.now.timeIntervalSince1970
+      info["looking"] = looking.rawValue
+      info["boxes"] = self.boxes.map { [$0.minX, $0.minY, $0.width, $0.height] }
+      info["detections"] = found.map {
+        ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height],
+         "turns": $0.turns, "rack": $0.rack ?? NSNull()] as [String: Any]
+      }
+      history = history.filter { Date.now.timeIntervalSince1970 - ($0["time"] as! Double) < 10 } + [info]
+    }
     _ = try? timing?.seekToEnd()
     try? timing?.write(contentsOf: Data(
       "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(found.count),\(boxes?.count ?? -1)\n".utf8))
@@ -309,23 +320,33 @@ import UniformTypeIdentifiers
         ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]]
       },
     ]
-    // Matrices column by column, in metres; footprints a box at a time, each null where it never meets the table.
-    if let ar, let pose = ar.pose {
-      func columns(_ m: simd_float4x4) -> [Float] { [m.columns.0, m.columns.1, m.columns.2, m.columns.3].flatMap { [$0.x, $0.y, $0.z, $0.w] } }
-      let k = pose.intrinsics
-      info["ar"] = [
-        "transform": columns(pose.transform), "intrinsics": [k.columns.0, k.columns.1, k.columns.2].flatMap { [$0.x, $0.y, $0.z] },
-        "resolution": [pose.resolution.width, pose.resolution.height], "tracking": ar.tracking,
-        "plane": pose.plane.map(columns) ?? NSNull(),
-        "planes": ar.planes.map {
-          ["transform": columns($0.transform), "extent": [$0.extent.x, $0.extent.y], "classification": $0.classification]
-        },
-        "footprints": footprints.map { size -> Any in size.map { [$0.x, $0.y] } ?? NSNull() },
-      ]
+    if let ar, var now = Self.info(ar, footprints: footprints) {
+      now["history"] = history
+      info["ar"] = now
     }
     try? JSONSerialization.data(withJSONObject: finite(info), options: [.prettyPrinted, .sortedKeys])
       .write(to: base.appendingPathExtension("json"))
   }
+
+  /// An ARKit frame for a capture: matrices column by column, in metres; footprints a box at a time, each null where
+  /// it never meets the table.
+  nonisolated static func info(_ ar: Frame, footprints: [SIMD2<Float>?]) -> [String: Any]? {
+    guard let pose = ar.pose else { return nil }
+    func columns(_ m: simd_float4x4) -> [Float] { [m.columns.0, m.columns.1, m.columns.2, m.columns.3].flatMap { [$0.x, $0.y, $0.z, $0.w] } }
+    let k = pose.intrinsics
+    return [
+      "transform": columns(pose.transform), "intrinsics": [k.columns.0, k.columns.1, k.columns.2].flatMap { [$0.x, $0.y, $0.z] },
+      "resolution": [pose.resolution.width, pose.resolution.height], "tracking": ar.tracking,
+      "plane": pose.plane.map(columns) ?? NSNull(),
+      "planes": ar.planes.map {
+        ["transform": columns($0.transform), "extent": [$0.extent.x, $0.extent.y], "classification": $0.classification]
+      },
+      "footprints": footprints.map { size -> Any in size.map { [$0.x, $0.y] } ?? NSNull() },
+    ]
+  }
+
+  /// The last 10 s of frames read with ARKit, oldest first, for a capture: how tiles moved as the camera did.
+  private var history = [[String: Any]]()
 
   func solve() async {
     let table = scene.tableTiles, rack = scene.rackTiles

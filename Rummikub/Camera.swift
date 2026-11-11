@@ -161,9 +161,9 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     last = Date()
     let planes = frame.anchors.compactMap { $0 as? ARPlaneAnchor }.filter { $0.alignment == .horizontal }
     let camera = frame.camera
-    // The table: the largest plane below the camera.
+    // The table: the highest plane below the camera, not the floor.
     let table = planes.filter { $0.transform.columns.3.y < camera.transform.columns.3.y }
-      .max { $0.planeExtent.width * $0.planeExtent.height < $1.planeExtent.width * $1.planeExtent.height }
+      .max { $0.transform.columns.3.y < $1.transform.columns.3.y }
     continuation.yield(Frame(
       image: upright,
       pose: Pose(intrinsics: camera.intrinsics, resolution: camera.imageResolution, transform: camera.transform,

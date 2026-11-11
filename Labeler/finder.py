@@ -58,7 +58,10 @@ class Squares(torch.utils.data.IterableDataset):
         rng = random.Random()
         while True:
             path, boxes = rng.choice(self.items)
-            image = Image.open(path).convert("RGB")
+            try:
+                image = Image.open(path).convert("RGB")
+            except FileNotFoundError:  # deleted in the labeler while training
+                continue
             w, h = image.size
             if rng.random() < 0.2:
                 x, y, cw, ch = 0, 0, w, h

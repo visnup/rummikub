@@ -174,16 +174,17 @@ struct ContentView: View {
 
   var lenses: some View {
     HStack(spacing: 4) {
-      // ARKit tracks only with the wide lens.
-      if !ar {
-        ForEach(camera.zooms, id: \.self) { z in
-          Button(z == 0.5 ? ".5×" : "\(Int(z))×") {
-            zoom = z
-            camera.zoom(to: z)
+      ForEach(camera.zooms, id: \.self) { z in
+        Button(z == 0.5 ? ".5×" : "\(Int(z))×") {
+          zoom = z
+          if ar {
+            ar = false
+            camera.use(ar: false)
           }
-          .foregroundStyle(zoom == z ? .yellow : .primary)
-          .frame(width: 36, height: 36)
+          camera.zoom(to: z)
         }
+        .foregroundStyle(!ar && zoom == z ? .yellow : .primary)
+        .frame(width: 36, height: 36)
       }
       if Camera.arSupported {
         Button("AR") {

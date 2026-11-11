@@ -144,6 +144,8 @@ import UniformTypeIdentifiers
       if rack { boxes = boxes.map(Finder.nearest) }
       var found = [Detection]()
       let time = clock.measure { found = boxes.flatMap { try? classifier?.tiles(in: image, boxes: $0) } ?? [] }
+      // At the rack, Values says which tiles lie on the table behind it, where `nearest` couldn't.
+      if rack { found = found.filter { ($0.rack ?? 1) >= 0.5 } }
       return (found, boxes, findTime, time)
     }.value
     frame = image

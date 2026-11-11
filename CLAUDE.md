@@ -38,11 +38,15 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     ghost, and an arrow.
   - `Render.swift`: table images and where their tiles lie, for tests, and drawing overlays onto images.
   - `score` (`make score`) runs the finder on the held-out done captures, through `Finder`: tiles found (a box
-    overlapping a true one by half) and extra boxes, then the finder's boxes read by `Values.mlpackage` when it's
-    beside the captures: right on a confirmed box with its value, extra on another value or no box. It takes
-    `Captures/Tiles.mlpackage`. Against the written truth instead, on 2026-11-10, the same models read 1842 of 1926
-    right with 202 extras, and against the boxes 1940 of 1997 with 39: the written truth was short on "As read"
-    captures and listed the table behind racks. For rack captures with boxes marked background (`x` in the labeler),
+    overlapping a true one by half), then those boxes read by `Values.mlpackage` when it's beside the captures, as
+    the app reads them. It takes `Captures/Tiles.mlpackage`, and counts each error by name: a tile **missed**, a
+    **phantom** box on no tile, a **duplicate** box on a tile already found; of the confirmed tiles found, read
+    **correctly**, **misread** as another value, or **unread** (Values not sure enough); of those read correctly, the
+    **wrong orientation**; and a **phantom read** on a phantom or duplicate box. Reads are scored against the
+    confirmed boxes, not the written truth, which was short on "As read" captures and listed the table behind racks.
+    On 2026-11-10: 2016 tiles, 24 missed, 35 phantom, 0 duplicate; of 2010 confirmed, 1956 read correctly, 16
+    misread, 17 unread, 18 phantom reads, and 328 in the wrong orientation, nearly all in whole captures read upright
+    though they're upside down or sideways (#45, #271, #62). For rack captures with boxes marked background (`x` in the labeler),
     it also counts the rack's tiles `Finder.nearest` keeps and the background ones it lets through.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks

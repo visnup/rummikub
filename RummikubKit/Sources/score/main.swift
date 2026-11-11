@@ -28,23 +28,45 @@
   let done = ((try? String(contentsOf: captures.appending(path: "boxed.txt"), encoding: .utf8)) ?? "")
     .split(separator: "\n").map(String.init)
 
+  /// Each kind of error, by where it happens. The finder: a tile `missed` (no box), a `phantom` box (on no tile), a
+  /// `duplicate` box (a second on a tile already found). Then reading, of the confirmed tiles found, as the app reads
+  /// them (melds made valid at the table): read `correctly`, `misread` (another value, a 6 for a 9 among them), or
+  /// `unread` (Values not sure enough). A `phantom read` is a reading on a phantom or duplicate box. Orientation isn't
+  /// scored: nothing downstream uses it, and where it matters, 6 and 9, it's a misread.
   struct Score {
-    var tiles = 0, found = 0, extraBoxes = 0, valued = 0, classified = 0, extraClassified = 0, valid = 0, extraValid = 0
+    var tiles = 0, found = 0, phantom = 0, duplicate = 0
+    var confirmed = 0, correctly = 0, misread = 0, unread = 0, phantomRead = 0
+
+    static let header = ["tiles", "found", "missed", "phantom", "duplicate", "confirmed", "read correctly", "misread",
+      "unread", "phantom read"]
+    var columns: [Int] {
+      [tiles, found, tiles - found, phantom, duplicate, confirmed, correctly, misread, unread, phantomRead]
+    }
 
     static func += (a: inout Score, b: Score) {
       a = Score(
-        tiles: a.tiles + b.tiles, found: a.found + b.found, extraBoxes: a.extraBoxes + b.extraBoxes,
-        valued: a.valued + b.valued, classified: a.classified + b.classified,
-        extraClassified: a.extraClassified + b.extraClassified, valid: a.valid + b.valid, extraValid: a.extraValid + b.extraValid)
-    }
-
-    var columns: [String] {
-      ["\(found)/\(tiles) +\(extraBoxes)", "\(classified)/\(valued) +\(extraClassified)", "\(valid)/\(valued) +\(extraValid)"]
+        tiles: a.tiles + b.tiles, found: a.found + b.found, phantom: a.phantom + b.phantom,
+        duplicate: a.duplicate + b.duplicate, confirmed: a.confirmed + b.confirmed, correctly: a.correctly + b.correctly,
+        misread: a.misread + b.misread, unread: a.unread + b.unread, phantomRead: a.phantomRead + b.phantomRead)
     }
   }
   var total = Score()
-  print("capture", "found/tiles +extra", "classified +extra", "valid melds +extra", separator: "\t")
-  var rackTotal = (tiles: 0, kept: 0, table: 0)
+  print((["capture"] + Score.header).joined(separator: "\t"))
+  /// The rack's tiles kept, and the table's let through, by `Finder.nearest` and then by Values' rack-or-table.
+  struct Rack: CustomStringConvertible {
+    var tiles = 0, nearest = 0, nearestTable = 0, standing = 0, standingTable = 0
+
+    static func += (a: inout Rack, b: Rack) {
+      a = Rack(
+        tiles: a.tiles + b.tiles, nearest: a.nearest + b.nearest, nearestTable: a.nearestTable + b.nearestTable,
+        standing: a.standing + b.standing, standingTable: a.standingTable + b.standingTable)
+    }
+
+    var description: String {
+      "nearest \(nearest)/\(tiles) +\(nearestTable) table, then on a rack \(standing)/\(tiles) +\(standingTable) table"
+    }
+  }
+  var rackTotal = Rack()
   for name in done.filter(Finder.isHeldOut).sorted() {
     let labels = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
       as! [[String: Any]]
@@ -66,55 +88,64 @@
       guard labels[i]["confirmed"] as? Bool == true, !small(truth[i]), let tile = Tile(labels[i]["tile"] as! String) else { return nil }
       return (i, tile)
     })
-    var s = Score(tiles: truth.count { !small($0) }, valued: known.count)
-    var left = truth
+    var s = Score(tiles: truth.count { !small($0) }, confirmed: known.count)
+    // Each finder box's tile, nil for a phantom or duplicate.
+    var left = Set(truth.indices), tileOf = [Int?]()
     for box in boxes {
-      if let i = left.indices.max(by: { Finder.overlap(left[$0], box) < Finder.overlap(left[$1], box) }),
-        Finder.overlap(left[i], box) > 0.5
-      {
-        if !small(left[i]) { s.found += 1 }
-        left.remove(at: i)
+      let best = { (pool: Set<Int>) in pool.max { Finder.overlap(truth[$0], box) < Finder.overlap(truth[$1], box) } }
+      if let i = best(left), Finder.overlap(truth[i], box) > 0.5 {
+        if !small(truth[i]) { s.found += 1 }
+        left.remove(i)
+        tileOf.append(i)
       } else {
-        s.extraBoxes += 1
+        let taken = Set(truth.indices).subtracting(left)
+        if let i = best(taken), Finder.overlap(truth[i], box) > 0.5 { s.duplicate += 1 } else { s.phantom += 1 }
+        tileOf.append(nil)
       }
     }
-    /// Readings right and extra: right on a confirmed box with its value, extra on a box with another value or on no
-    /// box. One on an unconfirmed box or a tile out of scope counts as neither.
-    func score(_ readings: [Detection]) -> (right: Int, extra: Int) {
-      var left = Set(truth.indices), right = 0, extra = 0
-      for d in readings {
-        guard let i = left.max(by: { Finder.overlap(truth[$0], d.frame) < Finder.overlap(truth[$1], d.frame) }),
-          Finder.overlap(truth[i], d.frame) > 0.5
-        else {
-          extra += 1
+    func score(_ readings: [Detection]) {
+      for (box, i) in zip(boxes, tileOf) {
+        let read = readings.first { $0.frame == box }
+        guard let i else {
+          if read != nil { s.phantomRead += 1 }
           continue
         }
-        left.remove(i)
         guard let tile = known[i] else { continue }
-        if d.tile == tile { right += 1 } else { extra += 1 }
+        if let read {
+          if read.tile != tile { s.misread += 1 } else { s.correctly += 1 }
+        } else {
+          s.unread += 1
+        }
       }
-      return (right, extra)
     }
-    // At the rack the app keeps only `Finder.nearest`'s boxes: how many of the rack's tiles survive it, and how many of
-    // those marked background, the table behind it, do too. Only rack captures with background marked, since
-    // unmarked ones may not have been looked at.
+    let reads = try classifier?.tiles(in: image, boxes: boxes)
+    // At the rack the app keeps only `Finder.nearest`'s boxes, then the reads Values says are on a rack: how many of the
+    // rack's tiles survive each, and how many of those marked background, the table behind it, do too. Only rack
+    // captures with background marked, since unmarked ones may not have been looked at.
     let background = Set(labels.indices.filter { labels[$0]["background"] as? Bool == true })
     if lines.first?.hasPrefix("rack") == true, !background.isEmpty {
       var left = Set(truth.indices)
       let rack = Set(truth.indices).subtracting(background)
-      var kept = 0, table = 0
+      var n = Rack(tiles: rack.count)
       for box in Finder.nearest(boxes) {
         guard let i = left.max(by: { Finder.overlap(truth[$0], box) < Finder.overlap(truth[$1], box) }),
           Finder.overlap(truth[i], box) > 0.5
         else { continue }
         left.remove(i)
-        if rack.contains(i) { kept += 1 } else { table += 1 }
+        let standing = (reads?.first { $0.frame == box }?.rack ?? 1) >= 0.5
+        if rack.contains(i) {
+          n.nearest += 1
+          if standing { n.standing += 1 }
+        } else {
+          n.nearestTable += 1
+          if standing { n.standingTable += 1 }
+        }
       }
-      print("rack", name, "\(kept)/\(rack.count) +\(table)", separator: "\t")
-      rackTotal = (rackTotal.tiles + rack.count, rackTotal.kept + kept, rackTotal.table + table)
+      print("rack", name, n.description, separator: "\t")
+      rackTotal += n
     }
     if let classifier {
-      let classified = try classifier.tiles(in: image, boxes: boxes)
+      let classified = reads!
       // READS=1 prints each confirmed tile's reading, for a breakdown of what's misread.
       if ProcessInfo.processInfo.environment["READS"] != nil {
         let all = Recognizer.turned(try classifier.tiles(in: image, boxes: boxes, least: 0))
@@ -133,15 +164,14 @@
             Int(frame.height), t["turns"] as? Int ?? 0, read.turns, separator: "\t")
         }
       }
-      (s.classified, s.extraClassified) = score(classified)
       let table = lines.first?.hasPrefix("table") ?? false
       let turned = Recognizer.turned(classified)
-      (s.valid, s.extraValid) = score(table ? Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self) : turned)
+      score(table ? Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self) : turned)
     }
-    print(([name] + s.columns).joined(separator: "\t"))
+    print(([name] + s.columns.map(String.init)).joined(separator: "\t"))
     total += s
   }
-  print((["total"] + total.columns).joined(separator: "\t"))
+  print((["total"] + total.columns.map(String.init)).joined(separator: "\t"))
   print("regions", regions, "in", frames, "frames")
-  if rackTotal.tiles > 0 { print("rack tiles kept", "\(rackTotal.kept)/\(rackTotal.tiles) +\(rackTotal.table) table") }
+  if rackTotal.tiles > 0 { print("rack tiles kept", rackTotal.description, separator: "\t") }
 #endif

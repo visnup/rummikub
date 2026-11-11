@@ -3,8 +3,9 @@
 # dependencies = ["pillow"]
 # ///
 """Tile crops for Values, each 224 px square. Upright, one folder per tile (k1…r13, j): confirmed tiles of done
-captures that aren't held out, turned upright. Outside, one folder per tile: the outside sets' tiles as they lie, which
-join upright at the turn the last Values gave them.
+captures that aren't held out, turned upright, with `stands.tsv` saying which stand on a rack and which lie on the
+table. Outside, one folder per tile: the outside sets' tiles as they lie, which join upright at the turn the last
+Values gave them.
 uv run Labeler/crops.py <captures> <out> [<outside set>...]"""
 
 import json
@@ -30,19 +31,32 @@ def save(image, kind, tile, name):
     image.resize((224, 224), Image.Resampling.BILINEAR).save(out / kind / tile / f"{name}.jpg", quality=90)
 
 
+def looking(name):
+    txt = captures / f"{name}.txt"
+    words = txt.read_text().split() if txt.exists() else []
+    return words[0] if words else None
+
+
 for kind in ("upright", "turned", "outside"):
     shutil.rmtree(out / kind, ignore_errors=True)
+# In rack captures, whether each crop is on the rack or, marked background, the table behind it. Only rack captures,
+# since that's where the app asks: table captures' tiles outnumbered the rack's 17 to 1 and taught it flat tiles.
+stands = []
 for name in (captures / "boxed.txt").read_text().split():
     if held(name):
         continue
     tiles = [t for t in json.loads((captures / f"{name}.tiles.json").read_text()) if t.get("confirmed") and t.get("tile", "?") != "?"]
     image = Image.open(captures / f"{name}.png").convert("RGB") if tiles else None
+    seen = looking(name)
     for i, t in enumerate(tiles):
         upright = crop(image, t["frame"]).rotate(-90 * t.get("turns", 0), expand=True)
         if min(upright.size) < 20:
             continue
         key = f"{name.replace('/', '-')}-{i}"
         save(upright, "upright", t["tile"], key)
+        if seen == "rack":
+            stands.append(f"{t['tile']}/{key}.jpg\t{'table' if t.get('background') else 'rack'}\n")
+(out / "stands.tsv").write_text("".join(stands))
 for folder in outside:
     for labels in sorted(folder.glob("*.tiles.json")):
         stem = labels.name.removesuffix(".tiles.json")

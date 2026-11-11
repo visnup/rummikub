@@ -10,13 +10,18 @@ public struct Detection: Hashable, Sendable {
   public var odds = [Tile: Float]()
   /// The same at each orientation, from a classifier whose classes are tiles at an orientation.
   public var turned = [Tile: [Float]]()
+  /// How likely it stands on a rack rather than lies on the table, from a classifier that says.
+  public var rack: Float?
 
-  public init(tile: Tile, frame: CGRect, turns: Int = 0, odds: [Tile: Float] = [:], turned: [Tile: [Float]] = [:]) {
+  public init(
+    tile: Tile, frame: CGRect, turns: Int = 0, odds: [Tile: Float] = [:], turned: [Tile: [Float]] = [:], rack: Float? = nil
+  ) {
     self.tile = tile
     self.frame = frame
     self.turns = turns
     self.odds = odds
     self.turned = turned
+    self.rack = rack
   }
 }
 

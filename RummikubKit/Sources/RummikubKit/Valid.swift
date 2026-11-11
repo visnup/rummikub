@@ -32,7 +32,7 @@ extension Recognizer {
       guard total > 0, let best = odds.max(by: { $0.value < $1.value }) else { return d }
       return Detection(
         tile: best.key, frame: d.frame, turns: turn, odds: odds.mapValues { $0 / total }.filter { $0.value >= 0.001 },
-        turned: d.turned)
+        turned: d.turned, rack: d.rack)
     }
   }
 
@@ -78,7 +78,7 @@ extension Recognizer {
       }
       let read = meld.reduce(0) { $0 + cost($1, $1.tile) }
       guard let best, best.cost - read <= slack else { return meld }
-      return zip(meld, best.tiles).map { Detection(tile: $1, frame: $0.frame, turns: $0.turns, odds: $0.odds) }
+      return zip(meld, best.tiles).map { Detection(tile: $1, frame: $0.frame, turns: $0.turns, odds: $0.odds, rack: $0.rack) }
     }
   }
 }

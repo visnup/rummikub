@@ -65,21 +65,7 @@ struct ContentView: View {
           .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { topInset = $0 }
           .safeAreaBar(edge: .bottom) {
             if live {
-              HStack(spacing: 4) {
-                ForEach(camera.zooms, id: \.self) { z in
-                  Button(z == 0.5 ? ".5×" : "\(Int(z))×") {
-                    zoom = z
-                    camera.zoom(to: z)
-                  }
-                  .font(.caption.bold().monospacedDigit())
-                  .foregroundStyle(zoom == z ? .yellow : .primary)
-                  .frame(width: 36, height: 36)
-                }
-              }
-              .padding(4)
-              .glassEffect()
-              .padding(.bottom, 8)
-              .opacity(pressing ? 0 : 1)
+              lenses.padding(.bottom, 8).opacity(pressing ? 0 : 1)
             }
           }
       }
@@ -87,7 +73,11 @@ struct ContentView: View {
         panel(over: board) { solver }
           .safeAreaBar(edge: .top) {
             if !game.onBoard {
-              looking.fixedSize().padding(4).glassEffect().padding(.top, topInset == 0 ? 8 : 0)
+              HStack {
+                looking.fixedSize().padding(4).glassEffect()
+                if live { lenses }
+              }
+              .padding(.top, topInset == 0 ? 8 : 0)
             }
           }
           .background { if tab == 1 && !game.onBoard { preview } }
@@ -173,6 +163,22 @@ struct ContentView: View {
       }
     }
     .ignoresSafeArea()
+  }
+
+  var lenses: some View {
+    HStack(spacing: 4) {
+      ForEach(camera.zooms, id: \.self) { z in
+        Button(z == 0.5 ? ".5×" : "\(Int(z))×") {
+          zoom = z
+          camera.zoom(to: z)
+        }
+        .font(.caption.bold().monospacedDigit())
+        .foregroundStyle(zoom == z ? .yellow : .primary)
+        .frame(width: 36, height: 36)
+      }
+    }
+    .padding(4)
+    .glassEffect()
   }
 
   var looking: some View {

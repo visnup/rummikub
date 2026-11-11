@@ -97,13 +97,14 @@ public struct Finder: @unchecked Sendable {
     name.utf8.reduce(14_695_981_039_346_656_037 as UInt64) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 } % 5 == 0
   }
 
-  /// The boxes at least half as tall as the tallest. A rack's tiles stand nearest, so this drops the table's behind it,
-  /// which lie flat: in #280 the rack's were 115–156 px tall and the table's 37–55. Height, not the short side, since
-  /// flat tiles near the rack can be as wide as standing ones. It still drops a back-row tile hidden by the one in
-  /// front (#141's 8 and 13), and keeps a table tile tilted up (#86's joker).
+  /// The boxes at least .4 as tall as the tallest. A rack's tiles stand nearest, so this drops the table's behind it,
+  /// which lie flat. On the 15 rack captures with the table marked background (2026-11-10), .4 dropped 5 of 300 rack
+  /// tiles and kept 49 of 307 table ones; .5 dropped 34 and kept 32. No cutoff on height, width, area or either side
+  /// did better: in #284 and #285 the table's tiles are as big as the rack's, and a back-row tile hidden by the one in
+  /// front loses height.
   public static func nearest(_ boxes: [CGRect]) -> [CGRect] {
     let tallest = boxes.map(\.height).max() ?? 0
-    return boxes.filter { $0.height >= tallest / 2 }
+    return boxes.filter { $0.height >= tallest * 0.4 }
   }
 
   /// Whether a tile's box is big enough to be in scope, in an image this size.

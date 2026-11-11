@@ -1,3 +1,4 @@
+import ARKit
 import AVFoundation
 import CoreImage
 import SwiftUI
@@ -33,6 +34,18 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
       "whiteBalanceGains": [gains.redGain, gains.greenGain, gains.blueGain],
       "fieldOfView": device.activeFormat.videoFieldOfView, "zoom": device.videoZoomFactor, "zoomLabel": device.videoZoomFactor / wide,
       "lens": device.activePrimaryConstituent?.deviceType.rawValue ?? device.deviceType.rawValue,
+      "arkit": Self.arkit,
+    ]
+  }
+
+  /// What ARKit could give on this phone: LiDAR depth, and each camera and size it can track with.
+  static var arkit: [String: Any] {
+    [
+      "sceneDepth": ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth),
+      "formats": ARWorldTrackingConfiguration.supportedVideoFormats.map {
+        "\($0.captureDeviceType.rawValue) \(Int($0.imageResolution.width))x\(Int($0.imageResolution.height)) \($0.framesPerSecond)fps"
+          + ($0.isRecommendedForHighResolutionFrameCapturing ? " high-res" : "")
+      },
     ]
   }
 

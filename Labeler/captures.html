@@ -290,7 +290,7 @@ function crops() {
     const of = tiles.map((t, i) => [t, i]).filter(([t]) => (t.tile === "?" ? "?" : t.tile[0]) === color);
     const wanted = Object.keys(want).filter(t => t[0] === color);
     const valued = color !== "j" && color !== "?", used = {}, taken = new Set();
-    if (!valued && !of.length && !wanted.length) continue;
+    if (!of.length && !wanted.length) continue;
     const fg = color === "k" ? "var(--fg)" : ink[color] ?? "inherit";
     let rows = 1;
     const place = (cell, tile, n) => {

@@ -112,7 +112,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     2026-11-12, with 2220, three runs missed 19, 10 and 16 with 20, 32 and 27 extras, against its 11 with 42; the
     second replaced it. The retrained `Values` misread 14 where the last one misread 29. Later that day, with 2289, a
     fresh run missed 22 with 23 extras against its 9 with 27, and was dropped; `Values` retrained misread 14 against
-    the last one's 18, and was kept.
+    the last one's 18, and was kept. Then, with 2309 and phantoms scoped, a fresh run missed 9 with 22 phantoms
+    against its 11 with 19, and replaced it, so prelabeling would have a checkpoint again.
   - `make labels` runs `prelabel.py`, then `fill`, then serves the pages on Vite's dev server at
     http://localhost:8765/captures
     (`/captures/48` is #48; also `labeler` in `.claude/launch.json`). Over the VPN bytes matter most, so photos go
@@ -122,7 +123,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet. `make watch` runs it
     every 30 s while capturing, beside `make labels`, which takes the app's pushes. It's the finder, from the
     kept finder's checkpoint, `Captures/.finder`, read as `Finder` reads, so it improves only as `make keep-finder`
-    takes a better one. On 2026-11-12 it's the run that missed 22, since the 9's checkpoint wasn't kept. It replaced OWLv2 with a linear probe, which found 897 of 1013 held-out tiles with 153 extras to its 950
+    takes a better one. It replaced OWLv2 with a linear probe, which found 897 of 1013 held-out tiles with 153 extras to its 950
     with 45.
   - On the capture page, every tile needs a box and nothing else may have one. Click adds an average-sized box, drag draws
     one. Enter marks a capture done. Values are optional. A tile cut off by the photo's edge gets a box too, which

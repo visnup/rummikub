@@ -68,7 +68,7 @@ train:
 # goes beside the kept one, which the app, prelabeling, check and score go on using until `make keep-finder`.
 finder:
 	uv run Labeler/finder.py $(dir) $(wildcard Outside/*-train)
-	TILES=$(dir)/Tiles-new.mlpackage $(MAKE) score
+	TILES=$(CURDIR)/$(dir)/Tiles-new.mlpackage $(MAKE) score
 
 # Keeps the finder `make finder` trained, for everything, and gives the app it.
 keep-finder:

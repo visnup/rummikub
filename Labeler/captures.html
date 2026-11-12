@@ -9,23 +9,21 @@
   #missing .dispute { color: var(--dispute); }
   #view { flex: 1; overflow: auto; position: relative; display: flex; }
   #canvas { display: block; cursor: crosshair; margin: auto; flex: none; }
-  aside { flex: none; overflow: auto; border-left: 1px solid var(--line); padding: 6px; display: grid; grid-template-columns: 12px repeat(13, 24px); gap: 1px; align-content: start; justify-content: center; font: bold 11px ui-monospace, monospace; }
+  aside { flex: none; overflow: auto; border-left: 1px solid var(--line); padding: 6px; display: grid; grid-template-columns: 16px repeat(13, 36px); gap: 1px; align-content: safe center; justify-content: center; font: bold 13px ui-monospace, monospace; }
   aside canvas, aside div { outline: 1px solid var(--line); }
   aside span { text-align: center; color: var(--muted); align-self: center; }
-  aside canvas { width: 24px; height: 32px; border-bottom: 3px solid var(--unconfirmed); cursor: pointer; }
+  aside canvas { width: 36px; height: 48px; border-bottom: 3px solid var(--unconfirmed); cursor: pointer; }
   aside canvas.confirmed { border-color: var(--confirmed); }
   aside canvas.extra { border-color: var(--dispute); }
   aside canvas.background { opacity: 0.35; }
   aside canvas.selected { outline: 2px solid var(--selected); }
-  aside div { width: 24px; height: 35px; box-sizing: border-box; display: grid; place-items: center; font-size: 9px; opacity: 0.6; }
+  aside div { width: 36px; height: 51px; box-sizing: border-box; display: grid; place-items: center; font-size: 12px; opacity: 0.6; }
   aside div.wanted { border: 1px dashed var(--muted); opacity: 1; }
   @media (max-width: 1200px) {
     body { display: grid; grid-template: 1fr auto / auto 1fr; }
     nav { grid-row: 1 / 3; }
     main { min-height: 0; }
-    aside { grid-column: 2; max-height: 60vh; border-left: 0; border-top: 1px solid var(--line); grid-template-columns: 16px repeat(13, 36px); font-size: 13px; }
-    aside canvas { width: 36px; height: 48px; }
-    aside div { width: 36px; height: 51px; font-size: 12px; }
+    aside { grid-column: 2; max-height: 60vh; border-left: 0; border-top: 1px solid var(--line); align-content: start; }
   }
 </style>
 </head>

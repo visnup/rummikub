@@ -28,9 +28,10 @@ app pushes each one to `Captures/`.
 ## Solver speed
 
 The integer program solves the benchmark boards in 5–27 ms, and 800 random boards of up to 16 melds average 2–4 ms.
-A few take longer: the slowest seen, 16 melds with two jokers on the table and a 10-tile rack, took 0.29 s and about
-a thousand branch-and-bound nodes, nearly all proving the most "kept" for a front point. Ideas: a rounding
-heuristic for an early incumbent, or cuts.
+A few take longer. `bench random 800` deals them; on 2026-11-11 its slowest, 15 melds with two jokers and a 14-tile
+rack, took 0.32 s. Its first front point took 983 nodes, and it had a whole solution at node 11 and the best at 211:
+the rest prove that a 15th tile can't be placed (the relaxation says 15.4). So an early incumbent, by rounding or
+otherwise, won't help; only a tighter relaxation will, like cuts.
 
 ## App
 

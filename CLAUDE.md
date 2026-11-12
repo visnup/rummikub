@@ -214,7 +214,8 @@ rearrangements. What we settled on:
 - `make test` runs everything in the package, the solver and the overlays on rendered tables. `RENDER_DIR=<dir>
   swift test` also writes the step overlays there as PNGs.
 - `swift run -c release bench "<table>" "<rack>"` times one solve. The benchmark boards are in `SolverTests`
-  (`midgame`, `lateGame`).
+  (`midgame`, `lateGame`). `bench random 800` times 800 boards dealt from a shuffled set by a fixed seed and prints
+  the slowest five: on 2026-11-11, 3.4 ms on average, 0.32 s at worst.
 - Recognition is scored on captures by `make score`, and the models by their training scripts.
 - Captures from the phone: each capture saves three files to the app's Documents, and pushes them to the labeler:
   - `<ISO time>.png`. PNG, so it holds the pixels the phone read; the first seven were JPEG, converted to PNG on the

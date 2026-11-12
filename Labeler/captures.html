@@ -9,7 +9,8 @@
   #missing .dispute { color: var(--dispute); }
   #view { flex: 1; overflow: auto; position: relative; display: flex; }
   #canvas { display: block; cursor: crosshair; margin: auto; flex: none; }
-  aside { flex: none; overflow: auto; border-left: 1px solid var(--line); padding: 6px; display: grid; grid-template-columns: 12px repeat(13, 24px); gap: 2px; align-content: start; justify-content: center; font: bold 11px ui-monospace, monospace; }
+  aside { flex: none; overflow: auto; border-left: 1px solid var(--line); padding: 6px; display: grid; grid-template-columns: 12px repeat(13, 24px); gap: 1px; align-content: start; justify-content: center; font: bold 11px ui-monospace, monospace; }
+  aside canvas, aside div { outline: 1px solid var(--line); }
   aside span { text-align: center; color: var(--muted); align-self: center; }
   aside canvas { width: 24px; height: 32px; border-bottom: 3px solid var(--unconfirmed); cursor: pointer; }
   aside canvas.confirmed { border-color: var(--confirmed); }

@@ -227,7 +227,9 @@ function draw() {
     ctx.lineWidth = i === selected || many.has(i) ? 3 : 2;
     ctx.strokeStyle = color(i === selected || many.has(i) ? "--selected" : t.confirmed ? "--confirmed" : "--unconfirmed");
     ctx.globalAlpha = t.background ? 0.45 : 1;
+    ctx.setLineDash(t.background ? [6, 4] : []);
     ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
     const turns = t.turns || 0, text = label(t), width = ctx.measureText(text).width + 6;
     // Against the edge that's the tile's bottom at its orientation.
     // Under the text, a bar as long as the value, so a run's bars climb steadily and a misread stands out.

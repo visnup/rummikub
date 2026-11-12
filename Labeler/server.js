@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, appendFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { brotliCompressSync, constants } from "node:zlib";
+import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 import sharp from "sharp";
 
 const captures = resolve(import.meta.dirname, "../Captures");
@@ -134,13 +134,21 @@ const body = req => new Promise((done, fail) => {
   const chunks = [];
   req.on("data", c => chunks.push(c)).on("end", () => done(Buffer.concat(chunks))).on("error", fail);
 });
-/** Brotli where the browser takes it: /api/values is 2.6 MB as JSON, 370 kB compressed, which matters over the VPN. */
+/** Compressed, which matters over the VPN: /api/values is 2.6 MB as JSON. Brotli where the browser takes it, but
+ * browsers offer it only over HTTPS, so over plain HTTP it's gzip. */
 const json = (res, v) => {
   res.setHeader("Content-Type", "application/json");
-  const text = JSON.stringify(v);
-  if (text.length < 1024 || !/\bbr\b/.test(res.req.headers["accept-encoding"] ?? "")) return res.end(text);
-  res.setHeader("Content-Encoding", "br");
-  res.end(brotliCompressSync(text, { params: { [constants.BROTLI_PARAM_QUALITY]: 5 } }));
+  const text = JSON.stringify(v), accepts = res.req.headers["accept-encoding"] ?? "";
+  if (text.length < 1024) return res.end(text);
+  if (/\bbr\b/.test(accepts)) {
+    res.setHeader("Content-Encoding", "br");
+    return res.end(brotliCompressSync(text, { params: { [constants.BROTLI_PARAM_QUALITY]: 5 } }));
+  }
+  if (/\bgzip\b/.test(accepts)) {
+    res.setHeader("Content-Encoding", "gzip");
+    return res.end(gzipSync(text));
+  }
+  res.end(text);
 };
 
 /** A capture's photo as WebP, made once and kept in .web/ until the PNG changes: 290 kB against the PNG's 2.6 MB. */

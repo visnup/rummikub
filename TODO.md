@@ -2,24 +2,26 @@
 
 ## Next
 
-- **A real game on the phone**: scan the table and rack, let both lock, step through a play and Finish. Nothing has
-  tested the whole loop on today's models.
-- **The finder's misses.** On 2026-11-09, 38 held-out tiles in scope went unfound:
-  - 10 in #206, the new tile set still in its wrap; it needs captures of its own (below).
-  - 5 in #48, a fanned full set whose boxes sit off their tiles: fix them in the labeler.
-  - 16 stacked, overlapping or partly covered, at low angles (#128, #130, #144) and close up (#158, #160). Those are
-    what a table looks like mid-turn, so captures of real play, then several training runs, keeping the best: runs
-    vary by about 20 tiles.
-- **Speed.** A frame takes about 150 ms to find and 20–90 ms to read on the phone. Time reading again now that a
-  frame's boxes go to Values in one call, and the squares are skipped when the whole frame finds only large tiles.
+- **A real game on the phone**: scan the table and rack, let both lock, step through a play and Finish, once without
+  AR and once with it, recording. Nothing has tested the whole loop on the 2026-11-12 models, the "Laid down 30"
+  switch, or `World.melds` outside a replay.
+- **Speed.** A frame took about 150 ms to find and 20–90 ms to read on the phone (2026-11-09). Since then a frame's
+  boxes go to Values in one call, and the app skips the squares when the whole frame finds only tiles 80 px or more
+  (a fifth fewer regions in `score`). Time both with `make timing`.
+- **Phantom boxes** are now the finder's biggest error: 32 on held-out captures against 10 tiles missed
+  (2026-11-12). Most are in a few captures: #156 (6), #114 (5), #48 (4), #27 (3). Look at what they sit on; if it's
+  something real, like a keyboard or a game box, capture more of it with no tiles.
+- **The last misses**: #130 (3), #48 (2, the fanned full set with boxes off their tiles), and one each in #86, #128,
+  #160, #206 and #267: stacked or low-angle tiles, what a table looks like mid-turn, so captures of real play.
+- **Misreads**: 14 misread and 17 unread of 2210. #263 has 9 of them; #320 and #255 most of the rest.
+- **`make check`** flags 92 done captures: 50 boxes missed, 109 extra and 17 values, mostly training captures whose
+  labels the models disagree with. Work through "to check first" in the labeler, then retrain.
 
 ## Captures
 
 Unchecked kinds, roughly in order of what they unblock. Pick the layout and tag the tile set before shooting; the
 app pushes each one to `Captures/`.
 
-- **The new tile set** (#206's): out of its wrap, the full set half at a time so tiles are 50 px or more, at a couple
-  of angles and orientations; then racks and melds in play.
 - **Real games**: crowded mid-game tables with tiles touching, tiles being moved, the rack in a corner of the frame.
 - **Light**: warm overhead, dim evening, a lamp making glare, daylight and lamp mixed; racks too.
 - **Surfaces**: a white table, a patterned cloth, and each surface from above with no tiles.
@@ -38,6 +40,8 @@ otherwise, won't help; only a tighter relaxation will, like cuts.
   rack.
 - A flat diagram of the finished table for plays that rebuild most of it (see "Design" in `CLAUDE.md`). Comes free
   with step 4 below.
+- "Laid down 30" starts on at every launch, so a new game means switching it off by hand. It could be part of a
+  "New game" button that also clears the table.
 
 ## ARKit throughout
 
@@ -48,15 +52,11 @@ large set), once ARKit had found the table. What it costs: no ultra wide (ARKit 
 table takes a pan), more battery than a stopped camera, and the Simulator has no ARKit, so `Demo/` photos keep a
 path with no pose. Each step ships on its own and keeps the non-AR path working until step 5.
 
-1. **Labels pinned to the table.** Built 2026-11-11 as `Pose.follow`, a box's bottom edge carried from the read
-   frame's pose to the camera's now; on the phone it feels much better than labels that jump at each read. As planned: each detection gets a world point: its box's bottom edge cast onto the table plane
-   (`Pose.ground`). A flat tile's lies under it; a rack tile's bottom edge sits near the table, so its point is close
-   too. The overlay redraws every ARFrame by projecting those points with the current camera, so labels and step
-   arrows stay on their tiles between reads, which run at 5 a second or less. About 100 lines: the projection in
-   `Pose` (tested on the Mac), a per-frame callback that doesn't run the models, and the overlay drawing from world
-   points.
+1. **Labels pinned to the table.** Done 2026-11-11 (`Pose.follow`): on the phone it feels much better than labels
+   that jump at each read.
 2. **Sequences for the Mac.** Built 2026-11-11: AR recordings log every frame read, for `swift run world`, so steps
-   3 and 4 can be tuned and tested off the phone. Not yet recorded on the phone.
+   3 and 4 can be tuned and tested off the phone. None recorded on the phone yet; the first should be a crowded
+   table, to check `World.melds`' bounds.
 3. **Rack or table, by geometry.** One frame's footprint doesn't separate them at the angles racks are shot (40–45°:
    rack tiles measured 31×42–50 mm, the same as flat ones; only at 25–33° were they 60–80 deep). Nor, on 2026-11-11,
    did two other single-tile tests beat Values' rack head, which keeps 135 of 140 rack tiles and lets 4 table tiles
@@ -74,13 +74,13 @@ path with no pose. Each step ships on its own and keeps the non-AR path working 
    - Lock per tile, not per part, and don't read again a tile already sure, which saves the reader most of its time.
    - Plays on places: a step's ghost slot a point on the table, `stepsDone` seeing tiles move, `Scene.following`
      gone, and the Board the table from above in table coordinates.
-   - Check `World.melds`' bounds on a crowded table: they're fit to one sparse one.
 5. **AR as the only camera.** Once 1–4 beat today's on the phone, drop the AVCaptureSession path, the lens buttons,
-   `Looking` and the tilt, keeping a no-pose path for the Simulator and tests. Captures always record the pose.
+   `Looking` and the tilt, the five-frame vote and `Game.onRack`, keeping a no-pose path for the Simulator and tests.
+   Captures always record the pose.
 
 ## Models out of git
 
-Each finder retrain adds about 20 MB to git, and the pack was 105 MB on 2026-11-11. Move the models to a Hugging
+Each finder retrain adds about 20 MB to git (fe4ac1e did again), and the pack was 105 MB on 2026-11-11. Move the models to a Hugging
 Face model repo beside the captures dataset, `visnup/rummikub-models` (private): `make finder` and `make values`
 upload with the `score` line as the message and a tag, `make` and `make sim` `hf download` the revision pinned in the
 Makefile into `Rummikub/`, and the packages are gitignored. About 10 lines. The laptop needs `hf auth login` once, and

@@ -55,9 +55,8 @@ path with no pose. Each step ships on its own and keeps the non-AR path working 
    arrows stay on their tiles between reads, which run at 5 a second or less. About 100 lines: the projection in
    `Pose` (tested on the Mac), a per-frame callback that doesn't run the models, and the overlay drawing from world
    points.
-2. **Sequences for the Mac.** Built 2026-11-11: each AR capture carries the last 10 s of frames read, in
-   `ar.history`, so steps 3 and 4 can be tuned and tested off the phone. For rack or table, wave the phone a little
-   over the rack before capturing, while it's still scanning.
+2. **Sequences for the Mac.** Built 2026-11-11: AR recordings log every frame read, for `swift run world`, so steps
+   3 and 4 can be tuned and tested off the phone. Not yet recorded on the phone.
 3. **Rack or table, by geometry.** One frame's footprint doesn't separate them at the angles racks are shot (40–45°:
    rack tiles measured 31×42–50 mm, the same as flat ones; only at 25–33° were they 60–80 deep). Nor, on 2026-11-11,
    did two other single-tile tests beat Values' rack head, which keeps 135 of 140 rack tiles and lets 4 table tiles

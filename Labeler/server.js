@@ -213,11 +213,11 @@ async function api(req, res, path, query) {
     }
     return json(res, { deleted: name });
   }
-  // A capture file pushed from the app. One already here is kept. Once a capture's photo arrives, after its notes, an
+  // A capture file pushed from the app, or a recording's log (.jsonl). One already here is kept. Once a capture's photo arrives, after its notes, an
   // "As read" one goes to unlabeled/ until its truth is written.
   if (method === "PUT" && path.startsWith("/api/capture/")) {
     const name = rest("/api/capture/");
-    if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\.(png|txt|json)$/.test(name)) return fail(res, 400);
+    if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\.(png|txt|json|jsonl)$/.test(name)) return fail(res, 400);
     const data = await body(req);
     if (names(removed).has(name) || existsSync(join(captures, name)) || existsSync(join(captures, "unlabeled", name)))
       return json(res, { kept: name });

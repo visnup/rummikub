@@ -47,10 +47,11 @@ public struct World: Sendable {
   static let forgotten = 3
 
   /// Adds a frame's reads, each to the place within half a tile of its point, nearest first, or to a new place. Places
-  /// it should have seen and didn't are counted as missed. Returns each detection's place, nil where the pose has no
+  /// it should have seen and didn't are counted as missed, unless something covers them: a person, by `mask`, or
+  /// another box, like a rack tile in front of the table. Returns each detection's place, nil where the pose has no
   /// table or the box's foot misses it.
   @discardableResult
-  public mutating func add(_ detections: [Detection], pose: Pose) -> [Int?] {
+  public mutating func add(_ detections: [Detection], pose: Pose, mask: Mask? = nil) -> [Int?] {
     guard pose.plane != nil else { return detections.map { _ in nil } }
     let feet = detections.map { d -> (point: SIMD3<Float>, width: Float)? in
       let box = d.frame
@@ -76,7 +77,13 @@ public struct World: Sendable {
       taken.insert(pair.place)
     }
 
-    for j in places.indices where !taken.contains(j) && shows(places[j], from: pose) { places[j].missed += 1 }
+    for j in places.indices where !taken.contains(j) {
+      guard let box = box(places[j], from: pose), shows(box, in: pose) else { continue }
+      let area = box.width * box.height
+      let covered = (mask?.covers(box, resolution: pose.resolution) ?? 0) >= 0.3
+        || detections.contains { d in let o = d.frame.intersection(box); return !o.isNull && o.width * o.height >= area * 0.3 }
+      if !covered { places[j].missed += 1 }
+    }
     var ids = [Int?](repeating: nil, count: detections.count)
     for (i, d) in detections.enumerated() {
       guard let foot = feet[i] else { continue }
@@ -132,11 +139,41 @@ public struct World: Sendable {
 
   /// Whether the finder should have found it from `pose`: in the image, a tile from its edges, and as big as the
   /// finder finds reliably (`Finder.smallest`).
-  func shows(_ place: Place, from pose: Pose) -> Bool {
-    guard let box = box(place, from: pose) else { return false }
+  func shows(_ box: CGRect, in pose: Pose) -> Bool {
     let image = CGRect(origin: .zero, size: CGSize(width: pose.resolution.height, height: pose.resolution.width))
     return min(box.width, box.height) >= Finder.smallest
       && image.insetBy(dx: box.width, dy: box.height).contains(CGPoint(x: box.midX, y: box.maxY))
+  }
+
+  /// Where a person covers the image, from ARKit's segmentation: a small mask over the image as captured, nonzero for
+  /// the person.
+  public struct Mask: Sendable {
+    public let width: Int, height: Int, bytes: [UInt8]
+
+    public init(width: Int, height: Int, bytes: [UInt8]) {
+      self.width = width
+      self.height = height
+      self.bytes = bytes
+    }
+
+    /// A mask `k` times smaller each way, set wherever any pixel under it was.
+    public func shrunk(by k: Int) -> Mask {
+      let w = width / k, h = height / k
+      return Mask(width: w, height: h, bytes: (0..<h).flatMap { y in
+        (0..<w).map { x in (0..<k).contains { dy in (0..<k).contains { bytes[(y * k + dy) * width + x * k + $0] > 0 } } ? 255 : 0 }
+      })
+    }
+
+    /// The share of a box in the upright image, of an image captured at `resolution`, that the person covers.
+    public func covers(_ box: CGRect, resolution: CGSize) -> Double {
+      // The upright image is the captured one turned a quarter clockwise: its x is the captured y from the bottom.
+      let sx = Double(width) / resolution.width, sy = Double(height) / resolution.height
+      let xs = max(0, Int(box.minY * sx))..<min(width, Int((box.maxY * sx).rounded(.up)))
+      let ys = max(0, Int((resolution.height - box.maxX) * sy))..<min(height, Int(((resolution.height - box.minX) * sy).rounded(.up)))
+      guard !xs.isEmpty, !ys.isEmpty else { return 0 }
+      let on = ys.reduce(0) { n, y in n + xs.count { bytes[y * width + $0] > 0 } }
+      return Double(on) / Double(xs.count * ys.count)
+    }
   }
 
   /// Drops the rack's places or the table's, to scan that part again.

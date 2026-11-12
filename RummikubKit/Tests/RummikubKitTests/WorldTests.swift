@@ -47,6 +47,28 @@ private func seen(_ tile: String, at foot: SIMD3<Float>, from pose: Pose) -> Det
   #expect(world.places.map(\.tile) == [Tile("o7")!])
 }
 
+@Test func keepsWhatsCovered() {
+  var world = World()
+  let p = pose(0), here: SIMD3<Float> = [0, 0, 0], there: SIMD3<Float> = [0.06, 0, 0]
+  world.add([seen("b3", at: here, from: p), seen("o7", at: there, from: p)], pose: p)
+  // A hand over the whole image, as ARKit's segmentation marks it.
+  let hand = World.Mask(width: 256, height: 192, bytes: [UInt8](repeating: 255, count: 256 * 192))
+  for _ in 0..<5 { world.add([seen("o7", at: there, from: p)], pose: p, mask: hand) }
+  // Another box over it, its foot nearer, as a rack tile in front.
+  let behind = seen("b3", at: here, from: p).frame
+  let front = Detection(tile: Tile("k1")!, frame: behind.offsetBy(dx: 0, dy: behind.height * 0.6))
+  for _ in 0..<5 { world.add([seen("o7", at: there, from: p), front], pose: p) }
+  #expect(world.places.contains { $0.tile == Tile("b3")! })
+}
+
+@Test func maskCoversTheUprightBox() {
+  // A person over the captured image's left half, x < 960, which is the upright image's top half.
+  let mask = World.Mask(width: 4, height: 2, bytes: [255, 255, 0, 0, 255, 255, 0, 0])
+  let size = CGSize(width: 1920, height: 1080)
+  #expect(mask.covers(CGRect(x: 100, y: 100, width: 50, height: 50), resolution: size) == 1)
+  #expect(mask.covers(CGRect(x: 100, y: 1500, width: 50, height: 50), resolution: size) == 0)
+}
+
 @Test func keepsWhatsOutOfView() {
   var world = World()
   let near = pose(0), away = pose(2), foot: SIMD3<Float> = [0, 0, 0]

@@ -10,6 +10,8 @@ nonisolated struct Frame: Sendable {
   var pose: Pose?
   var planes = [Plane]()
   var tracking = ""
+  /// Where a person, like a hand reaching in, covers the frame.
+  var mask: World.Mask?
 
   struct Plane: Sendable {
     let transform: simd_float4x4
@@ -61,6 +63,7 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
   static var arkit: [String: Any] {
     [
       "sceneDepth": ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth),
+      "personSegmentation": ARWorldTrackingConfiguration.supportsFrameSemantics(.personSegmentation),
       "formats": ARWorldTrackingConfiguration.supportedVideoFormats.map {
         "\($0.captureDeviceType.rawValue) \(Int($0.imageResolution.width))x\(Int($0.imageResolution.height)) \($0.framesPerSecond)fps"
           + ($0.isRecommendedForHighResolutionFrameCapturing ? " high-res" : "")
@@ -114,6 +117,10 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         self.session.stopRunning()
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = .horizontal
+        // Hands over tiles, so the world table doesn't take them as gone.
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.personSegmentation) {
+          configuration.frameSemantics.insert(.personSegmentation)
+        }
         // The size the models were made on.
         if let format = ARWorldTrackingConfiguration.supportedVideoFormats.first(where: {
           $0.imageResolution == CGSize(width: 1920, height: 1080) && $0.framesPerSecond == 30
@@ -178,7 +185,16 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         Frame.Plane(transform: $0.transform, extent: [$0.planeExtent.width, $0.planeExtent.height],
           classification: "\($0.classification)")
       },
-      tracking: "\(camera.trackingState)"))
+      tracking: "\(camera.trackingState)",
+      mask: frame.segmentationBuffer.map(Self.mask)))
+  }
+
+  private static func mask(_ buffer: CVPixelBuffer) -> World.Mask {
+    CVPixelBufferLockBaseAddress(buffer, .readOnly)
+    defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+    let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
+    let row = CVPixelBufferGetBytesPerRow(buffer), base = CVPixelBufferGetBaseAddress(buffer)!.assumingMemoryBound(to: UInt8.self)
+    return World.Mask(width: width, height: height, bytes: (0..<height).flatMap { y in UnsafeBufferPointer(start: base + y * row, count: width) })
   }
 }
 

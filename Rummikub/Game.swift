@@ -163,17 +163,7 @@ import UniformTypeIdentifiers
     self.ar = ar
     footprints = ar?.pose.map { pose in self.boxes.map(pose.footprint) } ?? []
     detections = found
-    if let ar, var info = Self.info(ar, footprints: footprints) {
-      info.removeValue(forKey: "planes")
-      info["time"] = Date.now.timeIntervalSince1970
-      info["looking"] = looking.rawValue
-      info["boxes"] = self.boxes.map { [$0.minX, $0.minY, $0.width, $0.height] }
-      info["detections"] = found.map {
-        ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height],
-         "turns": $0.turns, "rack": $0.rack ?? NSNull()] as [String: Any]
-      }
-      history = history.filter { Date.now.timeIntervalSince1970 - ($0["time"] as! Double) < 10 } + [info]
-    }
+    if ar == nil, recording != nil { stopRecording() }
     _ = try? timing?.seekToEnd()
     try? timing?.write(contentsOf: Data(
       "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(found.count),\(boxes?.count ?? -1)\n".utf8))
@@ -181,9 +171,10 @@ import UniformTypeIdentifiers
     // Touching tiles at the orientation they agree on; on the table, each meld then as the likeliest valid one, as
     // between turns they all are.
     let turned = Recognizer.turned(found)
+    if let ar, recording != nil { record(turned, ar) }
     let voted: [Detection]
     if let pose {
-      world.add(turned, pose: pose)
+      world.add(turned, pose: pose, mask: ar?.mask)
       let placed = world.detections(from: pose).filter { $0.place.isRack == (part == .rack) }.map(\.detection)
       voted = part == .rack ? placed : Recognizer.valid(Recognizer.melds(placed)).flatMap(\.self)
     } else {
@@ -333,10 +324,8 @@ import UniformTypeIdentifiers
         ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]]
       },
     ]
-    if let ar, var now = Self.info(ar, footprints: footprints) {
-      now["history"] = history
-      info["ar"] = now
-    }
+    if let ar { info["ar"] = Self.info(ar, footprints: footprints) }
+    if let recording { info["recording"] = recording.formatted(.iso8601) }
     try? JSONSerialization.data(withJSONObject: finite(info), options: [.prettyPrinted, .sortedKeys])
       .write(to: base.appendingPathExtension("json"))
   }
@@ -358,8 +347,59 @@ import UniformTypeIdentifiers
     ]
   }
 
-  /// The last 10 s of frames read with ARKit, oldest first, for a capture: how tiles moved as the camera did.
-  private var history = [[String: Any]]()
+  /// When the recording under way started. While it runs, every frame read with ARKit goes to a log, a line each,
+  /// and every two seconds the frame is captured as well; it lands in Documents as `<start>.jsonl` once stopped.
+  private(set) var recording: Date?
+  @ObservationIgnored private var log: FileHandle?
+  @ObservationIgnored private var lastKeyframe = Date.distantPast
+  @ObservationIgnored private var recordingCamera = [String: Any]()
+  /// Where the log is written until it's done, apart from what `Sync` sends.
+  private static let recordings = URL.documentsDirectory.appending(path: "recording")
+
+  func startRecording(camera: [String: Any]) {
+    let start = Date.now
+    try? FileManager.default.createDirectory(at: Self.recordings, withIntermediateDirectories: true)
+    let url = Self.recordings.appending(path: start.formatted(.iso8601) + ".jsonl")
+    guard FileManager.default.createFile(atPath: url.path, contents: nil) else { return }
+    log = try? FileHandle(forWritingTo: url)
+    recording = start
+    recordingCamera = camera
+    lastKeyframe = start
+  }
+
+  func stopRecording() {
+    guard let recording else { return }
+    try? log?.close()
+    log = nil
+    self.recording = nil
+    let name = recording.formatted(.iso8601) + ".jsonl"
+    try? FileManager.default.moveItem(at: Self.recordings.appending(path: name), to: URL.documentsDirectory.appending(path: name))
+  }
+
+  /// A line of the recording: the pose and plane, where a person covered the frame (a quarter size), and every read
+  /// with its odds, as the world table got them. And the frame itself every two seconds.
+  private func record(_ read: [Detection], _ ar: Frame) {
+    guard var line = Self.info(ar, footprints: footprints) else { return }
+    line.removeValue(forKey: "planes")
+    line["time"] = Date.now.timeIntervalSince1970
+    line["looking"] = looking.rawValue
+    line["mask"] = ar.mask.map { mask in
+      let small = mask.shrunk(by: 4)
+      return ["width": small.width, "height": small.height, "bytes": Data(small.bytes).base64EncodedString()] as [String: Any]
+    } ?? NSNull()
+    line["detections"] = read.map {
+      ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height],
+       "turns": $0.turns, "rack": $0.rack ?? NSNull(),
+       "odds": Dictionary(uniqueKeysWithValues: $0.odds.map { ($0.key.description, $0.value) })] as [String: Any]
+    }
+    if let data = try? JSONSerialization.data(withJSONObject: finite(line), options: .sortedKeys) {
+      try? log?.write(contentsOf: data + Data("\n".utf8))
+    }
+    if Date.now.timeIntervalSince(lastKeyframe) >= 2 {
+      lastKeyframe = .now
+      capture(camera: recordingCamera)
+    }
+  }
 
   func solve() async {
     let table = scene.tableTiles, rack = scene.rackTiles

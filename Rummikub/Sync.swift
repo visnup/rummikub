@@ -18,9 +18,9 @@ enum Sync {
     let all = (try? FileManager.default.contentsOfDirectory(atPath: documents.path)) ?? []
     // Only what the labeler takes: a stray text file it refused once held back every photo behind it. Anything else
     // but the timing logs goes, like the first JPEG captures, long since copied by cable.
-    let files = all.filter { $0.wholeMatch(of: /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\.(png|txt|json)/) != nil }
+    let files = all.filter { $0.wholeMatch(of: /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\.(png|txt|json|jsonl)/) != nil }
       .sorted { ($0.hasSuffix(".png") ? 1 : 0, $0) < ($1.hasSuffix(".png") ? 1 : 0, $1) }
-    for stray in Set(all).subtracting(files).subtracting(["timing"]) {
+    for stray in Set(all).subtracting(files).subtracting(["timing", "recording"]) {
       try? FileManager.default.removeItem(at: documents.appending(path: stray))
     }
     var left = files.filter { $0.hasSuffix(".png") }.count

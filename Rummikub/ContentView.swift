@@ -24,7 +24,7 @@ struct ContentView: View {
     // shows in one preview layer at a time.
     // Tapping Capture again takes one, where the thumb already is.
     TabView(selection: Binding(get: { tab }, set: { if $0 == 0 && tab == 0 && live && !justSaved { shoot() }; tab = $0 })) {
-      Tab("Capture", systemImage: justSaved ? "checkmark" : "camera", value: 0) {
+      Tab("Capture", systemImage: game.recording != nil ? "stop.circle" : justSaved ? "checkmark" : ar ? "record.circle" : "camera", value: 0) {
         // Holding a finger on the camera hides everything drawn over it to check the framing; lifting it captures.
         Color.clear
           .background {
@@ -222,8 +222,15 @@ struct ContentView: View {
     Task { if let left = await Sync.push() { unsent = left } }
   }
 
+  /// A capture, or in AR a recording started or stopped.
   func shoot() {
-    game.capture(camera: camera.settings)
+    if ar && game.recording == nil {
+      game.startRecording(camera: camera.settings)
+    } else if ar {
+      game.stopRecording()
+    } else {
+      game.capture(camera: camera.settings)
+    }
     saved += 1
     justSaved = true
     send()

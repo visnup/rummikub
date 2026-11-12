@@ -73,8 +73,8 @@
   <kbd>Enter</kbd> with nothing selected marks the capture looked over.
   <kbd>+</kbd><kbd>−</kbd> zoom, <kbd>0</kbd> fit. <kbd>[</kbd><kbd>]</kbd> previous and next capture.
 </div></details>
-<script src="/common.js"></script>
-<script>
+<script type="module">
+import { flash, ink, label, pages, turn, typedFields, valid } from "./common.js";
 const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d"), view = document.getElementById("view");
 const typedEl = document.getElementById("typed"), layoutEl = document.getElementById("layout");
 layoutEl.onchange = async () => {

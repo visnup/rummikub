@@ -7,5 +7,6 @@ Captures/
 Timing/
 Outside/
 tmp/
+node_modules/
 xcuserdata/
 *.xcodeproj/project.xcworkspace/

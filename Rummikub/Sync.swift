@@ -1,6 +1,6 @@
 import Foundation
 
-/// Pushes captures to the labeler on the Mac (`Labeler/server.py`) and deletes each file once the Mac has it, so
+/// Pushes captures to the labeler on the Mac (`Labeler/server.js`) and deletes each file once the Mac has it, so
 /// what's left in Documents is what hasn't gone yet. That waits for the next capture, launch or return to the app.
 enum Sync {
   /// Resolves at home and over the phone's VPN.

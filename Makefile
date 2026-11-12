@@ -54,7 +54,8 @@ timing:
 labels:
 	uv run Labeler/prelabel.py
 	cd RummikubKit && swift run -c release fill ../$(dir)
-	uv run Labeler/server.py
+	pnpm -C Labeler install
+	pnpm -C Labeler exec vite
 
 # Trains the finder and Values side by side, then scores and checks them: a little over an hour, nearly all the
 # finder's.

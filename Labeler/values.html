@@ -30,8 +30,8 @@
   they show. <kbd>←</kbd><kbd>→</kbd> turn their orientation, <kbd>Esc</kbd> selects none. Double-click opens the
   capture. Changes save as you make them.
 </div></details>
-<script src="/common.js"></script>
-<script>
+<script type="module">
+import { flash, ink, label, pages, turn, typedFields } from "./common.js";
 const kinds = [..."kbor"].flatMap(c => Array.from({ length: 13 }, (_, i) => `${c}${i + 1}`)).concat("j");
 let all = [], shown = [], selected = new Set(), last = null, typed = "";
 /** A tile's ink on the page, black as the text color so it shows in dark mode. */

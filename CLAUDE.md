@@ -63,8 +63,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     else by tilt (two low ones were tables). Tilt alone can't say: racks were shot at 24–48°, tables from 35° up, and
     box shape doesn't separate them either. 21 of 24 held-out frames right, two of the misses judgment calls.
 
-- `Labeler/`: pages for checking boxes and values by hand, a server that saves them to each `.tiles.json`, and the
-  Python that trains on them. `held.py` is `Finder.isHeldOut` for the Python.
+- `Labeler/`: pages for checking boxes and values by hand, served by Vite with `server.js` saving them to each
+  `.tiles.json`, and the Python that trains on them. `held.py` is `Finder.isHeldOut` for the Python.
   - `finder.py` trains the finder: D-FINE small (Apache 2.0) from COCO, one "tile" class at 640 px, on random
     squares of the done captures (listed in `Captures/boxed.txt`) and the outside sets, at random quarter turns. It
     never trains on held-out captures (`Finder.isHeldOut`, a fifth of them by a hash of the name, so finishing more
@@ -83,7 +83,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     run lengths, since the rate is constant. On 2026-11-10, with 1988 held-out tiles, a fresh run found 1964 with 36
     against the earlier best's 1969 with 23; it was kept. On 2026-11-11, with 2058, a fresh run missed 9 with 38
     extras against its 24 with 35, and replaced it; nano, YOLO26s and OWLv2 were rerun too (`ARCHIVE.md`).
-  - `make labels` runs `prelabel.py`, then `fill`, then serves the pages at http://localhost:8765/captures
+  - `make labels` runs `prelabel.py`, then `fill`, then serves the pages on Vite's dev server at
+    http://localhost:8765/captures
     (`/captures/48` is #48; also `labeler` in `.claude/launch.json`).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
     round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet. `make watch` runs it
@@ -116,7 +117,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     so it flags few of theirs. Of the finder's 54 held-out misses that day, 14 were tiles fanned 30–45° in two full
     sets (#48, #62) with boxes off their tiles, 32 small or low-angle tiles (10–45 px, rows sheared or
     overlapping), 3 motion-blurred, 4 large tiles partly covered by another, and 1 cut by the edge.
-  - The app pushes each capture to `server.py` (`PUT /api/capture/<file>`, notes before the photo), which keeps one
+  - The app pushes each capture to `server.js` (`PUT /api/capture/<file>`, notes before the photo), which keeps one
     already there or in `.removed` and moves "As read" ones to `unlabeled/`. The phone deletes each file once the
     server has it, so Documents holds only what hasn't gone; that's retried on the next capture, launch or return to
     the app (`Sync.swift`). The Mac is `box.localdomain`, which also resolves over the phone's VPN, and the server

@@ -2,7 +2,8 @@
 # requires-python = ">=3.12"
 # dependencies = ["coremltools", "pillow", "scipy", "torch", "torchvision", "transformers"]
 # ///
-"""Trains the tile finder and writes it for the app as <captures>/Tiles.mlpackage: D-FINE (Apache 2.0), fine-tuned
+"""Trains a tile finder and writes it as <captures>/Tiles-new.mlpackage, its checkpoint as .finder-new, beside the
+kept ones, which `make keep-finder` replaces with them: D-FINE (Apache 2.0), fine-tuned
 from COCO as one class at 640 px, on random squares of the done captures that aren't held out and of every photo in
 the other folders with a .tiles.json, like the outside sets `outside.py` converts.
 
@@ -10,7 +11,7 @@ the other folders with a .tiles.json, like the outside sets `outside.py` convert
 
 MINUTES (60) bounds training; on the held-out captures 4 minutes found 854 of 1013 tiles, 15 found 894, 60 found
 950. SIZE (small) picks the D-FINE size, and QUARTERS (4) trains on that many quarters of our captures, nested, for a
-learning curve. SNAPSHOTS ("15 30") also saves the checkpoint at those minutes, beside it as .finder-15 and so on,
+learning curve. SNAPSHOTS ("15 30") also saves the checkpoint at those minutes, beside it as .finder-new-15 and so on,
 for a curve over run lengths.
 """
 
@@ -181,6 +182,6 @@ def convert(checkpoint: Path, package: Path):
 
 if __name__ == "__main__":
     captures = Path(sys.argv[1])
-    checkpoint = captures / ".finder"
+    checkpoint = captures / ".finder-new"
     train(examples(captures, [Path(f) for f in sys.argv[2:]]), checkpoint, float(os.environ.get("MINUTES", 60)))
-    convert(checkpoint, captures / "Tiles.mlpackage")
+    convert(checkpoint, captures / "Tiles-new.mlpackage")

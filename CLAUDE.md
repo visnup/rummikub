@@ -63,8 +63,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     **phantom** box on no tile, a **duplicate** box on a tile already found; of the confirmed tiles found, read
     **correctly**, **misread** as another value, or **unread** (Values not sure enough); and a **phantom read** on a phantom or duplicate box. Reads are scored against the
     confirmed boxes, not the written truth, which was short on "As read" captures and listed the table behind racks.
-    On 2026-11-12, after a round of Check fixes: 2223 tiles, 9 missed, 27 phantom, 0 duplicate; of 2211 confirmed,
-    2171 read correctly, 14 misread, 17 unread, 13 phantom reads. Each value's confirmed tiles missed, misread (and as
+    Later on 2026-11-12, after more Check fixes: 2289 tiles, 9 missed, 27 phantom, 0 duplicate; of 2277 confirmed,
+    2234 read correctly, 14 misread, 20 unread, 12 phantom reads. Each value's confirmed tiles missed, misread (and as
     what) and unread go to `Captures/.score.json` for the values page, unless `TILES` or `BOXES` names another
     model. For rack captures with boxes marked background (`x` in the labeler),
     it also counts the rack's tiles `Finder.nearest` keeps and the background ones it lets through.
@@ -90,8 +90,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     squares of the done captures (listed in `Captures/boxed.txt`) and the outside sets, at random quarter turns. It
     never trains on held-out captures (`Finder.isHeldOut`, a fifth of them by a hash of the name, so finishing more
     never moves one in or out). It runs `MINUTES` (60) on the Mac's GPU, then converts to
-    `Captures/Tiles.mlpackage`, swapping out three parts coremltools 9.0 can't convert. `make finder` runs it and
-    copies the model to `Rummikub/`; `make train` runs it beside `make values`, then `score`. In 15 minutes, a
+    `Captures/Tiles-new.mlpackage`, swapping out three parts coremltools 9.0 can't convert. `make finder` runs it
+    and scores it beside the kept `Tiles.mlpackage`, which the app, prelabeling, `check` and `score` go on using
+    until `make keep-finder` swaps it in and copies it to `Rummikub/`, since most runs don't beat the last; `make
+    train` runs it beside `make values`, then `score`. In 15 minutes, a
     quarter of our captures took it from 856 found with 169 extras (outside sets alone) to 895 with 67, and all of
     them to 894 with 62; 60 minutes found 950 with 45. 120 minutes did worse, one run each: 966 of 1051 with 47
     against 60 minutes' 988 with 44, and so did 60 minutes with the rate falling along a half cosine: 974 with 50.
@@ -105,7 +107,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     against the earlier best's 1969 with 23; it was kept. On 2026-11-11, with 2058, a fresh run missed 9 with 38
     extras against its 24 with 35, and replaced it; nano, YOLO26s and OWLv2 were rerun too (`ARCHIVE.md`). On
     2026-11-12, with 2220, three runs missed 19, 10 and 16 with 20, 32 and 27 extras, against its 11 with 42; the
-    second replaced it. The retrained `Values` misread 14 where the last one misread 29.
+    second replaced it. The retrained `Values` misread 14 where the last one misread 29. Later that day, with 2289, a
+    fresh run missed 22 with 23 extras against its 9 with 27, and was dropped; `Values` retrained misread 14 against
+    the last one's 18, and was kept.
   - `make labels` runs `prelabel.py`, then `fill`, then serves the pages on Vite's dev server at
     http://localhost:8765/captures
     (`/captures/48` is #48; also `labeler` in `.claude/launch.json`). Over the VPN bytes matter most, so photos go
@@ -114,8 +118,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
     round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet. `make watch` runs it
     every 30 s while capturing, beside `make labels`, which takes the app's pushes. It's the finder, from the
-    checkpoint `finder.py` leaves in `Captures/.finder`, read as `Finder` reads, so it improves only as `make finder`
-    reruns. It replaced OWLv2 with a linear probe, which found 897 of 1013 held-out tiles with 153 extras to its 950
+    kept finder's checkpoint, `Captures/.finder`, read as `Finder` reads, so it improves only as `make keep-finder`
+    takes a better one. On 2026-11-12 it's the run that missed 22, since the 9's checkpoint wasn't kept. It replaced OWLv2 with a linear probe, which found 897 of 1013 held-out tiles with 153 extras to its 950
     with 45.
   - On the capture page, every tile needs a box and nothing else may have one. Click adds an average-sized box, drag draws
     one. Enter marks a capture done. Values are optional. A tile cut off by the photo's edge gets a box too, which

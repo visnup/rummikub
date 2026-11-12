@@ -2,7 +2,7 @@ app := DerivedData/Build/Products
 
 files := --device Yam --domain-type appDataContainer --domain-identifier com.visnup.Rummikub
 
-.PHONY: all sim test captures watch timing upload labels train finder values looking check score
+.PHONY: all sim test captures watch timing upload labels train finder keep-finder values looking check score
 
 all:
 	xcodebuild -scheme Rummikub -destination generic/platform=iOS -derivedDataPath DerivedData \
@@ -57,17 +57,25 @@ labels:
 	pnpm -C Labeler install
 	pnpm -C Labeler exec vite
 
-# Trains the finder and Values side by side, then scores and checks them: a little over an hour, nearly all the
-# finder's.
+# Trains a finder and Values side by side, then scores the new finder, and the kept one with the new Values, and
+# checks: a little over an hour, nearly all the finder's.
 # After labeling values alone, `make values score` takes about 8 minutes.
 train:
 	$(MAKE) -j2 finder values
 	$(MAKE) score check
 
-# Trains the tile finder on captures whose boxes are done and the outside sets for MINUTES (60), and gives the app it.
+# Trains a tile finder on captures whose boxes are done and the outside sets for MINUTES (60), and scores it. It
+# goes beside the kept one, which the app, prelabeling, check and score go on using until `make keep-finder`.
 finder:
 	uv run Labeler/finder.py $(dir) $(wildcard Outside/*-train)
-	rm -rf Rummikub/Tiles.mlpackage && cp -R $(dir)/Tiles.mlpackage Rummikub/
+	TILES=$(dir)/Tiles-new.mlpackage $(MAKE) score
+
+# Keeps the finder `make finder` trained, for everything, and gives the app it.
+keep-finder:
+	rm -rf $(dir)/.finder $(dir)/Tiles.mlpackage Rummikub/Tiles.mlpackage
+	mv $(dir)/.finder-new $(dir)/.finder
+	mv $(dir)/Tiles-new.mlpackage $(dir)/Tiles.mlpackage
+	cp -R $(dir)/Tiles.mlpackage Rummikub/
 
 # Trains Values, which reads each tile and its orientation, on tile crops for MINUTES (5), and gives the app it.
 values:
@@ -95,6 +103,6 @@ score:
 upload:
 	uvx --from huggingface_hub hf upload visnup/rummikub-captures $(dir) . --repo-type dataset --exclude .files.json \
 	  --exclude .removed --exclude .DS_Store --exclude .words.txt --exclude review.txt \
-	  --exclude ".crops/*" --exclude ".looking/*" --exclude ".looking.features" --exclude ".finder/*" --exclude ".runs/*" --exclude ".web/*" \
+	  --exclude ".crops/*" --exclude ".looking/*" --exclude ".looking.features" --exclude ".finder*" --exclude ".runs/*" --exclude ".web/*" \
 	  --exclude "*.mlmodel" \
-	  --exclude "Tiles.mlpackage/*" --exclude "Values.mlpackage/*" --exclude ids.txt --exclude .check.json --exclude .check.done --exclude checked.txt
+	  --exclude "Tiles*.mlpackage/*" --exclude "Values.mlpackage/*" --exclude ids.txt --exclude .check.json --exclude .check.done --exclude checked.txt

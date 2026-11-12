@@ -37,7 +37,7 @@ def looking(name):
     return words[0] if words else None
 
 
-for kind in ("upright", "turned", "outside"):
+for kind in ("upright", "outside"):
     shutil.rmtree(out / kind, ignore_errors=True)
 # In rack captures, whether each crop is on the rack or, marked background, the table behind it. Only rack captures,
 # since that's where the app asks: table captures' tiles outnumbered the rack's 17 to 1 and taught it flat tiles.

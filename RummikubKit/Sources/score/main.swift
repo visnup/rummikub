@@ -19,14 +19,14 @@
   // BOXES=<folder> scores boxes found elsewhere, `<name>.json` a capture, each box [x, y, width, height] in pixels.
   let found = environment["BOXES"].map { URL(filePath: $0) }
   // WHOLE=1 looks in the whole image only, without crops.
-  finder.cropped = (ProcessInfo.processInfo.environment["WHOLE"] ?? "").isEmpty
+  finder.cropped = (environment["WHOLE"] ?? "").isEmpty
   // SIDE=0.5 crops squares half the short side of the image, rather than all of it.
-  if let side = ProcessInfo.processInfo.environment["SIDE"].flatMap(Double.init) { finder.side = side }
+  if let side = environment["SIDE"].flatMap(Double.init) { finder.side = side }
   // ENOUGH=60 skips the crops when every box the whole image finds is 60 px or more.
-  finder.enough = ProcessInfo.processInfo.environment["ENOUGH"].flatMap(Double.init)
+  finder.enough = environment["ENOUGH"].flatMap(Double.init)
   var regions = 0, frames = 0
   // Tiles out of scope aren't counted, and a box on one isn't extra. MIN=40 moves the cutoff, MIN=0 counts them all.
-  let smallest = ProcessInfo.processInfo.environment["MIN"].flatMap(Double.init) ?? Finder.smallest
+  let smallest = environment["MIN"].flatMap(Double.init) ?? Finder.smallest
   let values = captures.appending(path: "Values.mlpackage")
   let classifier = FileManager.default.fileExists(atPath: values.path)
     ? try Classifier(model: MLModel(contentsOf: MLModel.compileModel(at: values))) : nil
@@ -184,14 +184,10 @@
     if let classifier {
       let classified = reads!
       // READS=1 prints each confirmed tile's reading, for a breakdown of what's misread.
-      if ProcessInfo.processInfo.environment["READS"] != nil {
+      if environment["READS"] != nil {
         let all = Recognizer.turned(try classifier.tiles(in: image, boxes: boxes, least: 0))
-        let tiles = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
-          as! [[String: Any]]
-        for t in tiles where t["confirmed"] as? Bool == true {
+        for (t, frame) in zip(labels, truth) where t["confirmed"] as? Bool == true {
           guard let tile = Tile(t["tile"] as! String) else { continue }
-          let f = t["frame"] as! [Double]
-          let frame = CGRect(x: f[0], y: f[1], width: f[2], height: f[3])
           let read = all.max { Finder.overlap($0.frame, frame) < Finder.overlap($1.frame, frame) }
           guard let read, Finder.overlap(read.frame, frame) > 0.5 else {
             print("read", name, lines[0], tile, "-", 0, 0, Int(frame.height), t["turns"] as? Int ?? 0, separator: "\t")

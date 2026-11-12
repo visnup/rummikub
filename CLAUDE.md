@@ -53,8 +53,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     overlapping a true one by half), then those boxes read by `Values.mlpackage` when it's beside the captures, as
     the app reads them. It takes `Captures/Tiles.mlpackage`, and counts each error by name: a tile **missed**, a
     **phantom** box on no tile, a **duplicate** box on a tile already found; of the confirmed tiles found, read
-    **correctly**, **misread** as another value, or **unread** (Values not sure enough); of those read correctly, the
-    **wrong orientation**; and a **phantom read** on a phantom or duplicate box. Reads are scored against the
+    **correctly**, **misread** as another value, or **unread** (Values not sure enough); and a **phantom read** on a phantom or duplicate box. Reads are scored against the
     confirmed boxes, not the written truth, which was short on "As read" captures and listed the table behind racks.
     On 2026-11-12: 2220 tiles, 10 missed, 32 phantom, 0 duplicate; of 2210 confirmed, 2169 read correctly, 14
     misread, 17 unread, 17 phantom reads. For rack captures with boxes marked background (`x` in the labeler),
@@ -159,7 +158,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     boxed), bluebox (NC-SA), Okey sets (another game's tiles).
 
 - `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames at most five
-  times a second, fewer when a frame takes longer to read; `Game` decides rack or table (`Looking`), finds the tiles (`Tiles`; at the rack, only those at least half as tall as the tallest,
+  times a second, fewer when a frame takes longer to read; `Game` decides rack or table (`Looking`), finds the tiles (`Tiles`; at the rack, only those at least .4 as tall as the tallest,
   `Finder.nearest`, to leave out the table behind it), reads each box
   and its orientation (`Values`), keeps the table and rack, solves, and
   tracks the step shown; `ContentView`

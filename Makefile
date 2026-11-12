@@ -95,5 +95,6 @@ score:
 upload:
 	uvx --from huggingface_hub hf upload visnup/rummikub-captures $(dir) . --repo-type dataset --exclude .files.json \
 	  --exclude .removed --exclude .DS_Store --exclude .words.txt --exclude review.txt \
-	  --exclude ".crops/*" --exclude ".looking/*" --exclude ".finder/*" --exclude "*.mlmodel" \
+	  --exclude ".crops/*" --exclude ".looking/*" --exclude ".looking.features" --exclude ".finder/*" --exclude ".runs/*" \
+	  --exclude "*.mlmodel" \
 	  --exclude "Tiles.mlpackage/*" --exclude "Values.mlpackage/*" --exclude ids.txt --exclude .check.json --exclude .check.done --exclude checked.txt

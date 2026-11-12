@@ -580,7 +580,7 @@ function selectNext(step) {
 
 async function save() {
   const c = captures[current];
-  // Any change by hand keeps `label` and model predictions from overwriting the file.
+  // Any change by hand keeps `prelabel.py` from overwriting the file.
   for (const t of tiles) t.source = "hand";
   await fetch(`/api/tiles/${encodeURIComponent(c.name)}`, { method: "PUT", body: JSON.stringify(tiles) });
 }

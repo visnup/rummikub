@@ -53,8 +53,6 @@ if not todo:
 from transformers import DFineForObjectDetection
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
-# Whether to look in crops too, as `Finder.cropped`.
-cropped = True
 model = DFineForObjectDetection.from_pretrained(captures / ".finder").to(device).eval()
 
 
@@ -70,7 +68,7 @@ def detect(image, least=0.6):
         n = -(-(length - side) // (side // 2)) + 1
         return [0] if n == 1 else [(length - side) * i // (n - 1) for i in range(n)]
 
-    regions = [(0, 0, w, h)] + [(x, y, side, side) for y in starts(h) for x in starts(w)] * cropped
+    regions = [(0, 0, w, h)] + [(x, y, side, side) for y in starts(h) for x in starts(w)]
     pixels = torch.stack([
         pil_to_tensor(image.crop((x, y, x + rw, y + rh)).resize((640, 640), Image.BILINEAR)) for x, y, rw, rh in regions
     ])

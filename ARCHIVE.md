@@ -95,7 +95,7 @@ What was tried and dropped, so nobody repeats it.
   OWL's per-patch logit shift and scale swamp a single query.
 - **A value classifier** (Create ML image classifier on upright crops of confirmed tiles): on the fixtures, reader
   frames filtered by the finder went from 59 wrong to 49, but it breaks right values too, mostly 6 read as 5. On 12
-  game captures given the true box and turn it read 177 of 220. Not in the app yet.
+  game captures given the true box and turn it read 177 of 220. `Values` replaced it.
 
 ## Solver
 

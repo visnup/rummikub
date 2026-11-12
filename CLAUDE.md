@@ -127,7 +127,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     orientation, so a wrong orientation or value stands out; "Least sure" lists the unconfirmed ones `Values` is least
     sure of. Its list gives each value's boxes and, from `make score`, its held-out tiles missed, misread and unread. The `fill` tool (`swift run -c release fill ../Captures`) writes what `Values` reads, with its odds,
     into every unconfirmed box; on 2026-11-09 that was 2905. `make watch` runs `fill --new` after `prelabel.py`, so
-    a new capture's boxes arrive with values too.
+    a new capture's boxes arrive with values too. In a rack capture, a box it fills first is marked background where
+    Values' rack odds are under .5. On 2026-11-12 that matched 1313 of 1317 hand-marked boxes, mostly ones it trained
+    on; held out, it read 120 of 136 rack tiles as rack.
   - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones

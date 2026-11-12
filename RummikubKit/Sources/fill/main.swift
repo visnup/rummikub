@@ -5,7 +5,8 @@
   import RummikubKit
 
   // Writes what Values reads into every unconfirmed box of every capture: its tile, orientation, and how sure it is
-  // ("odds"), for the labeler to confirm. Confirmed boxes are left alone.
+  // ("odds"), for the labeler to confirm. Confirmed boxes are left alone. In a rack capture, a new box Values says
+  // lies on the table is marked background.
   // With --new, only boxes with no value yet, as the finder draws them, so `make watch` can run it every pass.
   //   fill [--new] <captures> [<Values.mlpackage>]
   setvbuf(stdout, nil, _IOLBF, 0)
@@ -32,8 +33,12 @@
       return CGRect(x: f[0], y: f[1], width: f[2], height: f[3])
     }
     let reads = try values.tiles(in: image, boxes: frames, least: 0)
+    let txt = try? String(contentsOf: URL(filePath: file.path.replacingOccurrences(of: ".tiles.json", with: ".txt")), encoding: .utf8)
+    let rack = txt?.hasPrefix("rack") == true
     for (i, frame) in zip(open, frames) {
       guard let read = reads.first(where: { $0.frame == frame }) else { continue }
+      // Only on a box the finder just drew, so a background cleared by hand stays cleared.
+      if rack, labels[i]["tile"] as? String == "?", let onRack = read.rack, onRack < 0.5 { labels[i]["background"] = true }
       // The orientation most likely over every tile, then the tile most likely at it.
       let sums = (0..<4).map { k in read.turned.values.reduce(0) { $0 + $1[k] } }
       let turns = sums.indices.max { sums[$0] < sums[$1] }!

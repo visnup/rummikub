@@ -5,17 +5,6 @@
 <title>Captures</title>
 <link rel="stylesheet" href="/common.css">
 <style>
-  nav select { margin: 0 10px 4px; }
-  nav table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  nav td, nav th { padding: 3px 4px; white-space: nowrap; }
-  nav td:first-child, nav th:first-child { padding-left: 10px; }
-  nav td:last-child, nav th:last-child { padding-right: 10px; }
-  nav thead th { font-size: 11px; font-weight: 600; color: var(--muted); position: sticky; top: 0; background: var(--bg); }
-  nav tbody th { font-size: 12px; font-weight: 600; color: var(--muted); text-align: left; padding-top: 8px; }
-  nav tbody tr:not(:has(th)) { cursor: pointer; }
-  nav tr.current { background: var(--pick); }
-  nav .n { text-align: right; }
-  nav .k { font-size: 11px; }
   #missing { color: var(--muted); }
   #missing .dispute { color: var(--dispute); }
   #view { flex: 1; overflow: auto; position: relative; display: flex; }
@@ -184,20 +173,30 @@ function list() {
     return [h, row(i)];
   });
   const table = document.createElement("table");
-  table.innerHTML = `<thead><tr><th class="n">#</th><th></th><th></th><th class="n" title="boxes the finder misses">miss</th>` +
-    `<th class="n" title="boxes the finder finds that have none">extra</th><th class="n" title="values read otherwise">val</th><th class="n">boxes</th></tr></thead>`;
   const stages = [0, 1, 2].map(s => captures.filter(c => stage(c) === s).length);
-  const sort = document.createElement("select");
-  sort.title = `${stages[0]} pending, ${stages[1]} to check, ${stages[2]} done`;
-  sort.innerHTML = Object.entries(sorts).map(([key, [name]]) =>
-    `<option value="${key}">${name}${{ pending: ` (${stages[0]})`, check: ` (${stages[1]})`, done: ` (${stages[2]})` }[key] ?? ""}</option>`).join("");
-  sort.value = sorts[sortBy] ? sortBy : "";
-  sort.onchange = () => { sortBy = sort.value; try { localStorage.sortBy = sortBy; } catch {} list(); };
+  // Each header sorts by its column; boxes steps through pending, to check and done first, then back to newest.
+  const header = (text, keys, title = "") => {
+    const active = keys.includes(sortBy) && (sortBy !== "" || keys.length === 1);
+    const th = Object.assign(document.createElement("th"), { textContent: text, className: active ? "n sorted" : "n" });
+    th.title = `${title}${title ? ": " : ""}${active ? sorts[sortBy][0] : `click for ${sorts[keys[0]][0]}`}`;
+    th.onclick = () => {
+      sortBy = keys[(keys.indexOf(sortBy) + 1) % keys.length];
+      try { localStorage.sortBy = sortBy; } catch {}
+      list();
+    };
+    return th;
+  };
+  const head = document.createElement("tr");
+  head.append(header("#", [""]), header("", [""]), header("", [""]),
+    header("miss", ["missed", ""], "boxes the finder misses"), header("extra", ["extra", ""], "boxes the finder finds that have none"),
+    header("val", ["values", ""], "values read otherwise"),
+    header("boxes", ["pending", "check", "done", ""], `${stages[0]} pending, ${stages[1]} to check, ${stages[2]} done`));
+  table.createTHead().append(head);
   const o = order();
   const body = document.createElement("tbody");
   body.replaceChildren(...(sortBy ? o.map(row) : days(o)));
   table.append(body);
-  document.getElementById("list").replaceChildren(pages("/captures"), sort, table);
+  document.getElementById("list").replaceChildren(pages("/captures"), table);
 }
 
 function summary() {

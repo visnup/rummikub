@@ -55,8 +55,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     **phantom** box on no tile, a **duplicate** box on a tile already found; of the confirmed tiles found, read
     **correctly**, **misread** as another value, or **unread** (Values not sure enough); and a **phantom read** on a phantom or duplicate box. Reads are scored against the
     confirmed boxes, not the written truth, which was short on "As read" captures and listed the table behind racks.
-    On 2026-11-12: 2220 tiles, 10 missed, 32 phantom, 0 duplicate; of 2210 confirmed, 2169 read correctly, 14
-    misread, 17 unread, 17 phantom reads. For rack captures with boxes marked background (`x` in the labeler),
+    On 2026-11-12, after a round of Check fixes: 2223 tiles, 9 missed, 27 phantom, 0 duplicate; of 2211 confirmed,
+    2171 read correctly, 14 misread, 17 unread, 13 phantom reads. Each value's confirmed tiles missed, misread (and as
+    what) and unread go to `Captures/.score.json` for the values page, unless `TILES` or `BOXES` names another
+    model. For rack captures with boxes marked background (`x` in the labeler),
     it also counts the rack's tiles `Finder.nearest` keeps and the background ones it lets through.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks
@@ -115,7 +117,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     truth no box reads as, and a red bar a box past the truth's count.
   - http://localhost:8765/values/r6 shows every r6 in the captures, done or not, as a grid, each crop turned upright by its
     orientation, so a wrong orientation or value stands out; "Least sure" lists the unconfirmed ones `Values` is least
-    sure of. The `fill` tool (`swift run -c release fill ../Captures`) writes what `Values` reads, with its odds,
+    sure of. Its list gives each value's boxes and, from `make score`, its held-out tiles missed, misread and unread. The `fill` tool (`swift run -c release fill ../Captures`) writes what `Values` reads, with its odds,
     into every unconfirmed box; on 2026-11-09 that was 2905. `make watch` runs `fill --new` after `prelabel.py`, so
     a new capture's boxes arrive with values too.
   - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
@@ -123,7 +125,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones
     too, the boxes the finder misses, the boxes it finds that have none, and confirmed values `Values` reads as another
     tile at least .8 sure. It takes 22 s for 194 captures, four at a time; one at a time took 31 s. `make train` reruns it, and `make watch` runs `check --new`
-    on captures newly done (those not in `.check.done`). The page's "to check first" sort lists those captures fewest first, and
+    on captures newly done (those not in `.check.done`). Clicking the boxes header steps to "to check first", which lists those captures fewest first (the
+    other headers sort by their column), and
     marks each spot, which `n` zooms to in turn; Enter there records the capture in `Captures/checked.txt`. On 2026-11-08 it flagged 120 of
     174: 470 boxes missed, 456 extra, 57 values. 279 of the misses had a finder box on them (median IoU .44), mostly
     our click-placed boxes sitting loose or off center, which `f` snaps to the finder's. Of the rest, most were real

@@ -56,6 +56,13 @@
     }
   }
   var total = Score()
+  /// Each value's confirmed tiles in scope, and how many the finder missed, Values misread (and as what) or left
+  /// unread, for the labeler's values page.
+  struct PerTile: Encodable {
+    var tiles = 0, missed = 0, misread = 0, unread = 0
+    var readAs = [String: Int]()
+  }
+  var byTile = [String: PerTile]()
   print((["capture"] + Score.header).joined(separator: "\t"))
   /// The rack's tiles kept, and the table's let through, by `Finder.nearest` and then by Values' rack-or-table; and,
   /// of `nearest`'s, by `Standing.taper` alone, with how many it found no corners for.
@@ -118,6 +125,10 @@
         tileOf.append(nil)
       }
     }
+    for (i, tile) in known {
+      byTile[tile.description, default: PerTile()].tiles += 1
+      if left.contains(i) { byTile[tile.description]!.missed += 1 }
+    }
     func score(_ readings: [Detection]) {
       for (box, i) in zip(boxes, tileOf) {
         let read = readings.first { $0.frame == box }
@@ -126,10 +137,15 @@
           continue
         }
         guard let tile = known[i] else { continue }
-        if let read {
-          if read.tile != tile { s.misread += 1 } else { s.correctly += 1 }
+        if let read, read.tile != tile {
+          s.misread += 1
+          byTile[tile.description]!.misread += 1
+          byTile[tile.description]!.readAs[read.tile.description, default: 0] += 1
+        } else if read != nil {
+          s.correctly += 1
         } else {
           s.unread += 1
+          byTile[tile.description]!.unread += 1
         }
       }
     }
@@ -207,4 +223,10 @@
   print((["total"] + total.columns.map(String.init)).joined(separator: "\t"))
   print("regions", regions, "in", frames, "frames")
   if rackTotal.tiles > 0 { print("rack tiles kept", rackTotal.description, separator: "\t") }
+  // Only for the models the app has, not one being compared.
+  if environment["TILES"] == nil, found == nil, classifier != nil {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    try encoder.encode(byTile).write(to: captures.appending(path: ".score.json"))
+  }
 #endif

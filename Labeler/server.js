@@ -169,6 +169,8 @@ const fail = (res, status) => {
 async function api(req, res, path, query) {
   const { method } = req, rest = prefix => decodeURIComponent(path.slice(prefix.length));
   if (method === "GET" && path === "/api/values") return json(res, values());
+  // Each value's held-out errors, as `score` last wrote them.
+  if (method === "GET" && path === "/api/score") return json(res, readJSON(join(captures, ".score.json"), {}));
   if (method === "GET" && path === "/api/captures") {
     const photos = pngs(), number = ids(photos), check = readJSON(join(captures, ".check.json"), {});
     const done = names(boxed), looked = names(checked);

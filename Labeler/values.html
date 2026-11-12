@@ -15,6 +15,7 @@
   .cell p { margin: 0; padding: 1px 4px; font: bold 12px ui-monospace, monospace; display: flex; justify-content: space-between; }
   .cell p small { color: var(--muted); font-weight: normal; }
   #typed { position: fixed; right: 16px; top: 12px; }
+  nav td:not(:first-child), nav th:not(:first-child) { padding-left: 2px; padding-right: 2px; }
 </style>
 </head>
 <body>
@@ -39,8 +40,11 @@ const hue = tile => tile[0] === "k" ? "var(--fg)" : ink[tile[0]] ?? "inherit";
 
 const view = () => decodeURIComponent(location.pathname.split("/")[2] || "unsure");
 
+/** Each value's held-out errors, from `.score.json`. */
+let score = {};
+
 async function load() {
-  all = await (await fetch("/api/values")).json();
+  [all, score] = await Promise.all(["/api/values", "/api/score"].map(async u => (await fetch(u)).json()));
   render();
 }
 
@@ -57,24 +61,40 @@ function render() {
   refresh();
 }
 
-/** The list of views with counts: unconfirmed of all. */
+/** The list of views: each value's boxes (unconfirmed of all), then its held-out errors as `score` last counted
+ * them, of its confirmed held-out tiles: missed by the finder, misread by Values, or left unread. */
 function nav() {
   const v = view();
-  const link = (k, label, count) => {
-    const a = document.createElement("a");
-    a.href = `/values/${k}`;
-    a.className = k === v ? "current" : "";
-    a.innerHTML = `<span style="color:${hue(k)}">${label}</span><small>${count}</small>`;
-    a.onclick = e => { e.preventDefault(); history.pushState(null, "", a.href); selected.clear(); render(); };
-    return a;
+  const go = k => { history.pushState(null, "", `/values/${k}`); selected.clear(); render(); };
+  const n = x => x ? `<td class="n k dispute">${x}</td>` : `<td class="n k"></td>`;
+  const row = (k, label, cells, title = "") => {
+    const tr = document.createElement("tr");
+    tr.className = k === v ? "current" : "";
+    tr.title = title;
+    tr.innerHTML = `<td style="color:${hue(k)}">${label}</td>${cells}`;
+    tr.onclick = () => go(k);
+    return tr;
   };
-  const heading = text => Object.assign(document.createElement("h2"), { textContent: text });
-  document.getElementById("list").replaceChildren(pages("/values"),
-    link("unsure", "Least sure", unsure().length), heading("Tiles"),
-    ...kinds.map(k => {
-      const of = all.filter(t => t.tile === k), open = of.filter(t => !t.confirmed).length;
-      return link(k, k, open ? `${open}/${of.length}` : of.length);
-    }));
+  const table = document.createElement("table");
+  table.innerHTML = `<thead><tr><th></th><th class="n" title="unconfirmed of all">boxes</th>` +
+    `<th class="n" title="confirmed held-out tiles score read">held</th><th class="n" title="missed by the finder">miss</th>` +
+    `<th class="n" title="misread by Values">wrong</th><th class="n" title="unread: Values not sure enough">unsure</th>` +
+    `<th class="n" title="missed, misread or unread, of held">err</th></tr></thead>`;
+  const body = table.createTBody();
+  const open = unsure().length;
+  body.append(row("unsure", "Least sure", `<td class="n"><small>${open}</small></td><td colspan="5"></td>`));
+  const percent = s => {
+    const wrong = s ? s.missed + s.misread + s.unread : 0;
+    return wrong ? `<td class="n k dispute">${(100 * wrong / s.tiles).toFixed(1)}%</td>` : `<td class="n k"></td>`;
+  };
+  for (const k of kinds) {
+    const of = all.filter(t => t.tile === k), left = of.filter(t => !t.confirmed).length, s = score[k];
+    const as = Object.entries(s?.readAs ?? {}).map(([t, c]) => `${t} ×${c}`).join(", ");
+    body.append(row(k, k, `<td class="n"><small>${left ? `${left}/` : ""}${of.length}</small></td>` +
+      `<td class="n"><small>${s?.tiles ?? ""}</small></td>${n(s?.missed)}${n(s?.misread)}${n(s?.unread)}${percent(s)}`,
+      as && `read as ${as}`));
+  }
+  document.getElementById("list").replaceChildren(pages("/values"), table);
   document.getElementById("title").textContent = v === "unsure" ? "Least sure" : v;
   document.getElementById("count").textContent = v === "unsure"
     ? `the ${shown.length} unconfirmed tiles Values is least sure of` : `${shown.length} tiles, ${shown.filter(t => !t.confirmed).length} unconfirmed`;

@@ -13,6 +13,17 @@ nav .pages a.current { color: var(--fg); font-weight: 600; }
 nav button, nav a { display: flex; justify-content: space-between; width: 100%; box-sizing: border-box; border: 0; background: none; color: inherit; font: inherit; padding: 3px 10px; cursor: pointer; text-align: left; text-decoration: none; font-variant-numeric: tabular-nums; }
 nav .current { background: var(--pick); }
 nav small { color: var(--muted); }
+nav table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+nav td, nav th { padding: 3px 4px; white-space: nowrap; }
+nav td:first-child, nav th:first-child { padding-left: 10px; }
+nav td:last-child, nav th:last-child { padding-right: 10px; }
+nav thead th { font-size: 11px; font-weight: 600; color: var(--muted); position: sticky; top: 0; background: var(--bg); cursor: pointer; user-select: none; }
+nav thead th.sorted { color: var(--fg); }
+nav tbody th { font-size: 12px; font-weight: 600; color: var(--muted); text-align: left; padding-top: 8px; }
+nav tbody tr:not(:has(th)) { cursor: pointer; }
+nav tr.current { background: var(--pick); }
+nav .n { text-align: right; }
+nav .k { font-size: 11px; }
 nav .done { color: var(--confirmed); }
 nav .dispute { color: var(--dispute); }
 nav h2, nav summary { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin: 0; padding: 10px 10px 4px; cursor: default; }

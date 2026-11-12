@@ -34,6 +34,14 @@ public struct Pose: Sendable {
     return t > 0 ? origin + t * direction : nil
   }
 
+  /// The camera's height above the table, in metres.
+  public var height: Float? {
+    guard let plane else { return nil }
+    let normal = SIMD3(plane.columns.1.x, plane.columns.1.y, plane.columns.1.z)
+    let onPlane = SIMD3(plane.columns.3.x, plane.columns.3.y, plane.columns.3.z)
+    return dot(SIMD3(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z) - onPlane, normal)
+  }
+
   /// Where a world point shows in the upright image, or nil behind the camera.
   public func project(_ point: SIMD3<Float>) -> CGPoint? {
     let c = transform.inverse * SIMD4(point, 1)

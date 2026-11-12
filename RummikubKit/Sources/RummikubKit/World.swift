@@ -97,7 +97,7 @@ public struct World: Sendable {
   /// The lift this frame's table tiles call for, from the median of their widths on `pose`'s plane: those Values
   /// says lie on the table, three at least.
   static func lift(_ detections: [Detection], pose: Pose) -> Float? {
-    guard let plane = pose.plane else { return nil }
+    guard let height = pose.height else { return nil }
     let widths = detections.filter { ($0.rack ?? 0) < 0.5 }.compactMap { d -> Float? in
       let box = d.frame
       guard let a = pose.ground(CGPoint(x: box.minX, y: box.maxY)), let b = pose.ground(CGPoint(x: box.maxX, y: box.maxY))
@@ -107,10 +107,6 @@ public struct World: Sendable {
     guard widths.count >= 3 else { return nil }
     // Pouch tiles are smaller than the large set's, so only a plane far off moves: on the floor they measured 100–140.
     guard widths[widths.count / 2] > tileWidth * 1.5 else { return 0 }
-    let normal = SIMD3(plane.columns.1.x, plane.columns.1.y, plane.columns.1.z)
-    let onPlane = SIMD3(plane.columns.3.x, plane.columns.3.y, plane.columns.3.z)
-    let camera = SIMD3(pose.transform.columns.3.x, pose.transform.columns.3.y, pose.transform.columns.3.z)
-    let height = dot(camera - onPlane, normal)
     return height * (1 - tileWidth / widths[widths.count / 2])
   }
 

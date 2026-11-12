@@ -43,7 +43,15 @@ struct ContentView: View {
             HStack {
               if let tilt = game.tilt { Text("\(Int(tilt))°") }
               if ar, let frame = game.ar {
-                Text(frame.pose?.plane == nil ? "no table" : frame.tracking == "normal" ? "table" : frame.tracking)
+                if frame.tracking != "normal" {
+                  Text(frame.tracking)
+                } else if let height = frame.pose?.height {
+                  // The camera above the table, and how far `World.level` lifted ARKit's plane to reach it.
+                  let lift = (camera.pose?.height ?? height) - height
+                  Text("table \(Int(height * 100)) cm" + (lift > 0.05 ? ", lifted \(Int(lift * 100))" : ""))
+                } else {
+                  Text("no table")
+                }
               }
               if let unsent {
                 if unsent > 0 { Label("\(unsent)", systemImage: "arrow.up.circle") } else { Image(systemName: "checkmark.circle") }

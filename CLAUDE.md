@@ -47,7 +47,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     are fit to #319–326's one table, where melds measured .7–.83 widths and 26° at most, and other neighbors 1.2 and
     58° at least. `swift run world <start>.jsonl …` replays a recording's log through it, or a 2026-11-11 capture's
     `ar.history`: on #319–326 it read the rack's 7 tiles every time, and the table exactly in all four that saw it
-    whole (#319, #323, #325, #326).
+    whole (#319, #323, #325, #326). ARKit doesn't always find the tabletop: over dark felt (#327–331) it found only
+    the floor, 0.97 m down, and called it a table. So `World.level` lifts the plane, kept level, to where the tiles
+    Values says lie on the table measure 36 mm along their bottom edge (35–37 in #325 and #326), the running median
+    over 30 frames. That read #327–331's table exactly; #319–326 read as before.
   - `Render.swift`: table images and where their tiles lie, for tests, and drawing overlays onto images.
   - `score` (`make score`) runs the finder on the held-out done captures, through `Finder`: tiles found (a box
     overlapping a true one by half), then those boxes read by `Values.mlpackage` when it's beside the captures, as

@@ -13,8 +13,8 @@ private func pose(_ x: Float) -> Pose {
 }
 
 /// A tile lying on the table with its near edge's middle at `foot`, as `pose` boxes it.
-private func seen(_ tile: String, at foot: SIMD3<Float>, from pose: Pose) -> Detection {
-  let near = [foot - [0.015, 0, 0], foot + [0.015, 0, 0]].map { pose.project($0)! }
+private func seen(_ tile: String, at foot: SIMD3<Float>, from pose: Pose, width: Float = 0.03) -> Detection {
+  let near = [foot - [width / 2, 0, 0], foot + [width / 2, 0, 0]].map { pose.project($0)! }
   let far = pose.project(foot - [0, 0, 0.04])!
   let box = CGRect(x: near[0].x, y: far.y, width: near[1].x - near[0].x, height: near[0].y - far.y)
   return Detection(tile: Tile(tile)!, frame: box)
@@ -78,6 +78,25 @@ private func seen(_ tile: String, at foot: SIMD3<Float>, from pose: Pose) -> Det
   #expect(world.places.count == 1)
   let box = world.detections(from: near)[0].detection.frame, truth = seen("j", at: foot, from: near).frame
   #expect(abs(box.midX - truth.midX) < 1 && abs(box.maxY - truth.maxY) < 1 && abs(box.width - truth.width) < 1)
+}
+
+@Test func levelsToTheTiles() {
+  var world = World()
+  // ARKit found the floor 60 cm under the table, as over dark felt in #327–331.
+  var floor = matrix_identity_float4x4
+  floor.columns.3.y = -0.6
+  let feet: [SIMD3<Float>] = [[-0.05, 0, 0], [0, 0, 0], [0.05, 0, 0]]
+  func found(_ x: Float) -> Pose {
+    var p = pose(x)
+    p.plane = floor
+    return p
+  }
+  for x: Float in [0, 0.05, 0.1] {
+    world.add(zip(["r1", "r2", "r3"], feet).map { seen($0, at: $1, from: pose(x), width: World.tileWidth) }, pose: found(x))
+  }
+  #expect(abs(world.level(found(0)).plane!.columns.3.y) < 0.001)
+  #expect(world.places.count == 3)
+  #expect(zip(world.places, feet).allSatisfy { distance($0.point, $1) < 0.002 })
 }
 
 @Test func meldsAlongTheTable() {

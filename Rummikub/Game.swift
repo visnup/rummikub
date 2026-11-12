@@ -186,6 +186,10 @@ import UniformTypeIdentifiers
     var melds: [[Detection]]?
     if let pose {
       world.add(turned, pose: pose, mask: ar?.mask)
+      // Drawn and measured on the tabletop, not on whatever plane ARKit found; recorded as ARKit gave it.
+      let leveled = world.level(pose)
+      self.ar?.pose = leveled
+      footprints = self.boxes.map(leveled.footprint)
       let placed = world.detections(from: pose).filter { $0.place.isRack == (part == .rack) }
       if part == .table { melds = Recognizer.valid(World.melds(placed)) }
       voted = melds?.flatMap(\.self) ?? placed.map(\.detection)

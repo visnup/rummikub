@@ -41,8 +41,45 @@ public struct World: Sendable {
 
   public private(set) var places = [Place]()
   private var next = 0
+  /// How far the tabletop sits above the plane ARKit found, one estimate a frame, newest last.
+  private var lifts = [Float]()
 
   public init() {}
+
+  /// A tile lying on the table, measured along its box's bottom edge: 35–37 mm, the median in #325 and #326 (large
+  /// set), where ARKit had the tabletop.
+  static let tileWidth: Float = 0.036
+
+  /// `pose` with its plane moved up to the tabletop. ARKit doesn't always find the table: over dark felt (#327–331)
+  /// it found only a room-sized plane 0.97 m below the camera, which it called a table, and tiles on it measured
+  /// 100–140 mm. The table is level with that plane, and a tile's size on any level plane scales with the camera's
+  /// height above it, so the tiles' size says where the tabletop is.
+  public func level(_ pose: Pose) -> Pose {
+    guard var plane = pose.plane, !lifts.isEmpty else { return pose }
+    let lift = lifts.sorted()[lifts.count / 2]
+    plane.columns.3 += plane.columns.1 * lift
+    var leveled = pose
+    leveled.plane = plane
+    return leveled
+  }
+
+  /// The lift this frame's table tiles call for, from the median of their widths on `pose`'s plane: those Values
+  /// says lie on the table, three at least.
+  static func lift(_ detections: [Detection], pose: Pose) -> Float? {
+    guard let plane = pose.plane else { return nil }
+    let widths = detections.filter { ($0.rack ?? 0) < 0.5 }.compactMap { d -> Float? in
+      let box = d.frame
+      guard let a = pose.ground(CGPoint(x: box.minX, y: box.maxY)), let b = pose.ground(CGPoint(x: box.maxX, y: box.maxY))
+      else { return nil }
+      return distance(a, b)
+    }.sorted()
+    guard widths.count >= 3 else { return nil }
+    let normal = SIMD3(plane.columns.1.x, plane.columns.1.y, plane.columns.1.z)
+    let onPlane = SIMD3(plane.columns.3.x, plane.columns.3.y, plane.columns.3.z)
+    let camera = SIMD3(pose.transform.columns.3.x, pose.transform.columns.3.y, pose.transform.columns.3.z)
+    let height = dot(camera - onPlane, normal)
+    return height * (1 - tileWidth / widths[widths.count / 2])
+  }
 
   /// A place is dropped after this many frames in a row in which it should have shown and didn't: picked up, or
   /// never a tile.
@@ -51,10 +88,13 @@ public struct World: Sendable {
   /// Adds a frame's reads, each to the place within half a tile of its point, nearest first, or to a new place. Places
   /// it should have seen and didn't are counted as missed, unless something covers them: a person, by `mask`, or
   /// another box, like a rack tile in front of the table. Returns each detection's place, nil where the pose has no
-  /// table or the box's foot misses it.
+  /// table or the box's foot misses it. `found` is the pose as ARKit gives it, its plane moved to the tabletop here
+  /// (`level`).
   @discardableResult
-  public mutating func add(_ detections: [Detection], pose: Pose, mask: Mask? = nil) -> [Int?] {
-    guard pose.plane != nil else { return detections.map { _ in nil } }
+  public mutating func add(_ detections: [Detection], pose found: Pose, mask: Mask? = nil) -> [Int?] {
+    guard found.plane != nil else { return detections.map { _ in nil } }
+    if let lift = Self.lift(detections, pose: found) { lifts = (lifts + [lift]).suffix(30) }
+    let pose = level(found)
     let feet = detections.map { d -> (point: SIMD3<Float>, width: Float, axis: SIMD3<Float>)? in
       let box = d.frame
       guard let a = pose.ground(CGPoint(x: box.minX, y: box.maxY)), let b = pose.ground(CGPoint(x: box.maxX, y: box.maxY))

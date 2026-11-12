@@ -88,7 +88,8 @@ lookingEl.onchange = async () => {
   lookingEl.blur();
   draw();
 };
-const color = name => getComputedStyle(document.documentElement).getPropertyValue(name);
+const colors = getComputedStyle(document.documentElement);
+const color = name => colors.getPropertyValue(name);
 let captures = [], current = 0, image = new Image(), tiles = [], selected = null, typed = "", scale = 1, fit = true, drag = null;
 /** Boxes selected together, by a shift-drag or `a`. */
 let many = new Set();
@@ -145,13 +146,24 @@ async function open(i, push = true) {
     fit = false; scale *= 1.25; draw();
     view.scrollTo({ left: canvas.offsetLeft + (canvas.width - view.clientWidth) / 2, top: canvas.offsetTop + (canvas.height - view.clientHeight) / 2 });
   };
-  image.src = `/photos/${encodeURIComponent(c.name).replace("%2F", "/")}.png?${c.modified}`;
+  image.src = photo(c);
+  // The next capture listed, so moving on doesn't wait for its photo.
+  const o = order();
+  image.decode().then(() => fetch(photo(captures[o[(o.indexOf(i) + 1) % o.length]])), () => {});
   list();
   document.querySelector("nav tr.current")?.scrollIntoView({ block: "nearest" });
 }
+const photo = c => `/photos/${encodeURIComponent(c.name).replace("%2F", "/")}.webp?${c.modified}`;
 const step = by => { const o = order(); open(o[(o.indexOf(current) + by + o.length) % o.length]); };
 
+let listed = "";
+/** The list of captures, rebuilt only when what it shows changes: every draw asks, and 325 rows took most of a
+ * 40 ms draw, on every mouse move of a drag. */
 function list() {
+  const c = captures[current];
+  const key = JSON.stringify([current, sortBy, captures.length, c.boxes, c.boxed, c.checked, c.looking, c.truth?.length]);
+  if (key === listed) return;
+  listed = key;
   const row = i => {
     const c = captures[i], tr = document.createElement("tr");
     tr.className = i === current ? "current" : "";

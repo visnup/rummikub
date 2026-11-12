@@ -98,7 +98,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     second replaced it. The retrained `Values` misread 14 where the last one misread 29.
   - `make labels` runs `prelabel.py`, then `fill`, then serves the pages on Vite's dev server at
     http://localhost:8765/captures
-    (`/captures/48` is #48; also `labeler` in `.claude/launch.json`).
+    (`/captures/48` is #48; also `labeler` in `.claude/launch.json`). Over the VPN bytes matter most, so photos go
+    out as WebP (q90, about 290 kB against the PNG's 2.6 MB), made once into `Captures/.web/`, the next capture's
+    is fetched ahead, and JSON is brotli-compressed (`/api/values` 2.6 MB to 426 kB).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
     round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet. `make watch` runs it
     every 30 s while capturing, beside `make labels`, which takes the app's pushes. It's the finder, from the

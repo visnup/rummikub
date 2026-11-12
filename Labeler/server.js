@@ -1,8 +1,9 @@
 /** The labeler's API on Vite's dev server: the pages' reads and saves of Captures/, crops for the values page, and
  * captures the app pushes. */
-import { existsSync, readdirSync, readFileSync, renameSync, appendFileSync, statSync, writeFileSync, createReadStream } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, appendFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { brotliCompressSync, constants } from "node:zlib";
 import sharp from "sharp";
 
 const captures = resolve(import.meta.dirname, "../Captures");
@@ -133,10 +134,25 @@ const body = req => new Promise((done, fail) => {
   const chunks = [];
   req.on("data", c => chunks.push(c)).on("end", () => done(Buffer.concat(chunks))).on("error", fail);
 });
+/** Brotli where the browser takes it: /api/values is 2.6 MB as JSON, 370 kB compressed, which matters over the VPN. */
 const json = (res, v) => {
   res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify(v));
+  const text = JSON.stringify(v);
+  if (text.length < 1024 || !/\bbr\b/.test(res.req.headers["accept-encoding"] ?? "")) return res.end(text);
+  res.setHeader("Content-Encoding", "br");
+  res.end(brotliCompressSync(text, { params: { [constants.BROTLI_PARAM_QUALITY]: 5 } }));
 };
+
+/** A capture's photo as WebP, made once and kept in .web/ until the PNG changes: 290 kB against the PNG's 2.6 MB. */
+const web = join(captures, ".web");
+async function webp(png) {
+  const path = join(web, relative(captures, png).replaceAll("/", "-").replace(/\.png$/, ".webp"));
+  if (!existsSync(path) || statSync(path).mtimeMs < statSync(png).mtimeMs) {
+    mkdirSync(web, { recursive: true });
+    await sharp(png).webp({ quality: 90 }).toFile(path);
+  }
+  return readFileSync(path);
+}
 const fail = (res, status) => {
   res.statusCode = status;
   res.end();
@@ -154,7 +170,8 @@ async function api(req, res, path, query) {
     const png = inside(rest("/api/crop/"), ".png");
     if (!png || !existsSync(png)) return fail(res, 404);
     res.setHeader("Content-Type", "image/jpeg");
-    res.setHeader("Cache-Control", "max-age=3600");
+    // A capture's pixels never change, and the box is in the URL.
+    res.setHeader("Cache-Control", "max-age=31536000, immutable");
     return res.end(await crop(png, query.get("f").split(",").map(Number)));
   }
   if (path.startsWith("/api/tiles/")) {
@@ -245,12 +262,12 @@ export default () => ({
         // /captures/48 is capture #48 in the labeler, /values/r6 the r6s in the values page.
         if (/^\/captures(\/\d+)?$/.test(path)) req.url = "/captures.html";
         else if (/^\/values(\/\w+)?$/.test(path)) req.url = "/values.html";
-        else if (path.startsWith("/photos/")) {
-          const png = inside(decodeURIComponent(path.slice("/photos/".length)), "");
+        else if (path.startsWith("/photos/") && path.endsWith(".webp")) {
+          const png = inside(decodeURIComponent(path.slice("/photos/".length, -".webp".length)), ".png");
           if (!png || !existsSync(png)) return fail(res, 404);
-          res.setHeader("Content-Type", "image/png");
+          res.setHeader("Content-Type", "image/webp");
           res.setHeader("Cache-Control", "max-age=31536000, immutable");
-          return createReadStream(png).pipe(res);
+          return res.end(await webp(png));
         } else if (path.startsWith("/api/")) return await api(req, res, path, url.searchParams);
         next();
       } catch (e) {

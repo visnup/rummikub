@@ -62,7 +62,13 @@ import UniformTypeIdentifiers
 
   init() {
     Task {
-      let finder = Task.detached { Game.model("Tiles").flatMap { try? Finder(model: $0) } }
+      let finder = Task.detached {
+        Game.model("Tiles").flatMap { try? Finder(model: $0) }.map {
+          var finder = $0
+          finder.enough = 80
+          return finder
+        }
+      }
       let values = Task.detached { Game.model("Values").flatMap { try? Classifier(model: $0) } }
       let looking = Task.detached { Game.model("Looking").flatMap { try? Classifier(model: $0) } }
       models = Models(finder: await finder.value, values: await values.value, looking: await looking.value)

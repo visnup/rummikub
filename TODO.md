@@ -11,8 +11,7 @@
     what a table looks like mid-turn, so captures of real play, then several training runs, keeping the best: runs
     vary by about 20 tiles.
 - **Speed.** A frame takes about 150 ms to find and 20–90 ms to read on the phone. Time reading again now that a
-  frame's boxes go to Values in one call. When the whole frame already finds large tiles, as in a rack close up,
-  the three squares could be skipped.
+  frame's boxes go to Values in one call, and the squares are skipped when the whole frame finds only large tiles.
 
 ## Captures
 

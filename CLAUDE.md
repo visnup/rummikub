@@ -34,6 +34,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     behind a rack is nearer (37–55 px in #280), and the app leaves that out by `Finder.nearest` instead. Of 1054
     held-out tiles 960 are in scope.
     There the 4 regions found 932 with 14 extras, the 19 found 937 with 16, and the whole image alone 908 with 12.
+    The app sets `enough` to 80: when every box the whole image finds is 80 px or more, it skips the squares. On
+    2026-11-12 that read a fifth fewer regions (202 of 256) for one tile of 2220 lost; 60 lost five.
   - `Overlay.swift`: what to draw for each step of a play over the image: the tile to pick up, its target slot as a
     ghost, and an arrow.
   - `World.swift`: the table as places, with ARKit: each read joins the place within half a tile of where its box's
@@ -54,15 +56,15 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     **correctly**, **misread** as another value, or **unread** (Values not sure enough); of those read correctly, the
     **wrong orientation**; and a **phantom read** on a phantom or duplicate box. Reads are scored against the
     confirmed boxes, not the written truth, which was short on "As read" captures and listed the table behind racks.
-    On 2026-11-11: 2058 tiles, 9 missed, 38 phantom, 0 duplicate; of 2052 confirmed, 2010 read correctly, 18
-    misread, 17 unread, 19 phantom reads. For rack captures with boxes marked background (`x` in the labeler),
+    On 2026-11-12: 2220 tiles, 10 missed, 32 phantom, 0 duplicate; of 2210 confirmed, 2169 read correctly, 14
+    misread, 17 unread, 17 phantom reads. For rack captures with boxes marked background (`x` in the labeler),
     it also counts the rack's tiles `Finder.nearest` keeps and the background ones it lets through.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks
     alike: `crops.py` crops confirmed tiles upright, and `Labeler/values.py` trains MobileNetV3 (ImageNet) at 128 px
     with a head for the tile and one for the orientation, on those crops at random orientations, for 5 minutes on
     the Mac's GPU, then converts it with each class p(tile)·p(orientation). It's 6.8 MB, and reads about 1.2 ms a
-    tile on the phone (72 in 84 ms). Read at the labeled boxes, it gets about 612 of 628 held-out confirmed tiles and 595 orientations right; it levels off after about 3
+    tile on the phone (72 in 84 ms). Read at the labeled boxes, it got 2261 of 2308 held-out confirmed tiles and their orientations right on 2026-11-12; it levels off after about 3
     minutes. Orientation matters because our 6 and 9 differ only in the logo under the numeral. The outside sets'
     orientations aren't written down, so they join at the orientation the last `Values` gives them
     (`.crops/outside.turns`), where it's .9 sure, but not their 6s and 9s. `Recognizer.turned` then reads each
@@ -92,7 +94,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     `small`) are for those comparisons, and `SNAPSHOTS` (`"15 30"`) saves checkpoints along one run for a curve over
     run lengths, since the rate is constant. On 2026-11-10, with 1988 held-out tiles, a fresh run found 1964 with 36
     against the earlier best's 1969 with 23; it was kept. On 2026-11-11, with 2058, a fresh run missed 9 with 38
-    extras against its 24 with 35, and replaced it; nano, YOLO26s and OWLv2 were rerun too (`ARCHIVE.md`).
+    extras against its 24 with 35, and replaced it; nano, YOLO26s and OWLv2 were rerun too (`ARCHIVE.md`). On
+    2026-11-12, with 2220, three runs missed 19, 10 and 16 with 20, 32 and 27 extras, against its 11 with 42; the
+    second replaced it. The retrained `Values` misread 14 where the last one misread 29.
   - `make labels` runs `prelabel.py`, then `fill`, then serves the pages on Vite's dev server at
     http://localhost:8765/captures
     (`/captures/48` is #48; also `labeler` in `.claude/launch.json`).

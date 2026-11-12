@@ -79,3 +79,14 @@ private func seen(_ tile: String, at foot: SIMD3<Float>, from pose: Pose) -> Det
   let box = world.detections(from: near)[0].detection.frame, truth = seen("j", at: foot, from: near).frame
   #expect(abs(box.midX - truth.midX) < 1 && abs(box.maxY - truth.maxY) < 1 && abs(box.width - truth.width) < 1)
 }
+
+@Test func meldsAlongTheTable() {
+  var world = World()
+  let p = pose(0), slope = SIMD3<Float>(cos(.pi / 6), 0, -sin(.pi / 6)) * 0.03
+  // A run rising at 30° on the table, and a tile just behind its first, as #323's r8 behind r10.
+  let run = (0..<3).map { seen("b\($0 + 4)", at: [-0.06, 0, 0] + slope * Float($0), from: p) }
+  let behind = seen("k9", at: [-0.06, 0, -0.042], from: p)
+  for _ in 0..<2 { world.add(run.reversed() + [behind], pose: p) }
+  let melds = World.melds(world.detections(from: p)).map { $0.map(\.tile.description).joined(separator: " ") }
+  #expect(Set(melds) == ["b4 b5 b6", "k9"])
+}

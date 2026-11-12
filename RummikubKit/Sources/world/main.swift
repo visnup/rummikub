@@ -50,10 +50,10 @@ for path in CommandLine.arguments.dropFirst() {
   }
   guard let last else { continue }
   let seen = world.detections(from: last)
-  let rack = seen.filter(\.place.isRack).map(\.detection), table = seen.filter { !$0.place.isRack }.map(\.detection)
+  let rack = seen.filter(\.place.isRack).map(\.detection), table = seen.filter { !$0.place.isRack }
   func line(_ ds: [Detection]) -> String { ds.map(\.tile.description).joined(separator: " ") }
   print("  rack:  " + line(Recognizer.melds(rack).joined().map(\.self)))
-  print("  table: " + Recognizer.valid(Recognizer.melds(table)).map(line).joined(separator: ", "))
+  print("  table: " + Recognizer.valid(World.melds(table)).map(line).joined(separator: ", "))
   for (place, _) in seen.sorted(by: { $0.place.seen > $1.place.seen }) {
     let reads = place.reads.sorted { $0.value > $1.value }.map { String(format: "%@ %.1f", $0.key.description, $0.value) }
       .joined(separator: " ")

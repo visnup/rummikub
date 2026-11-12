@@ -109,6 +109,10 @@ import UniformTypeIdentifiers
   var scene = Scene(table: [], rack: [])
   var plays = [Play]()
   var choice = 0
+  /// Whether the player has laid down their first 30 points, after which they may play on the table.
+  var opened = true {
+    didSet { if opened != oldValue, !locked.isEmpty { Task { await solve() } } }
+  }
   /// The step shown, or nil before starting a play. While stepping, new readings don't re-solve.
   var step: Int?
   /// Every frame's timing, a file a launch in Documents/timing, for `make timing`.
@@ -173,10 +177,12 @@ import UniformTypeIdentifiers
     let turned = Recognizer.turned(found)
     if let ar, recording != nil { record(turned, ar) }
     let voted: [Detection]
+    var melds: [[Detection]]?
     if let pose {
       world.add(turned, pose: pose, mask: ar?.mask)
-      let placed = world.detections(from: pose).filter { $0.place.isRack == (part == .rack) }.map(\.detection)
-      voted = part == .rack ? placed : Recognizer.valid(Recognizer.melds(placed)).flatMap(\.self)
+      let placed = world.detections(from: pose).filter { $0.place.isRack == (part == .rack) }
+      if part == .table { melds = Recognizer.valid(World.melds(placed)) }
+      voted = melds?.flatMap(\.self) ?? placed.map(\.detection)
     } else {
       let seen = part == .rack ? onRack(turned) : Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self)
       readings[part] = Array(((readings[part] ?? []) + [seen]).suffix(5))
@@ -184,7 +190,7 @@ import UniformTypeIdentifiers
     }
     var next = scene
     if part == .table {
-      next.table = Recognizer.melds(voted)
+      next.table = melds ?? Recognizer.melds(voted)
     } else {
       next.rack = voted
     }
@@ -196,6 +202,7 @@ import UniformTypeIdentifiers
         let used = Set(play.steps.compactMap { if case .rack(let i) = $0.from { i } else { nil } })
         scene = Scene(table: next.table, rack: scene.rack.indices.filter { !used.contains($0) }.map { scene.rack[$0] })
         self.step = nil
+        opened = true
         await solve()
       } else if done > step {
         self.step = done
@@ -253,6 +260,7 @@ import UniformTypeIdentifiers
     guard let play else { return }
     scene = play.finished(scene, within: tableBounds)
     step = nil
+    opened = true
     await solve()
   }
 
@@ -402,8 +410,8 @@ import UniformTypeIdentifiers
   }
 
   func solve() async {
-    let table = scene.tableTiles, rack = scene.rackTiles
-    plays = await Task.detached { RummikubKit.solve(table: table, rack: rack) }.value
+    let table = scene.tableTiles, rack = scene.rackTiles, opened = opened
+    plays = await Task.detached { RummikubKit.solve(table: table, rack: rack, opened: opened) }.value
     choice = max(0, plays.count - 1)
   }
 

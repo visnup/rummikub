@@ -7,10 +7,10 @@ func melds(_ string: String) -> [[Tile]] {
 }
 
 /// The plays as (placed, moved), after checking each one is a legal table.
-func options(_ table: String, _ rack: String) -> [[Int]] {
+func options(_ table: String, _ rack: String, opened: Bool = true) -> [[Int]] {
   let table = melds(table)
   let rack = Tile.parse(rack)
-  let plays = solve(table: table, rack: rack)
+  let plays = solve(table: table, rack: rack, opened: opened)
   for play in plays {
     #expect(play.melds.allSatisfy { isMeld($0.tiles) }, "\(play.melds)")
     let placed = play.steps.compactMap { if case .rack(let i) = $0.from { rack[i] } else { nil } }
@@ -52,6 +52,18 @@ func options(_ table: String, _ rack: String) -> [[Int]] {
 
 @Test func freeJoker() {
   #expect(options("r5 j r7", "r6 b8 k8") == [[1, 0], [3, 1]])
+}
+
+@Test func opening() {
+  #expect(options("", "r10 r11 r12 k1 b1 o1", opened: false) == [[0, 0], [6, 0]])
+  #expect(options("", "r1 r2 r3 k5 b5 o5", opened: false) == [[0, 0]])
+  // The joker is worth the 11 it stands for, not 14.
+  #expect(options("", "j r12 r13 k2", opened: false) == [[0, 0], [3, 0]])
+  #expect(options("", "j j r1 k8", opened: false) == [[0, 0]])
+  #expect(options("", "j j r1 k9", opened: false) == [[0, 0], [3, 0]])
+  // The table can't be touched yet, not even to add a b4.
+  #expect(options("b1 b2 b3", "b4 r10 r11 r12", opened: false) == [[0, 0], [3, 0]])
+  #expect(worth(Tile.parse("j j r5")) == (18, Tile.parse("r5 j j")))
 }
 
 @Test func invalidTable() {

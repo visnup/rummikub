@@ -74,7 +74,7 @@ path with no pose. Each step ships on its own and keeps the non-AR path working 
    - Lock per tile, not per part, and don't read again a tile already sure, which saves the reader most of its time.
    - Plays on places: a step's ghost slot a point on the table, `stepsDone` seeing tiles move, `Scene.following`
      gone, and the Board the table from above in table coordinates.
-   - The melds come from boxes projected from the current pose, where `Recognizer.melds` split #323's r4 from r5 r6.
+   - Check `World.melds`' bounds on a crowded table: they're fit to one sparse one.
 5. **AR as the only camera.** Once 1–4 beat today's on the phone, drop the AVCaptureSession path, the lens buttons,
    `Looking` and the tilt, keeping a no-pose path for the Simulator and tests. Captures always record the pose.
 
@@ -88,6 +88,4 @@ a fresh clone builds in Xcode only after a `make`. Leave the versions already in
 
 ## Rules not handled yet
 
-- The 30-point initial meld: a player who hasn't melded can only lay rack-only melds worth 30 or more, and can't
-  touch the table that turn.
 - Scoring: "placed" counts tiles, not their value.

@@ -306,6 +306,7 @@ struct ContentView: View {
         Text("\(melds) isn't a meld. Tap the table to scan it again.").font(.callout)
           .frame(maxWidth: .infinity, alignment: .leading)
       }
+      Toggle("Laid down 30", isOn: $game.opened).font(.callout)
       ForEach(Array(game.plays.enumerated()), id: \.offset) { i, play in
         Button {
           game.choice = i

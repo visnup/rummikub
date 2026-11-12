@@ -13,6 +13,8 @@ public struct World: Sendable {
     /// Its box's width on the table and height over width in the image, the means, to draw it from any pose.
     public var width: Float
     public var aspect: Float
+    /// Its reading direction on the table, left to right, summed over its reads.
+    public var axis: SIMD3<Float>
     /// Summed odds for each tile it was read as.
     public var reads: [Tile: Float]
     /// Summed odds for each orientation of its likeliest tile.
@@ -53,11 +55,16 @@ public struct World: Sendable {
   @discardableResult
   public mutating func add(_ detections: [Detection], pose: Pose, mask: Mask? = nil) -> [Int?] {
     guard pose.plane != nil else { return detections.map { _ in nil } }
-    let feet = detections.map { d -> (point: SIMD3<Float>, width: Float)? in
+    let feet = detections.map { d -> (point: SIMD3<Float>, width: Float, axis: SIMD3<Float>)? in
       let box = d.frame
       guard let a = pose.ground(CGPoint(x: box.minX, y: box.maxY)), let b = pose.ground(CGPoint(x: box.maxX, y: box.maxY))
       else { return nil }
-      return ((a + b) / 2, distance(a, b))
+      // The tile's right in the image, by its orientation, from its middle.
+      let right = [(1, 0), (0, -1), (-1, 0), (0, 1)][d.turns % 4], r = min(box.width, box.height) / 2
+      let axis = pose.ground(CGPoint(x: box.midX - r * CGFloat(right.0), y: box.midY - r * CGFloat(right.1))).flatMap { l in
+        pose.ground(CGPoint(x: box.midX + r * CGFloat(right.0), y: box.midY + r * CGFloat(right.1))).map { normalize($0 - l) }
+      }
+      return ((a + b) / 2, distance(a, b), axis ?? .zero)
     }
     var pairs = [(distance: Float, detection: Int, place: Int)]()
     for (i, foot) in feet.enumerated() {
@@ -94,13 +101,14 @@ public struct World: Sendable {
         place.point = (place.point * n + foot.point) / (n + 1)
         place.width = (place.width * n + foot.width) / (n + 1)
         place.aspect = (place.aspect * n + aspect) / (n + 1)
+        place.axis += foot.axis
         place.seen += 1
         place.missed = 0
         Self.read(d, into: &place)
         places[j] = place
         ids[i] = place.id
       } else {
-        var place = Place(id: next, point: foot.point, width: foot.width, aspect: aspect, reads: [:], turns: [0, 0, 0, 0])
+        var place = Place(id: next, point: foot.point, width: foot.width, aspect: aspect, axis: foot.axis, reads: [:], turns: [0, 0, 0, 0])
         next += 1
         Self.read(d, into: &place)
         places.append(place)
@@ -118,6 +126,7 @@ public struct World: Sendable {
       let into = k < j ? k : k - 1
       for (tile, p) in gone.reads { places[into].reads[tile, default: 0] += p }
       for t in 0..<4 { places[into].turns[t] += gone.turns[t] }
+      places[into].axis += gone.axis
       places[into].seen += gone.seen
       ids = ids.map { $0 == gone.id ? places[into].id : $0 }
     }
@@ -185,6 +194,29 @@ public struct World: Sendable {
     guard depth > 0, let foot = pose.project(place.point) else { return nil }
     let width = CGFloat(pose.intrinsics[0][0] * place.width / depth), height = width * CGFloat(place.aspect)
     return CGRect(x: foot.x - width / 2, y: foot.y - height, width: width, height: height)
+  }
+
+  /// Places in melds, in reading order: tiles side by side along their width, as `Recognizer.melds` joins them in an
+  /// image. On the table, not in a frame, so a meld at an angle stays whole and
+  /// tiles stacked above one another stay apart, as #323's r4 r5 r6 and r8 over r10.
+  public static func melds(_ seen: [(place: Place, detection: Detection)]) -> [[Detection]] {
+    var group = Array(seen.indices)
+    func root(_ i: Int) -> Int { group[i] == i ? i : root(group[i]) }
+    for i in seen.indices {
+      for j in seen.indices where j > i {
+        let a = seen[i].place, b = seen[j].place, v = b.point - a.point, d = length(v)
+        // `width` is the box's, wider than the tile at an angle: in #319–326 neighbors in a meld were .7–.83 widths
+        // apart and within 26° of both tiles' width, and tiles in different melds 1.2 and more, 58° and more.
+        guard d < min(a.width, b.width) * 1.1,
+          [a.axis, b.axis].allSatisfy({ length($0) > 0 && abs(dot(v, normalize($0))) >= d * 0.8 })
+        else { continue }
+        group[root(j)] = root(i)
+      }
+    }
+    return Dictionary(grouping: seen.indices, by: root).values.map { members in
+      let axis = members.reduce(SIMD3<Float>.zero) { $0 + seen[$1].place.axis }
+      return members.sorted { dot(seen[$0].place.point, axis) < dot(seen[$1].place.point, axis) }.map { seen[$0].detection }
+    }.sorted { ($0[0].frame.minY, $0[0].frame.minX) < ($1[0].frame.minY, $1[0].frame.minX) }
   }
 
   /// Every sure place as a detection where it shows from `pose`, in view or not, so a part bigger than the frame reads

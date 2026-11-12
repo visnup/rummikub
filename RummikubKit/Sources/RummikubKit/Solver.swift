@@ -32,7 +32,16 @@ public struct Play: Sendable {
 
 /// The plays worth considering: for each number of tiles placed from the rack, the one that moves the fewest tiles
 /// already on the table. Ordered by tiles placed, so the first is always "place nothing" when `table` is valid.
-public func solve(table: [[Tile]], rack: [Tile]) -> [Play] {
+/// A player who hasn't `opened` may only lay melds of their own worth 30 or more, and not touch the table.
+public func solve(table: [[Tile]], rack: [Tile], opened: Bool = true) -> [Play] {
+  guard opened else {
+    let kept = table.indices.map { Play.Meld(tiles: table[$0], anchor: $0) }
+    let nothing = Play(melds: kept, steps: [])
+    guard let melds = opening(rack) else { return [nothing] }
+    let laid = plan(table: [], rack: rack, melds: melds)
+    let steps = laid.steps.map { Play.Step(tile: $0.tile, from: $0.from, to: $0.to + table.count) }
+    return [nothing, Play(melds: kept + laid.melds, steps: steps)]
+  }
   let plays = front(table: table, rack: rack)
     .map { plan(table: table, rack: rack, melds: $0) }
     .sorted { ($0.placed, -$0.moved) > ($1.placed, -$1.moved) }
@@ -106,6 +115,55 @@ func front(table: [[Tile]], rack: [Tile]) -> [[[Tile]]] {
     lp.bound(1, kept, tiles)
   }
   return front
+}
+
+/// The opening that places the most of `rack`: melds from it alone worth 30 or more, or nil if there's none.
+func opening(_ rack: [Tile]) -> [[Tile]]? {
+  let inRack = Counts(rack)
+  let candidates = Template.all.filter { !any($0.counts .> inRack) }.map { template in
+    let (points, tiles) = worth(template.tiles)
+    return (tiles: tiles, counts: template.counts, points: points, most: any(template.counts &* 2 .> inRack) ? 1 : 2)
+  }
+  let held = (0..<53).filter { inRack[$0] > 0 }
+  // Columns: candidates, unused rack tiles, points. Rows: each tile in the rack, then the points.
+  let columns = candidates.count + held.count + 1
+  var matrix = [Double](repeating: 0, count: (held.count + 1) * columns)
+  for (r, t) in held.enumerated() {
+    for (c, candidate) in candidates.enumerated() { matrix[r * columns + c] = Double(candidate.counts[t]) }
+    matrix[r * columns + candidates.count + r] = 1
+  }
+  let pointsRow = held.count * columns
+  for (c, candidate) in candidates.enumerated() { matrix[pointsRow + c] = Double(candidate.points) }
+  matrix[pointsRow + columns - 1] = -1
+  var lp = LP(
+    matrix: matrix,
+    b: held.map { Double(inRack[$0]) } + [0],
+    cost: candidates.map { -Double($0.counts.total) } + Array(repeating: 0, count: held.count + 1),
+    lower: Array(repeating: 0, count: columns - 1) + [30],
+    upper: candidates.map { Double($0.most) } + held.map { Double(inRack[$0]) } + [Double(13 * rack.count)]
+  )
+  guard let x = lp.minimize(integers: candidates.count) else { return nil }
+  return candidates.indices.flatMap { repeatElement(candidates[$0].tiles, count: Int(x[$0].rounded())) }
+}
+
+/// What a meld counts toward an opening, each joker the tile it stands for, and its tiles laid out that way: a run
+/// as high as its tiles allow, or a group, whichever is worth more.
+func worth(_ tiles: [Tile]) -> (points: Int, tiles: [Tile]) {
+  let real = tiles.filter { $0 != .joker }, values = real.compactMap(\.value), n = tiles.count
+  var best = (points: 0, tiles: tiles)
+  if Set(values).count == 1, Set(real.map(\.color)).count == real.count, n <= 4 {
+    best = (values[0] * n, real + repeatElement(.joker, count: n - real.count))
+  }
+  if let color = real.first?.color, real.allSatisfy({ $0.color == color }), Set(values).count == values.count,
+    values.max()! - values.min()! < n
+  {
+    let start = min(values.min()!, 14 - n)
+    let points = n * start + n * (n - 1) / 2
+    if points > best.points {
+      best = (points, (start..<start + n).map { values.contains($0) ? .number(color, $0) : .joker })
+    }
+  }
+  return best
 }
 
 /// Ways to keep part of the old meld `tiles`: itself, then every run or group that shares at least two of its tiles,

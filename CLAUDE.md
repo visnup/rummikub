@@ -39,9 +39,13 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `World.swift`: the table as places, with ARKit: each read joins the place within half a tile of where its box's
     bottom edge meets the table (¾ for the same tile), or starts one, and each place votes on its own tile. A place
     the finder should have seen three frames running and didn't is dropped, unless a person (ARKit's segmentation,
-    `World.Mask`) or another box covers it. On the rack by Values' mean (.75). `swift run world <start>.jsonl …`
-    replays a recording's log through it, or a 2026-11-11 capture's `ar.history`: on #319–326 it read the rack's 7
-    tiles every time, and #319's and #325's table exactly.
+    `World.Mask`) or another box covers it. On the rack by Values' mean (.75). `World.melds` joins the table's places
+    into melds on the table, not in the image: neighbors under 1.1 box widths apart along both tiles' reading
+    direction, within 37°, so a meld at an angle stays whole and a tile just behind another stays apart. Both bounds
+    are fit to #319–326's one table, where melds measured .7–.83 widths and 26° at most, and other neighbors 1.2 and
+    58° at least. `swift run world <start>.jsonl …` replays a recording's log through it, or a 2026-11-11 capture's
+    `ar.history`: on #319–326 it read the rack's 7 tiles every time, and the table exactly in all four that saw it
+    whole (#319, #323, #325, #326).
   - `Render.swift`: table images and where their tiles lie, for tests, and drawing overlays onto images.
   - `score` (`make score`) runs the finder on the held-out done captures, through `Finder`: tiles found (a box
     overlapping a true one by half), then those boxes read by `Values.mlpackage` when it's beside the captures, as
@@ -255,3 +259,8 @@ are finite, so every basis is dual feasible and a bound change warm-starts.
 Moves are counted in `plan`: old and new melds pair up greedily by overlap, and a table tile that ends up in a meld
 other than its old meld's partner has moved. "Kept" only steers toward the same thing, so `solve` re-filters the
 front by real moves.
+
+Before a player has laid down 30 points (`opened: false`, the Solver's "Laid down 30" switch, which Finish turns
+on), `opening` picks melds from the rack alone worth 30 or more, placing the most tiles, by a smaller integer program
+over the templates in the rack. A joker counts as the tile it stands for, its meld laid out for the most points
+(`worth`). The table stays as it is.

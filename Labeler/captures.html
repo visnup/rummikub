@@ -5,7 +5,6 @@
 <title>Captures</title>
 <link rel="stylesheet" href="/common.css">
 <style>
-  nav, #keys { width: 300px; }
   nav select { margin: 0 10px 4px; }
   nav table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
   nav td, nav th { padding: 3px 4px; white-space: nowrap; }
@@ -17,10 +16,7 @@
   nav tr.current { background: var(--pick); }
   nav .n { text-align: right; }
   nav .k { font-size: 11px; }
-  main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  header { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
-  header b { font-size: 14px; }
-  header small, #missing { color: var(--muted); }
+  #missing { color: var(--muted); }
   #missing .dispute { color: var(--dispute); }
   #view { flex: 1; overflow: auto; position: relative; display: flex; }
   #canvas { display: block; cursor: crosshair; margin: auto; flex: none; }
@@ -49,10 +45,10 @@
   <header>
     <b id="name"></b>
     <select id="layout" title="What the capture was meant to show, which sets its truth">
-      <option>Full set</option><option>As read</option><option>No tiles</option>
+      <option>As read</option><option>Full set</option><option>No tiles</option>
     </select>
-    <select id="looking" title="Whether it shows the rack or the table">
-      <option value="rack">Rack</option><option value="table">Table</option>
+    <select id="looking" title="Whether it shows the table or the rack">
+      <option value="table">Table</option><option value="rack">Rack</option>
     </select>
     <span id="count"></span>
     <span id="missing"></span>
@@ -63,13 +59,13 @@
 <details id="keys"><summary>Keys</summary><div>
   Every tile needs a box and nothing else does. Click empty space to add a box the size of those nearby, or drag to
   draw one; drag a box to move it, its corner to resize. Click a box to select it, shift-drag around several to select
-  them, or <kbd>a</kbd> to select every unconfirmed one. Type a tile (<kbd>r12</kbd>, <kbd>j</kbd>) and
+  them, cmd-click to add or remove one, or <kbd>a</kbd> to select every unconfirmed one. Type a tile (<kbd>r12</kbd>, <kbd>j</kbd>) and
   <kbd>Enter</kbd> to set and confirm it, <kbd>?</kbd> for one you can't read, or just <kbd>Enter</kbd> to confirm what it shows; one box then goes on to
   the next unconfirmed, unless it's <kbd>⇧Enter</kbd>. <kbd>←</kbd><kbd>→</kbd> turn its orientation, <kbd>x</kbd> marks it background (box it anyway: the table behind a rack, a rack at a table's edge), <kbd>⌫</kbd> deletes it, <kbd>Esc</kbd>
   selects none. With nothing selected, <kbd>Enter</kbd> marks the capture done and opens the next, <kbd>u</kbd>
   unmarks it, and <kbd>D</kbd> deletes it, to the Trash.
-  Under Check, dashed red marks a box the finder misses, dashed blue a box it finds that has none (double-click to
-  adopt it), and a red tag a value the classifier reads otherwise. <kbd>n</kbd> zooms to the next mark, <kbd>N</kbd>
+  Where the models disagree, dashed red marks a box the finder misses (missed), dashed blue a box it finds that has
+  none (extra; double-click to adopt it), and a red tag a value Values reads otherwise. <kbd>n</kbd> zooms to the next mark, <kbd>N</kbd>
   the previous, drawing the finder's box there solid; <kbd>f</kbd> snaps the selected box to it, or adds it, or with
   no mark snaps the selected box to the finder's box it overlaps. <kbd>Tab</kbd> selects the next unconfirmed box;
   <kbd>Enter</kbd> with nothing selected marks the capture looked over.
@@ -175,7 +171,7 @@ function list() {
   });
   const table = document.createElement("table");
   table.innerHTML = `<thead><tr><th class="n">#</th><th></th><th></th><th class="n" title="boxes the finder misses">miss</th>` +
-    `<th class="n" title="boxes the finder finds that aren't labeled">extra</th><th class="n" title="values read otherwise">val</th><th class="n">boxes</th></tr></thead>`;
+    `<th class="n" title="boxes the finder finds that have none">extra</th><th class="n" title="values read otherwise">val</th><th class="n">boxes</th></tr></thead>`;
   const stages = [0, 1, 2].map(s => captures.filter(c => stage(c) === s).length);
   const sort = document.createElement("select");
   sort.title = `${stages[0]} pending, ${stages[1]} to check, ${stages[2]} done`;
@@ -200,7 +196,7 @@ function summary() {
   const missing = document.getElementById("missing");
   const open = tiles.filter(t => !t.confirmed).length;
   const k = c.check;
-  const disagree = k && [[k.missed, "boxes the finder misses"], [k.extra, "found unboxed"], [k.values, "values read otherwise"]]
+  const disagree = k && [[k.missed, "missed"], [k.extra, "extra"], [k.values, "values read otherwise"]]
     .filter(([a]) => a.length).map(([a, what]) => `${a.length} ${what}`).join(", ");
   missing.innerHTML = (c.truth ? "" : "truth unknown: box every tile, ") + (open ? `${open} unconfirmed` : "all confirmed") +
     (disagree ? ` <span class="dispute">${disagree}${c.checked ? ", looked over" : ""}</span>` : "");
@@ -241,7 +237,7 @@ function draw() {
     ctx.setLineDash([5, 4]);
     ctx.strokeStyle = color("--dispute");
     for (const f of k.missed) { const [x, y, w, h] = f.map(v => v * scale); ctx.strokeRect(x - 4, y - 4, w + 8, h + 8); }
-    ctx.strokeStyle = "#0cf";
+    ctx.strokeStyle = color("--extra");
     for (const f of k.extra) { const [x, y, w, h] = f.map(v => v * scale); ctx.strokeRect(x, y, w, h); }
     if (focus) {
       ctx.setLineDash([]); ctx.lineWidth = 4;
@@ -341,7 +337,8 @@ const inside = (t, x, y) => x >= t.frame[0] && y >= t.frame[1] && x <= t.frame[0
 
 canvas.onmousedown = e => {
   const [x, y] = point(e);
-  many.clear(); focus = null;
+  if (!e.metaKey) many.clear();
+  focus = null;
   if (e.shiftKey) {
     selected = null; typed = "";
     drag = { mode: "select", x0: x, y0: y, x1: x, y1: y };
@@ -353,7 +350,13 @@ canvas.onmousedown = e => {
     return;
   }
   const hits = tiles.map((t, i) => [t, i]).filter(([t]) => inside(t, x, y)).sort((a, b) => a[0].frame[2] * a[0].frame[3] - b[0].frame[2] * b[0].frame[3]);
-  if (hits.length) {
+  if (hits.length && e.metaKey) {
+    // Adds the box to those selected together, or takes it out.
+    if (selected !== null) many.add(selected);
+    const i = hits[0][1];
+    many.has(i) ? many.delete(i) : many.add(i);
+    selected = null; typed = "";
+  } else if (hits.length) {
     selected = hits[0][1]; typed = "";
     drag = { mode: "move", x0: x, y0: y, frame: [...tiles[selected].frame] };
   } else {

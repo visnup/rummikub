@@ -5,12 +5,11 @@
 <title>Values</title>
 <link rel="stylesheet" href="/common.css">
 <style>
-  main { flex: 1; overflow: auto; padding: 8px; }
-  header { padding: 0 4px 8px; color: var(--muted); }
-  #grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  #grid { flex: 1; overflow: auto; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
   .cell { width: 96px; border: 3px solid var(--unconfirmed); border-radius: 4px; cursor: pointer; user-select: none; }
   .cell.confirmed { border-color: var(--confirmed); }
   .cell.selected { border-color: var(--selected); }
+  .cell.background img { opacity: 0.35; }
   .cell div { width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .cell img { max-width: 96px; max-height: 96px; }
   .cell p { margin: 0; padding: 1px 4px; font: bold 12px ui-monospace, monospace; display: flex; justify-content: space-between; }
@@ -20,14 +19,15 @@
 </head>
 <body>
 <nav id="list"></nav>
-<main><header id="title"></header><div id="grid"></div></main>
+<main><header><b id="title"></b><small id="count"></small></header><div id="grid"></div></main>
 <div id="typed"></div>
 <details id="keys"><summary>Keys</summary><div>
   Each tile is drawn upright by its orientation, so one upside down or sideways has the wrong orientation. Yellow is
   unconfirmed, least sure first, and green confirmed. Click a tile to select it, shift-click to select a run,
   cmd-click to add or remove one, or <kbd>a</kbd> to select every unconfirmed one. Type a tile (<kbd>r6</kbd>,
   <kbd>j</kbd>) and <kbd>Enter</kbd> to set and confirm the selected ones, <kbd>?</kbd> for ones you can't read, or just <kbd>Enter</kbd> to confirm what
-  they show. <kbd>←</kbd><kbd>→</kbd> turn their orientation, <kbd>Esc</kbd> selects none. Double-click opens the
+  they show. <kbd>←</kbd><kbd>→</kbd> turn their orientation, <kbd>x</kbd> marks them background (dimmed: the table
+  behind a rack), <kbd>Esc</kbd> selects none. Double-click opens the
   capture. Changes save as you make them.
 </div></details>
 <script type="module">
@@ -75,8 +75,9 @@ function nav() {
       const of = all.filter(t => t.tile === k), open = of.filter(t => !t.confirmed).length;
       return link(k, k, open ? `${open}/${of.length}` : of.length);
     }));
-  document.getElementById("title").textContent = v === "unsure"
-    ? `The ${shown.length} least sure unconfirmed tiles` : `${v}: ${shown.length} tiles, ${shown.filter(t => !t.confirmed).length} unconfirmed`;
+  document.getElementById("title").textContent = v === "unsure" ? "Least sure" : v;
+  document.getElementById("count").textContent = v === "unsure"
+    ? `the ${shown.length} unconfirmed tiles Values is least sure of` : `${shown.length} tiles, ${shown.filter(t => !t.confirmed).length} unconfirmed`;
 }
 
 function cell(t, i) {
@@ -104,7 +105,7 @@ function cell(t, i) {
 function refresh() {
   [...document.getElementById("grid").children].forEach((c, i) => {
     const t = shown[i];
-    c.className = "cell" + (t.confirmed ? " confirmed" : "") + (selected.has(t) ? " selected" : "");
+    c.className = "cell" + (t.confirmed ? " confirmed" : "") + (selected.has(t) ? " selected" : "") + (t.background ? " background" : "");
     c.querySelector("img").style.transform = `rotate(${(t.turns || 0) * 90}deg)`;
     c.querySelector("p").innerHTML = `<span style="color:${hue(t.tile)}">${label(t)}</span><small>#${t.id}${t.odds != null && !t.confirmed ? ` ${t.odds.toFixed(2)}` : ""}</small>`;
   });
@@ -136,6 +137,10 @@ window.onkeydown = e => {
     e.preventDefault();
     if (!selected.size) return flash();
     change(t => ({ turns: turn(t.turns, e.key) }));
+  } else if (e.key === "x" && !typed) {
+    if (!selected.size) return flash();
+    const on = ![...selected].every(t => t.background);
+    change({ background: on });
   } else return;
   refresh();
   nav();

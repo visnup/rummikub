@@ -1,7 +1,11 @@
-:root { --bg: #fff; --fg: #111; --muted: #666; --line: #ddd; --pick: #e0e7ff; --unconfirmed: #fc0; --confirmed: #2c2; --selected: #f0f; --dispute: #d33; }
+:root { --bg: #fff; --fg: #111; --muted: #666; --line: #ddd; --pick: #e0e7ff; --unconfirmed: #fc0; --confirmed: #2c2; --selected: #f0f; --dispute: #d33; --extra: #0cf; }
 @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #eee; --muted: #999; --line: #333; --pick: #2a2f4a; } }
 body { margin: 0; display: flex; height: 100vh; font: 13px/1.4 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--fg); }
-nav, #keys { width: 230px; }
+nav, #keys { width: 300px; }
+main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+main > header { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+main > header b { font-size: 14px; }
+main > header small { color: var(--muted); }
 nav { overflow: auto; border-right: 1px solid var(--line); flex: none; padding-bottom: 32px; box-sizing: border-box; }
 nav .pages { display: flex; margin: 8px 10px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 nav .pages a { flex: 1; justify-content: center; padding: 3px 0; color: var(--muted); }

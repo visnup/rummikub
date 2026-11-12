@@ -81,7 +81,7 @@ function values() {
     const name = nameOf(png);
     return readJSON(without(png, ".png") + ".tiles.json", []).filter(t => (t.tile ?? "?") !== "?").map(t => ({
       name, id: number[stem(png)] ?? null, frame: t.frame, tile: t.tile, turns: t.turns ?? 0,
-      confirmed: !!t.confirmed, odds: t.odds ?? null,
+      confirmed: !!t.confirmed, odds: t.odds ?? null, background: !!t.background,
     }));
   });
 }
@@ -121,6 +121,7 @@ function apply(changes) {
       if (!tile) continue;
       Object.assign(tile, f, { source: "hand" });
       delete tile.odds;
+      if (tile.background === false) delete tile.background;
       changed++;
     }
     writeJSON(path, tiles);

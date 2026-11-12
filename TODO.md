@@ -49,8 +49,8 @@ Today a frame is the unit: each one is found, read, voted over the last five, an
 the table is the unit: every tile has a place on it, frames add evidence to tiles, and drawing follows the camera at
 60 fps between reads. On 2026-11-11 the AR mode measured flat tiles on the table plane to a few mm (28–45 mm sides,
 large set), once ARKit had found the table. What it costs: no ultra wide (ARKit offers the wide lens only, so a whole
-table takes a pan), more battery than a stopped camera, and the Simulator has no ARKit, so `Demo/` photos keep a
-path with no pose. Each step ships on its own and keeps the non-AR path working until step 5.
+table takes a pan), and more battery than a stopped camera. The Simulator has no ARKit, so it replays a recording
+(`Replay`). Each step ships on its own and keeps the non-AR path working until step 5.
 
 1. **Labels pinned to the table.** Done 2026-11-11 (`Pose.follow`): on the phone it feels much better than labels
    that jump at each read.

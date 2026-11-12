@@ -82,7 +82,20 @@ struct ContentView: View {
           }
       }
       Tab("Solver", systemImage: "square.grid.3x3.fill", value: 1) {
-        panel(over: board) { solver }
+        Group {
+          if game.onBoard {
+            Board(game: game) { part in
+              game.rescan(part)
+              game.pick(part)
+            } controls: {
+              VStack(spacing: 12) { solver }
+                .padding()
+                .glassEffect(in: .rect(cornerRadius: 24))
+            }
+          } else {
+            panel(over: Color.clear) { solver }
+          }
+        }
           .safeAreaBar(edge: .top) {
             if !game.onBoard {
               HStack {
@@ -122,10 +135,15 @@ struct ContentView: View {
         if ar { camera.use(ar: true) }
         for await frame in camera.frames { await game.see(frame.image, ar: frame.pose == nil ? nil : frame) }
       } else {
-        // No camera, as in the simulator: read a photo of whichever the picker says, as often as a camera would.
+        // No camera, as in the simulator: replay an AR recording at its pace, over and over.
         while !Task.isCancelled {
-          if tab == 0 || !game.onBoard, let image = Demo.photos[game.looking] { await game.see(image) }
-          try? await Task.sleep(for: .seconds(0.2))
+          for (f, next) in zip(Replay.frames, Replay.frames.dropFirst() + [Replay.frames[0]]) where !Task.isCancelled {
+            if tab == 0 || !game.onBoard {
+              game.looking = f.looking
+              await game.see(f.frame.image, ar: f.frame, read: f.read)
+            }
+            try? await Task.sleep(for: .seconds(min(max(next.time - f.time, 0.1), 1)))
+          }
         }
       }
     }
@@ -139,19 +157,6 @@ struct ContentView: View {
         .padding()
         .glassEffect(in: .rect(corners: .concentric(minimum: .fixed(24)), isUniform: true))
         .scenePadding(.horizontal)
-    }
-  }
-
-  var board: some View {
-    ZStack {
-      if game.onBoard {
-        Board(game: game) { part in
-          game.rescan(part)
-          game.pick(part)
-        }
-      } else {
-        Color.clear
-      }
     }
   }
 
@@ -503,11 +508,31 @@ struct Overlay: View {
   }
 }
 
-/// Photos from `Demo/`, read straight off the Mac, which the simulator can see.
-enum Demo {
-  static let photos: [Game.Looking: CGImage] = [.table: "2026-11-06T155531Z", .rack: "2026-11-06T155556Z"]
-    .compactMapValues { name in
-      let url = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../Demo/\(name).png")
-      return CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }
+/// An AR recording in `Captures/`, read straight off the Mac, which the simulator can see: each frame's pose, person
+/// mask and reads, with the last photo the recording captured by then.
+enum Replay {
+  static let name = "2026-11-12T14:17:55Z"
+  static let frames: [(time: Double, looking: Game.Looking, frame: Frame, read: [Detection])] = {
+    let captures = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../Captures")
+    guard let recording = try? Recording(contentsOf: captures.appending(path: name + ".jsonl")) else { return [] }
+    let photos = [captures, captures.appending(path: "unlabeled")].flatMap { folder in
+      ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []).compactMap {
+        url -> (time: Double, image: CGImage)? in
+        let stem = url.deletingPathExtension().lastPathComponent
+        guard url.pathExtension == "json", let time = try? Date(stem, strategy: .iso8601),
+          let notes = (try? Data(contentsOf: url)).flatMap({ try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }),
+          notes["recording"] as? String == name,
+          let image = CGImageSourceCreateWithURL(url.deletingLastPathComponent().appending(path: stem + ".png") as CFURL, nil)
+            .flatMap({ CGImageSourceCreateImageAtIndex($0, 0, nil) })
+        else { return nil }
+        return (time.timeIntervalSince1970, image)
+      }
+    }.sorted { $0.time < $1.time }
+    guard let first = photos.first else { return [] }
+    return recording.frames.map { f in
+      let image = photos.last { $0.time <= f.time + 1 }?.image ?? first.image
+      return (f.time, Game.Looking(rawValue: f.looking) ?? .table,
+        Frame(image: image, pose: f.pose, tracking: "normal", mask: f.mask), f.detections)
     }
+  }()
 }

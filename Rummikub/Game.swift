@@ -137,14 +137,15 @@ import UniformTypeIdentifiers
   var ar: Frame?
   var footprints = [SIMD2<Float>?]()
 
-  func see(_ image: CGImage, ar: Frame? = nil) async {
+  /// Reads a frame, or takes `read`, a recording's reads of it, as the simulator replays one.
+  func see(_ image: CGImage, ar: Frame? = nil, read: [Detection]? = nil) async {
     guard models != nil else { return }
     // Once locked, frames only watch for changes, so a second apart is enough and the phone stays cooler; while
     // stepping through a play, every frame, to follow each move.
     if locked.contains(looking), step == nil, Date.now.timeIntervalSince(lastSeen) < 1 { return }
     lastSeen = .now
     // Only where tilt can't say: below 30° it's always been a rack, above 55° a table.
-    if picked == nil, let lookingModel, (30...55).contains(tilt ?? 40),
+    if picked == nil, read == nil, let lookingModel, (30...55).contains(tilt ?? 40),
       let (label, confidence) = await Task.detached(operation: { try? lookingModel.label(of: image) }).value,
       confidence >= 0.8, let seen = Looking(rawValue: label)
     {
@@ -156,6 +157,7 @@ import UniformTypeIdentifiers
     let finder = finder, classifier = values, rack = looking == .rack && pose == nil
     // The finder's boxes read by Values.
     let (found, boxes, findTime, time) = await Task.detached {
+      if let read { return (read, Optional(read.map(\.frame)), Duration.zero, Duration.zero) }
       let clock = ContinuousClock()
       var boxes: [CGRect]?
       let findTime = clock.measure { boxes = try? finder?.tiles(in: image) }

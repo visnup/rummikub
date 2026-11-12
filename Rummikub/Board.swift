@@ -1,19 +1,46 @@
 import RummikubKit
 import SwiftUI
 
-/// The table and rack as last read, each laid out as it sat in its frame, with the step being shown drawn on them.
-/// Tapping either scans it again.
-struct Board: View {
+/// The table and rack as last read, each laid out as it sat in its frame, with the step being shown drawn on them,
+/// and the controls between them. The table pans and zooms. Tapping either scans it again.
+struct Board<Controls: View>: View {
   let game: Game
   let scan: (Game.Looking) -> Void
+  @ViewBuilder let controls: Controls
+  @State private var zoom: CGFloat = 1
+  @State private var pan = CGSize.zero
+  @GestureState private var pinching: (scale: CGFloat, at: CGPoint)?
+  @GestureState private var dragging = CGSize.zero
+  @State private var size = CGSize.zero
+
+  /// The zoom and pan after a pinch by `scale` about `at`, which stays put.
+  func pinched(_ scale: CGFloat, at: CGPoint) -> (zoom: CGFloat, pan: CGSize) {
+    let scale = max(scale, 1 / zoom)
+    return (zoom * scale, CGSize(width: scale * pan.width + (1 - scale) * (at.x - size.width / 2),
+      height: scale * pan.height + (1 - scale) * (at.y - size.height / 2)))
+  }
 
   var body: some View {
-    GeometryReader { geometry in
-      VStack(spacing: 12) {
-        part(.table, tiles: Array(game.scene.table.joined()), marks: fromRack ? marks.filter(\.isTarget) : marks)
-          .frame(height: (geometry.size.height - 12) * 0.65)
-        part(.rack, tiles: Self.rows(game.scene.rack), marks: fromRack ? rackMarks : [])
-      }
+    let rack = Scene.laid(game.scene.rack)
+    let rows = Set(rack.map(\.frame.minY)).count
+    let (zoom, pan) = pinching.map { pinched($0.scale, at: $0.at) } ?? (zoom, pan)
+    VStack(spacing: 12) {
+      part(.table, tiles: Array(game.scene.table.joined()), marks: fromRack ? marks.filter(\.isTarget) : marks,
+        zoom: zoom, pan: CGSize(width: pan.width + dragging.width, height: pan.height + dragging.height))
+        .clipped()
+        .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
+        .gesture(
+          MagnifyGesture()
+            .updating($pinching) { value, state, _ in state = (value.magnification, value.startLocation) }
+            .onEnded { (self.zoom, self.pan) = pinched($0.magnification, at: $0.startLocation) }
+            .simultaneously(with: DragGesture()
+              .updating($dragging) { value, state, _ in state = value.translation }
+              .onEnded { self.pan = CGSize(width: self.pan.width + $0.translation.width,
+                height: self.pan.height + $0.translation.height) }))
+      controls
+      part(.rack, tiles: rack, marks: fromRack ? rackMarks : [])
+        .frame(height: CGFloat(max(rows, 1)) * 64 + 56)
+        .background(.fill.tertiary, in: .rect(cornerRadius: 16))
     }
     .padding()
   }
@@ -25,38 +52,14 @@ struct Board: View {
     return fromRack ? marks.filter { if case .arrow = $0 { false } else { true } } : marks
   }
 
-  /// The tiles to pick up from the rack, where `rows` draws them.
+  /// The tiles to pick up from the rack, where `Scene.laid` draws them.
   var rackMarks: [Mark] {
     guard let play = game.play, let step = game.step else { return [] }
-    let laid = Self.rows(game.scene.rack)
+    let laid = Scene.laid(game.scene.rack)
     return play.group(at: step).compactMap {
       guard case .rack(let i) = play.steps[$0].from, laid.indices.contains(i) else { return nil }
       return .source(laid[i].frame)
     }
-  }
-
-  /// The rack as even rows, in the order its tiles sit, since its frames overlap in perspective: rows split where a
-  /// tile sits over half a tile higher than the last.
-  static func rows(_ rack: [Detection]) -> [Detection] {
-    let heights = rack.map(\.frame.height).sorted()
-    guard !heights.isEmpty else { return [] }
-    let h = heights[heights.count / 2]
-    var rows = [[Int]]()
-    for i in rack.indices.sorted(by: { rack[$0].frame.midY < rack[$1].frame.midY }) {
-      if let last = rows.last?.last, rack[i].frame.midY - rack[last].frame.midY < h / 2 {
-        rows[rows.count - 1].append(i)
-      } else {
-        rows.append([i])
-      }
-    }
-    var laid = rack
-    for (r, row) in rows.enumerated() {
-      for (c, i) in row.sorted(by: { rack[$0].frame.midX < rack[$1].frame.midX }).enumerated() {
-        laid[i] = Detection(tile: rack[i].tile, frame: CGRect(x: CGFloat(c) * h * 0.78, y: CGFloat(r) * h * 1.1,
-          width: h * 0.72, height: h))
-      }
-    }
-    return laid
   }
 
   var fromRack: Bool {
@@ -66,10 +69,15 @@ struct Board: View {
     return true
   }
 
-  func part(_ part: Game.Looking, tiles: [Detection], marks: [Mark]) -> some View {
+  func part(_ part: Game.Looking, tiles: [Detection], marks: [Mark], zoom: CGFloat = 1, pan: CGSize = .zero)
+    -> some View
+  {
     Canvas { context, size in
       let rects = tiles.map(\.frame) + marks.compactMap(\.rect)
       guard let first = rects.first else { return }
+      context.translateBy(x: size.width / 2 + pan.width, y: size.height / 2 + pan.height)
+      context.scaleBy(x: zoom, y: zoom)
+      context.translateBy(x: -size.width / 2, y: -size.height / 2)
       let margin = (rects.map(\.height).max() ?? 0) * 0.3
       let fit = Fit(rects.reduce(first) { $0.union($1) }.insetBy(dx: -margin, dy: -margin), in: size)
       let bad = Set(game.scene.table.filter { !isMeld($0.map(\.tile)) }.joined())
@@ -90,7 +98,6 @@ struct Board: View {
       }
       Overlay.draw(marks, in: &context, fit: fit)
     }
-    .background(.fill.tertiary, in: .rect(cornerRadius: 16))
     .overlay(alignment: .topLeading) {
       Label("\(part.rawValue.capitalized) \(tiles.count)", systemImage: "checkmark.circle.fill")
         .font(.caption.bold().monospacedDigit()).foregroundStyle(.green).padding(10)

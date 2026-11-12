@@ -189,8 +189,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   and rack as text once two frames agree. The table and rack are each voted over their last five frames (each tile as often as the median frame read it),
   and lock once the vote holds for two seconds: then frames stop changing them and the plays are solved once. A locked
   part that reads differently for three seconds shows "changed?"; its chip in the Solver panel scans it again. While a play is being shown, readings don't re-solve; they advance the step instead
-  (`Play.stepsDone`). The simulator never uses a camera: it reads a photo in `Demo/` of whichever the Table/Rack switch
-  says, straight off the Mac's disk. On the phone, Table/Rack follows `Looking` when it's .8 sure, or
+  (`Play.stepsDone`). The simulator never uses a camera: it replays an AR recording in `Captures/` (`Replay`, #327–331's),
+  straight off the Mac's disk, each frame's pose, person mask and reads through the AR path, with the last photo it
+  captured by then. It takes a few seconds to launch, reading every capture's notes for its photos. On the phone, Table/Rack follows `Looking` when it's .8 sure, or
   without it the tilt from CoreMotion (`Game.tilt`), shown in degrees in the top pill and written into each capture.
   A pick by hand holds until that part locks. In the Simulator, Vision requests are pinned to the
   CPU, else it can't create an inference context; the finder's boxes there still come out wrong, so check on the phone.
@@ -199,7 +200,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     were off on one device or the other. Notes are typed in an alert, since the accessory stays behind the keyboard.
     Solver keeps a two-row panel.
   - Once table and rack are both locked, the Solver shows the Board (`Board.swift`) and the camera stops, to save
-    battery: each part drawn as it sat in its frame, with the step shown drawn on it. Tapping a part scans it again.
+    battery: the table on top as it sat in its frame, pinch-zoomed and panned, then the controls, then the rack in up
+    to three rows, each tile where `World` measured it along the rack (`Scene.laid`), each with the step shown drawn on it. Tapping a part
+    scans it again.
     Finish on a play's last step takes its melds as the table (`Play.finished`, in the slots the steps put them) and
     re-solves, with no rescan. Models load off the main thread, in parallel, about 7 s on a cold launch; frames wait for them, and the
     top pill shows progress against the last launch's load time.

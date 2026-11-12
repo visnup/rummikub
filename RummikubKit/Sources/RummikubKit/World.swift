@@ -299,10 +299,14 @@ public struct World: Sendable {
   /// Every sure place as a detection where it shows from `pose`, in view or not, so a part bigger than the frame reads
   /// whole.
   public func detections(from pose: Pose) -> [(place: Place, detection: Detection)] {
-    places.filter(\.sure).compactMap { place in
+    let sure = places.filter(\.sure)
+    let axis = sure.filter(\.isRack).reduce(SIMD3<Float>.zero) { $0 + $1.axis }
+    return sure.compactMap { place in
       box(place, from: pose).map { frame in
         let turns = place.turns.indices.max { place.turns[$0] < place.turns[$1] }!
-        return (place, Detection(tile: place.tile, frame: frame, turns: turns, odds: place.odds, rack: place.onRack))
+        var detection = Detection(tile: place.tile, frame: frame, turns: turns, odds: place.odds, rack: place.onRack)
+        if place.isRack, length(axis) > 0 { detection.along = dot(place.point, normalize(axis)) }
+        return (place, detection)
       }
     }
   }

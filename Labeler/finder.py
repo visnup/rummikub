@@ -10,7 +10,7 @@ the other folders with a .tiles.json, like the outside sets `outside.py` convert
   uv run Labeler/finder.py <captures> [<folder>...]
 
 MINUTES (60) bounds training; on the held-out captures 4 minutes found 854 of 1013 tiles, 15 found 894, 60 found
-950. SIZE (small) picks the D-FINE size, and QUARTERS (4) trains on that many quarters of our captures, nested, for a
+950. SIZE (small) picks the D-FINE size, PRETRAINED (coco) its pretraining (obj365, obj2coco), and QUARTERS (4) trains on that many quarters of our captures, nested, for a
 learning curve. SNAPSHOTS ("15 30") also saves the checkpoint at those minutes, beside it as .finder-new-15 and so on,
 for a curve over run lengths.
 """
@@ -94,7 +94,7 @@ def train(items, checkpoint: Path, minutes: float):
 
     print(len(items), "images,", sum(len(b) for _, b in items), "tiles", flush=True)
     model = DFineForObjectDetection.from_pretrained(
-        f"ustc-community/dfine-{os.environ.get('SIZE', 'small')}-coco", num_labels=1, id2label={0: "tile"},
+        f"ustc-community/dfine-{os.environ.get('SIZE', 'small')}-{os.environ.get('PRETRAINED', 'coco')}", num_labels=1, id2label={0: "tile"},
         label2id={"tile": 0}, ignore_mismatched_sizes=True,
     ).to("mps")
     backbone = [p for n, p in model.named_parameters() if "backbone" in n]

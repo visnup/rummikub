@@ -12,6 +12,8 @@ public struct Detection: Hashable, Sendable {
   public var turned = [Tile: [Float]]()
   /// How likely it stands on a rack rather than lies on the table, from a classifier that says.
   public var rack: Float?
+  /// Where a rack tile stands along the rack, in metres, as `World` measured it.
+  public var along: Float?
 
   public init(
     tile: Tile, frame: CGRect, turns: Int = 0, odds: [Tile: Float] = [:], turned: [Tile: [Float]] = [:], rack: Float? = nil

@@ -60,11 +60,14 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `score` (`make score`) runs the finder on the held-out done captures, through `Finder`: tiles found (a box
     overlapping a true one by half), then those boxes read by `Values.mlpackage` when it's beside the captures, as
     the app reads them. It takes `Captures/Tiles.mlpackage`, and counts each error by name: a tile **missed**, a
-    **phantom** box on no tile, a **duplicate** box on a tile already found; of the confirmed tiles found, read
+    **phantom** box on no tile (`PHANTOMS=1` lists them; a box out of scope or on a tile out of scope isn't one, as in
+    `check`), a **duplicate** box on a tile already found; of the confirmed tiles found, read
     **correctly**, **misread** as another value, or **unread** (Values not sure enough); and a **phantom read** on a phantom or duplicate box. Reads are scored against the
     confirmed boxes, not the written truth, which was short on "As read" captures and listed the table behind racks.
     Later on 2026-11-12, after more Check fixes: 2289 tiles, 9 missed, 27 phantom, 0 duplicate; of 2277 confirmed,
-    2234 read correctly, 14 misread, 20 unread, 12 phantom reads. Each value's confirmed tiles missed, misread (and as
+    2234 read correctly, 14 misread, 20 unread, 12 phantom reads. Then, with 2309 tiles and phantoms scoped as
+    `check` scopes them, 11 missed and 19 phantom where the old count said 28: #156's six were loose boxes on far
+    tiles. #114's are two empty rack slots and a thing on the stove. Each value's confirmed tiles missed, misread (and as
     what) and unread go to `Captures/.score.json` for the values page, unless `TILES` or `BOXES` names another
     model. For rack captures with boxes marked background (`x` in the labeler),
     it also counts the rack's tiles `Finder.nearest` keeps and the background ones it lets through.

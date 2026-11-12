@@ -121,7 +121,12 @@
         tileOf.append(i)
       } else {
         let taken = Set(truth.indices).subtracting(left)
-        if let i = best(taken), Finder.overlap(truth[i], box) > 0.5 { s.duplicate += 1 } else { s.phantom += 1 }
+        if let i = best(taken), Finder.overlap(truth[i], box) > 0.5 { s.duplicate += 1 }
+        else if !small(box), !(best(Set(truth.indices)).map { small(truth[$0]) && Finder.overlap(truth[$0], box) > 0 } ?? false) {
+          s.phantom += 1
+          // PHANTOMS=1 prints each phantom box.
+          if environment["PHANTOMS"] != nil { print("phantom", name, box) }
+        }
         tileOf.append(nil)
       }
     }

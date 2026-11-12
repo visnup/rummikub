@@ -4,20 +4,31 @@ import simd
 
 @testable import RummikubKit
 
-/// Looking down at 45° from 40 cm, `x` metres to the right.
-private func pose(_ x: Float) -> Pose {
-  var transform = simd_float4x4(simd_quatf(angle: -.pi / 4, axis: [1, 0, 0]) * simd_quatf(angle: -.pi / 2, axis: [0, 0, 1]))
-  transform.columns.3 = [x, 0.4, 0.4, 1]
+/// Looking down from 40 cm up, at 45° from 40 cm back, `x` metres to the right.
+private func pose(_ x: Float, back: Float = 0.4) -> Pose {
+  var transform = simd_float4x4(simd_quatf(angle: -atan(0.4 / back), axis: [1, 0, 0]) * simd_quatf(angle: -.pi / 2, axis: [0, 0, 1]))
+  transform.columns.3 = [x, 0.4, back, 1]
   return Pose(intrinsics: intrinsics, resolution: CGSize(width: 1920, height: 1080), transform: transform,
     plane: matrix_identity_float4x4)
 }
 
 /// A tile lying on the table with its near edge's middle at `foot`, as `pose` boxes it.
-private func seen(_ tile: String, at foot: SIMD3<Float>, from pose: Pose, width: Float = 0.03) -> Detection {
+private func seen(_ tile: String, at foot: SIMD3<Float>, from pose: Pose, width: Float = 0.03, rack: Float? = nil) -> Detection {
   let near = [foot - [width / 2, 0, 0], foot + [width / 2, 0, 0]].map { pose.project($0)! }
   let far = pose.project(foot - [0, 0, 0.04])!
   let box = CGRect(x: near[0].x, y: far.y, width: near[1].x - near[0].x, height: near[0].y - far.y)
-  return Detection(tile: Tile(tile)!, frame: box)
+  return Detection(tile: Tile(tile)!, frame: box, rack: rack)
+}
+
+@Test func rackTileOnALedge() {
+  var world = World()
+  // Its foot 3 cm above the table, seen from 45° down to 27°, where its ray meets the table 3 cm further back.
+  let foot: SIMD3<Float> = [0, 0.03, 0]
+  for back: Float in [0.4, 0.4, 0.5, 0.6, 0.7, 0.8, 0.8, 0.4] {
+    world.add([seen("k5", at: foot, from: pose(0, back: back), rack: 0.95)], pose: pose(0, back: back))
+  }
+  #expect(world.places.count == 1)
+  #expect(abs(world.places[0].height - 0.03) < 0.005)
 }
 
 @Test func twoOfATileByPlace() {

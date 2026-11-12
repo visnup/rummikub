@@ -70,10 +70,9 @@ path with no pose. Each step ships on its own and keeps the non-AR path working 
    go.
 4. **A world table.** Started 2026-11-11: `World` replaces the five-frame vote in AR mode once ARKit has the table,
    and tells the rack by Values' mean per place. Not yet tried on the phone. Still to do:
-   - Rack by place, not only Values' mean: the rack's line, once found, claims any tile on it. In #327–331's
-     recording the rack read 11 of 12 at first, but coming back to it from the table started a second place for
-     k3, k5, k8, b6 and b13: a rack tile's foot sits on a ledge above the table, so it moves on the table plane as
-     the camera does, and the new place's box covers the old, which is then never dropped.
+   - Rack by place, not only Values' mean: the rack's line, once found, claims any tile on it. Rack places now
+     find their ledge's height (`settle`), which ended #327–331's doubles, but only when the camera moves
+     gradually: a jump from 45° to 27° in one frame still doubles a tile, in the test.
    - Lock per tile, not per part, and don't read again a tile already sure, which saves the reader most of its time.
    - Plays on places: a step's ghost slot a point on the table, `stepsDone` seeing tiles move, `Scene.following`
      gone, and the Board the table from above in table coordinates.

@@ -41,7 +41,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `World.swift`: the table as places, with ARKit: each read joins the place within half a tile of where its box's
     bottom edge meets the table (¾ for the same tile), or starts one, and each place votes on its own tile. A place
     the finder should have seen three frames running and didn't is dropped, unless a person (ARKit's segmentation,
-    `World.Mask`) or another box covers it. On the rack by Values' mean (.75). `World.melds` joins the table's places
+    `World.Mask`) or another box covers it. On the rack by Values' mean (.75). A rack tile's foot stands on a ledge
+    above the table, so where it meets the table moves as the camera does; each rack place keeps every sighting's
+    ray and finds the height where they meet (`settle`), 25–67 mm in #327–331, and matches new reads at that height.
+    Without it, coming back to the rack from the table doubled 5 of its 12 tiles. `World.melds` joins the table's places
     into melds on the table, not in the image: neighbors under 1.1 box widths apart along both tiles' reading
     direction, within 37°, so a meld at an angle stays whole and a tile just behind another stays apart. Both bounds
     are fit to #319–326's one table, where melds measured .7–.83 widths and 26° at most, and other neighbors 1.2 and
@@ -50,7 +53,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     whole (#319, #323, #325, #326). ARKit doesn't always find the tabletop: over dark felt (#327–331) it found only
     the floor, 0.97 m down, and called it a table. So `World.level` lifts the plane, kept level, to where the tiles
     Values says lie on the table measure 36 mm along their bottom edge (35–37 in #325 and #326), the running median
-    over 30 frames. That read #327–331's table exactly; #319–326 read as before.
+    over 30 frames, only when they measure over 1.5 times that: always lifting pinned the AR labels to a plane below
+    the table, and they swam as the camera moved. That read #327–331's table and rack exactly; #319–326 read as
+    before.
   - `Render.swift`: table images and where their tiles lie, for tests, and drawing overlays onto images.
   - `score` (`make score`) runs the finder on the held-out done captures, through `Finder`: tiles found (a box
     overlapping a true one by half), then those boxes read by `Values.mlpackage` when it's beside the captures, as

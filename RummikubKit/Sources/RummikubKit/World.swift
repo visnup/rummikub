@@ -20,6 +20,11 @@ public struct World: Sendable {
     /// Summed odds for each orientation of its likeliest tile.
     public var turns: [Float]
     public var seen = 1
+    /// How far a rack tile's foot sits above the table, on its ledge, from its sightings' rays (`settle`). 0 on the
+    /// table.
+    public var height: Float = 0
+    /// From the camera through its foot, one a sighting.
+    var rays = [Ray]()
     /// Frames in a row it should have shown in and didn't.
     public var missed = 0
     var rack: Float = 0, racked = 0
@@ -37,6 +42,32 @@ public struct World: Sendable {
     public var isRack: Bool { (onRack ?? 0) >= 0.75 }
     /// Seen in two frames, so a one-frame phantom box isn't a tile.
     public var sure: Bool { seen >= 2 }
+  }
+
+  struct Ray: Sendable {
+    var origin: SIMD3<Float>, direction: SIMD3<Float>
+
+    /// Where it meets `plane`, and how that point moves per metre the plane rises.
+    func meets(_ plane: simd_float4x4) -> (point: SIMD3<Float>, rise: SIMD3<Float>) {
+      let normal = SIMD3(plane.columns.1.x, plane.columns.1.y, plane.columns.1.z)
+      let onPlane = SIMD3(plane.columns.3.x, plane.columns.3.y, plane.columns.3.z)
+      let facing = dot(direction, normal)
+      return (origin + dot(onPlane - origin, normal) / facing * direction, direction / facing)
+    }
+  }
+
+  /// Sets a place's height and point from its rays: the height at which they meet closest, by least squares, and
+  /// their mean there. A tile on a rack stands on a ledge, so where its foot's ray meets the table moves as the camera
+  /// does: in #327–331, 26–56 mm away from the camera between the table and the rack. Little camera motion says little
+  /// about height, so it's pulled toward the table.
+  static func settle(_ place: inout Place, on plane: simd_float4x4) {
+    guard place.isRack else { return }
+    let meets = place.rays.map { $0.meets(plane) }, n = Float(meets.count)
+    let point = meets.reduce(.zero) { $0 + $1.point } / n, rise = meets.reduce(.zero) { $0 + $1.rise } / n
+    let spread = meets.reduce(Float(0)) { $0 + dot($1.point - point, $1.rise - rise) }
+    let motion = meets.reduce(Float(0)) { $0 + length_squared($1.rise - rise) }
+    place.height = min(max(-spread / (motion + n * 0.01), 0), 0.08)
+    place.point = point + place.height * rise
   }
 
   public private(set) var places = [Place]()
@@ -74,6 +105,8 @@ public struct World: Sendable {
       return distance(a, b)
     }.sorted()
     guard widths.count >= 3 else { return nil }
+    // Pouch tiles are smaller than the large set's, so only a plane far off moves: on the floor they measured 100–140.
+    guard widths[widths.count / 2] > tileWidth * 1.5 else { return 0 }
     let normal = SIMD3(plane.columns.1.x, plane.columns.1.y, plane.columns.1.z)
     let onPlane = SIMD3(plane.columns.3.x, plane.columns.3.y, plane.columns.3.z)
     let camera = SIMD3(pose.transform.columns.3.x, pose.transform.columns.3.y, pose.transform.columns.3.z)
@@ -94,8 +127,10 @@ public struct World: Sendable {
   public mutating func add(_ detections: [Detection], pose found: Pose, mask: Mask? = nil) -> [Int?] {
     guard found.plane != nil else { return detections.map { _ in nil } }
     if let lift = Self.lift(detections, pose: found) { lifts = (lifts + [lift]).suffix(30) }
-    let pose = level(found)
-    let feet = detections.map { d -> (point: SIMD3<Float>, width: Float, axis: SIMD3<Float>)? in
+    let pose = level(found), plane = pose.plane!
+    for j in places.indices { Self.settle(&places[j], on: plane) }
+    let camera = SIMD3(pose.transform.columns.3.x, pose.transform.columns.3.y, pose.transform.columns.3.z)
+    let feet = detections.map { d -> (point: SIMD3<Float>, width: Float, axis: SIMD3<Float>, ray: Ray, rise: SIMD3<Float>)? in
       let box = d.frame
       guard let a = pose.ground(CGPoint(x: box.minX, y: box.maxY)), let b = pose.ground(CGPoint(x: box.maxX, y: box.maxY))
       else { return nil }
@@ -104,7 +139,8 @@ public struct World: Sendable {
       let axis = pose.ground(CGPoint(x: box.midX - r * CGFloat(right.0), y: box.midY - r * CGFloat(right.1))).flatMap { l in
         pose.ground(CGPoint(x: box.midX + r * CGFloat(right.0), y: box.midY + r * CGFloat(right.1))).map { normalize($0 - l) }
       }
-      return ((a + b) / 2, distance(a, b), axis ?? .zero)
+      let ray = Ray(origin: camera, direction: (a + b) / 2 - camera)
+      return ((a + b) / 2, distance(a, b), axis ?? .zero, ray, ray.meets(plane).rise)
     }
     var pairs = [(distance: Float, detection: Int, place: Int)]()
     for (i, foot) in feet.enumerated() {
@@ -112,7 +148,7 @@ public struct World: Sendable {
       for (j, place) in places.enumerated() {
         // Two of one tile never sit side by side in a meld, so the same read reaches further: a tile at an angle
         // moved its foot 14 mm between frames.
-        let d = distance(foot.point, place.point)
+        let d = distance(foot.point + place.height * foot.rise, place.point)
         let reach = detections[i].tile == place.tile ? max(foot.width, place.width) * 0.75 : min(foot.width, place.width) / 2
         if d < reach { pairs.append((d, i, j)) }
       }
@@ -139,6 +175,8 @@ public struct World: Sendable {
         var place = places[j]
         let n = Float(place.seen)
         place.point = (place.point * n + foot.point) / (n + 1)
+        place.rays.append(foot.ray)
+        Self.settle(&place, on: plane)
         place.width = (place.width * n + foot.width) / (n + 1)
         place.aspect = (place.aspect * n + aspect) / (n + 1)
         place.axis += foot.axis
@@ -149,6 +187,7 @@ public struct World: Sendable {
         ids[i] = place.id
       } else {
         var place = Place(id: next, point: foot.point, width: foot.width, aspect: aspect, axis: foot.axis, reads: [:], turns: [0, 0, 0, 0])
+        place.rays = [foot.ray]
         next += 1
         Self.read(d, into: &place)
         places.append(place)
@@ -168,6 +207,8 @@ public struct World: Sendable {
       for t in 0..<4 { places[into].turns[t] += gone.turns[t] }
       places[into].axis += gone.axis
       places[into].seen += gone.seen
+      places[into].rays += gone.rays
+      Self.settle(&places[into], on: plane)
       ids = ids.map { $0 == gone.id ? places[into].id : $0 }
     }
     return ids

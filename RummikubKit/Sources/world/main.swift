@@ -58,7 +58,7 @@ for path in CommandLine.arguments.dropFirst() {
     let reads = place.reads.sorted { $0.value > $1.value }.map { String(format: "%@ %.1f", $0.key.description, $0.value) }
       .joined(separator: " ")
     let nearest = world.places.filter { $0.id != place.id }.map { distance($0.point, place.point) }.min() ?? 0
-    print(String(format: "    #%-3d seen %2d  rack %.2f  width %2.0f mm, %2.0f mm from the next  %@", place.id, place.seen,
-      place.onRack ?? -1, place.width * 1000, nearest * 1000, reads))
+    print(String(format: "    #%-3d seen %2d  rack %.2f  width %2.0f mm, %2.0f mm from the next, %2.0f mm up  %@", place.id, place.seen,
+      place.onRack ?? -1, place.width * 1000, nearest * 1000, place.height * 1000, String(reads.prefix(30))))
   }
 }

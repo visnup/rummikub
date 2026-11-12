@@ -36,6 +36,11 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     There the 4 regions found 932 with 14 extras, the 19 found 937 with 16, and the whole image alone 908 with 12.
   - `Overlay.swift`: what to draw for each step of a play over the image: the tile to pick up, its target slot as a
     ghost, and an arrow.
+  - `World.swift`: the table as places, with ARKit: each read joins the place within half a tile of where its box's
+    bottom edge meets the table (¾ for the same tile), or starts one, and each place votes on its own tile. A place
+    the finder should have seen three frames running and didn't is dropped. On the rack by Values' mean (.75).
+    `swift run world <capture>.json …` replays a capture's `ar.history` through it: on #319–326 it read the rack's
+    7 tiles every time, and #319's and #325's table exactly.
   - `Render.swift`: table images and where their tiles lie, for tests, and drawing overlays onto images.
   - `score` (`make score`) runs the finder on the held-out done captures, through `Finder`: tiles found (a box
     overlapping a true one by half), then those boxes read by `Values.mlpackage` when it's beside the captures, as
@@ -173,7 +178,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - AR, beside the lens buttons (which leave it), hands the camera to ARKit, an experiment (`Pose.swift`): it finds the table as a
     plane and measures each box on it, in mm under the box, green when tile-sized, so lying on the table; a standing
     rack tile reaches far behind it. Between reads the overlay redraws every display frame where the camera is now,
-    each box's bottom edge held to the table (`Pose.follow`). Captures then record the pose, planes and footprints under `ar`, and in `ar.history` each frame read in
+    each box's bottom edge held to the table (`Pose.follow`). Once ARKit has the table, the table and rack come from
+    `World` instead of the five-frame vote, and the rack isn't filtered by `nearest` or Values first. Captures then record the pose, planes and footprints under `ar`, and in `ar.history` each frame read in
     the last 10 s: its pose, plane, boxes and readings (a second apart once the part in view is locked). On the Duo
     ARKit has no LiDAR and tracks only with the wide lens, at 1920×1080 here to match the models.
   - The camera is the virtual multi-lens device, so .5× reaches the ultra wide; it starts at the widest, since a whole

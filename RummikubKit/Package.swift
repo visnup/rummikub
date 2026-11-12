@@ -15,6 +15,7 @@ let package = Package(
     .executableTarget(name: "fill", dependencies: ["RummikubKit"]),
     .executableTarget(name: "score", dependencies: ["RummikubKit"]),
     .executableTarget(name: "words"),
+    .executableTarget(name: "world", dependencies: ["RummikubKit"]),
     .executableTarget(name: "looking"),
     .testTarget(name: "RummikubKitTests", dependencies: ["RummikubKit"]),
   ]

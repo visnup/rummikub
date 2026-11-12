@@ -69,13 +69,13 @@ path with no pose. Each step ships on its own and keeps the non-AR path working 
    its tiles' bottom edges held still on the table plane to 2–9 mm. Once Values has found it, any tile there is rack,
    at any angle. That belongs to step 4's world table, and with it `Looking`, the tilt and the Table/Rack switch can
    go.
-4. **A world table.** Replace the five-frame vote and `Scene.following` with tiles keyed by place: a detection joins
-   the tile within half a tile of it, or starts one; each tile keeps its own vote of reads. Two of each tile are told
-   apart by place. A pan then builds a table bigger than any frame; the table locks per tile, not per frame; a read
-   tile that's already sure needn't be read again, which saves the reader most of its time. Plays use the same
-   places: a step's ghost slot is a point on the table, `stepsDone` sees tiles move, and the Board is the table from
-   above in table coordinates. The biggest step: the merging and voting go in RummikubKit as a `World`, tested with
-   synthetic poses, then on step 2's logs.
+4. **A world table.** Started 2026-11-11: `World` replaces the five-frame vote in AR mode once ARKit has the table,
+   and tells the rack by Values' mean per place. Not yet tried on the phone. Still to do:
+   - Rack by place, not only Values' mean: the rack's line, once found, claims any tile on it.
+   - Lock per tile, not per part, and don't read again a tile already sure, which saves the reader most of its time.
+   - Plays on places: a step's ghost slot a point on the table, `stepsDone` seeing tiles move, `Scene.following`
+     gone, and the Board the table from above in table coordinates.
+   - The melds come from boxes projected from the current pose, where `Recognizer.melds` split #323's r4 from r5 r6.
 5. **AR as the only camera.** Once 1–4 beat today's on the phone, drop the AVCaptureSession path, the lens buttons,
    `Looking` and the tilt, keeping a no-pose path for the Simulator and tests. Captures always record the pose.
 

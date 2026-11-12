@@ -140,7 +140,10 @@ import UniformTypeIdentifiers
     {
       looking = seen
     }
-    let finder = finder, classifier = values, rack = looking == .rack
+    // With a table plane, every read goes to the world table, which says what's on the rack by place.
+    let pose = ar?.pose.flatMap { $0.plane == nil ? nil : $0 }
+    if ar?.pose == nil { world = World() }
+    let finder = finder, classifier = values, rack = looking == .rack && pose == nil
     // The finder's boxes read by Values.
     let (found, boxes, findTime, time) = await Task.detached {
       let clock = ContinuousClock()
@@ -178,9 +181,16 @@ import UniformTypeIdentifiers
     // Touching tiles at the orientation they agree on; on the table, each meld then as the likeliest valid one, as
     // between turns they all are.
     let turned = Recognizer.turned(found)
-    let seen = part == .rack ? onRack(turned) : Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self)
-    readings[part] = Array(((readings[part] ?? []) + [seen]).suffix(5))
-    let voted = vote(readings[part]!)
+    let voted: [Detection]
+    if let pose {
+      world.add(turned, pose: pose)
+      let placed = world.detections(from: pose).filter { $0.place.isRack == (part == .rack) }.map(\.detection)
+      voted = part == .rack ? placed : Recognizer.valid(Recognizer.melds(placed)).flatMap(\.self)
+    } else {
+      let seen = part == .rack ? onRack(turned) : Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self)
+      readings[part] = Array(((readings[part] ?? []) + [seen]).suffix(5))
+      voted = vote(readings[part]!)
+    }
     var next = scene
     if part == .table {
       next.table = Recognizer.melds(voted)
@@ -224,8 +234,10 @@ import UniformTypeIdentifiers
     }
   }
 
-  /// Each part's last few frames' readings, newest last.
+  /// Each part's last few frames' readings, newest last, without ARKit.
   private var readings = [Looking: [[Detection]]]()
+  /// With ARKit, every tile read, by place on the table (`World`).
+  @ObservationIgnored private var world = World()
   /// When each part's reading last changed while scanning.
   private var steadySince = [Looking: Date]()
   /// When a locked part's reading started disagreeing with it.
@@ -260,6 +272,7 @@ import UniformTypeIdentifiers
   func rescan(_ part: Looking) {
     locked.remove(part)
     readings[part] = nil
+    world.forget(rack: part == .rack)
     changedSince[part] = nil
     steadySince[part] = .now
   }

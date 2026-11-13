@@ -331,17 +331,13 @@ struct ContentView: View {
             Text("\(text)\(meld.offset == 0 ? "" : "  ·  ")\(numbers(meld.element))")
           }
           numbers(game.scene.rackTiles)
+          // The table keeps every tile it had, so it locks only once they've all been seen again.
+          if !game.locked.contains(.table), !game.unseen.isEmpty {
+            Text("Still to find: \(numbers(game.unseen))").font(.callout).foregroundStyle(.secondary)
+          }
         }
         .font(.callout.bold().monospacedDigit())
         .frame(maxWidth: .infinity, alignment: .leading)
-      }
-      let bad = game.scene.tableTiles.filter { !isMeld($0) }
-      if game.onBoard, game.plays.isEmpty, !bad.isEmpty {
-        let melds = bad.enumerated().reduce(Text("")) { text, meld in
-          Text("\(text)\(meld.offset == 0 ? "" : " · ")\(numbers(meld.element))")
-        }
-        Text("\(melds) isn't a meld. Tap the table to scan it again.").font(.callout)
-          .frame(maxWidth: .infinity, alignment: .leading)
       }
       if !game.opened {
         Text("Lay down 30 to open").font(.callout).foregroundStyle(.secondary)

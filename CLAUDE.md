@@ -196,7 +196,11 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   tracks the step shown; `ContentView`
   draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table
   and rack as text once two frames agree. The table and rack are each voted over their last five frames (each tile as often as the median frame read it),
-  and lock once the vote holds for two seconds: then frames stop changing them and the plays are solved once. A locked
+  and lock once the vote holds for two seconds and follows what was known before the part was scanned again
+  (`Rules.swift`): the table only its valid melds, holding every tile it had, the rack as it was or one tile more, and
+  no tile more than twice; until then the Solver lists the table's tiles still to find. With nothing known yet, as at
+  a new game, 14 tiles in `World` in all are the dealt rack, wherever they lie. Then frames stop changing
+  them and the plays are solved once. A locked
   part that reads differently for three seconds shows "changed?"; its chip in the Solver panel scans it again. While a play is being shown, readings don't re-solve; they advance the step instead
   (`Play.stepsDone`). The simulator never uses a camera: it replays an AR recording in `Captures/` (`Replay`, #327–331's),
   straight off the Mac's disk, each frame's pose, person mask and reads through the AR path, with the last photo it

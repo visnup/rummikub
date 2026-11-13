@@ -209,11 +209,14 @@ import UniformTypeIdentifiers
       let leveled = world.level(pose)
       self.ar?.pose = leveled
       footprints = self.boxes.map(leveled.footprint)
-      let placed = world.detections(from: pose)
-      let melds = Recognizer.valid(World.melds(placed.filter { !$0.place.isRack }))
+      // A new game deals 14 tiles, so 14 in all are the rack's, wherever they lie.
+      let dealt = before.table.isEmpty && before.rack.isEmpty && world.places.count(where: \.sure) == 14
+      let placed = world.detections(from: pose, allRack: dealt)
+      let melds = dealt ? [] : Recognizer.valid(World.melds(placed.filter { !$0.place.isRack }))
       await update(.table, voted: melds.flatMap(\.self), melds: melds,
         inView: racks.allSatisfy { $0 == nil } || racks.contains(false))
-      await update(.rack, voted: placed.filter(\.place.isRack).map(\.detection), inView: racks.contains(true))
+      await update(.rack, voted: placed.filter { dealt || $0.place.isRack }.map(\.detection),
+        inView: dealt || racks.contains(true))
     } else {
       keyframe()
       let part = looking
@@ -252,6 +255,7 @@ import UniformTypeIdentifiers
       return
     }
 
+    if part == .table { next = next.melded }
     let same = next.tiles(part) == scene.tiles(part)
     if same {
       changedSince[part] = nil
@@ -259,7 +263,7 @@ import UniformTypeIdentifiers
       if next.reads(like: scene) { scene = next }
       let since = steadySince[part] ?? .now
       steadySince[part] = since
-      if !locked.contains(part), Date.now.timeIntervalSince(since) >= 2,
+      if !locked.contains(part), Date.now.timeIntervalSince(since) >= 2, follows(part),
         part == .table || !voted.isEmpty
       {
         locked.insert(part)
@@ -273,6 +277,17 @@ import UniformTypeIdentifiers
       steadySince[part] = .now
     }
   }
+
+  /// The table and rack as last known, when a part was last scanned again, for what a scan may say (`Rules.swift`).
+  private var before = Scene(table: [], rack: [])
+
+  /// Whether a part as read now can follow what was known of it.
+  private func follows(_ part: Looking) -> Bool {
+    scene.possible && (part == .table ? scene.tableFollows(before) : scene.rackFollows(before))
+  }
+
+  /// The table's tiles not read since it was last known, which it must still have.
+  var unseen: [Tile] { Scene.missing(before.tableTiles.joined(), from: scene.tableTiles.joined()) }
 
   /// Each part's last few frames' readings, newest last, without ARKit.
   private var readings = [Looking: [[Detection]]]()
@@ -309,6 +324,7 @@ import UniformTypeIdentifiers
   /// Forgets the table and rack, and that 30 was laid down.
   func newGame() {
     scene = Scene(table: [], rack: [])
+    before = scene
     plays = []
     choice = 0
     step = nil
@@ -328,6 +344,7 @@ import UniformTypeIdentifiers
 
   /// Scans a part again, from scratch.
   func rescan(_ part: Looking) {
+    if locked.contains(part) { before = scene }
     locked.remove(part)
     readings[part] = nil
     world.forget(rack: part == .rack)

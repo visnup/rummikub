@@ -4,14 +4,11 @@
 
 The flow in "Design" in `CLAUDE.md`, in order. Each step ships on its own.
 
-Done: whether 30 is laid down follows the game, and "New game" is in a menu (2026-11-13).
+Done 2026-11-13: whether 30 is laid down follows the game, and "New game" is a title bar button; a part locks only
+when it follows the last known state (`Rules.swift`), and the table keeps only valid melds.
 
-2. **A scan proposes, the state decides.** A scan's table and rack are taken only when consistent with the last
-   state: the table all valid melds, holding every tile it had; at most two of a tile in all; the rack as it was, or
-   with the one tile drawn. Tiles that break this are dropped (phantoms, a rack tile seen as the table's). Once a
-   consistent state holds steady, back to the Solver on its own.
-3. **Table and rack in one view.** With the rules above, a tile in no valid meld and in my rack is the rack's;
-   positions and Values' rack odds decide the rest. Replay the 2026-11-13 reports (`Captures/unlabeled/*.jsonl`)
+3. **Table and rack in one view.** A rack tile in no valid meld is now dropped from the table, but not yet counted
+   on the rack; positions and Values' rack odds decide the rest. Replay the 2026-11-13 reports (`Captures/unlabeled/*.jsonl`)
    with `swift run world` to check.
 4. **No moves.** "No moves. Draw a tile." with a button to the rack scanner, which looks for exactly one new tile.
 5. **Steps on the Board only.** Drop the AR marks and the camera advancing steps; a tap moves to the next step.

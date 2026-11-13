@@ -152,7 +152,7 @@ struct ContentView: View {
   /// The Solver's controls, too tall for the tab bar's accessory, in a bar above the tab bar, with the scene's
   /// margins and corners concentric with the display's.
   func panel(over base: some View, @ViewBuilder _ content: () -> some View) -> some View {
-    base.safeAreaBar(edge: .bottom) {
+    base.bottomBar {
       VStack(spacing: 12, content: content)
         .padding()
         .glassEffect(in: .rect(corners: .concentric(minimum: .fixed(24)), isUniform: true))

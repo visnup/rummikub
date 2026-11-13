@@ -40,9 +40,7 @@ struct Board<Controls: View>: View {
       controls
     }
     .padding()
-    // The system's place for a bar, with the display's corners: above the tab bar, or down level with it where the
-    // tab bar is at the side, as on the iPhone Duo.
-    .safeAreaBar(edge: .bottom) {
+    .bottomBar {
       part(.rack, tiles: rack, marks: fromRack ? rackMarks : [])
         .frame(height: CGFloat(max(rows, 1)) * 36 + 48)
         .background(.fill.tertiary, in: .rect(corners: .concentric(minimum: .fixed(16)), isUniform: true))
@@ -113,6 +111,23 @@ struct Board<Controls: View>: View {
     .contentShape(.rect)
     .onTapGesture { scan(part) }
   }
+}
+
+/// The system's place for a bar, above the tab bar. Where the tab bar is at the side, as on the iPhone Duo, that
+/// leaves the home indicator's inset below it, so the bar drops to 24 pt off the bottom, level with the tab bar.
+struct BottomBar<Bar: View>: ViewModifier {
+  let bar: Bar
+  @State private var insets = EdgeInsets()
+
+  func body(content: Content) -> some View {
+    content
+      .safeAreaBar(edge: .bottom) { bar.padding(.bottom, insets.trailing > 0 ? -max(insets.bottom - 24, 0) : 0) }
+      .onGeometryChange(for: EdgeInsets.self, of: \.safeAreaInsets) { insets = $0 }
+  }
+}
+
+extension View {
+  func bottomBar(@ViewBuilder _ bar: () -> some View) -> some View { modifier(BottomBar(bar: bar())) }
 }
 
 extension Mark {

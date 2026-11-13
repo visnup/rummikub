@@ -9,12 +9,13 @@ for path in CommandLine.arguments.dropFirst() {
   let history = try Recording(contentsOf: URL(filePath: path)).frames
   guard let first = history.first else { continue }
   print(URL(filePath: path).lastPathComponent)
-  var world = World(), last: Pose?, previous = first.time
+  var world = World(), last: Pose?, previous = first.time, before = Scene(table: [], rack: [])
   for frame in history {
-    // The camera restarted, and the app with it forgets every place.
+    // The camera restarted, and the app with it forgets every place, but knows what it showed.
     if frame.time - previous > 2, frame.tracking != "normal" {
       world = World()
-      print("  restarted")
+      before = frame.shown ?? before
+      print("  restarted, knowing \(before.rack.count) on the rack and \(before.table.joined().count) on the table")
     }
     previous = frame.time
     let ids = frame.tracking == "normal" ? world.add(frame.detections, pose: frame.pose, mask: frame.mask) : []
@@ -41,6 +42,9 @@ for path in CommandLine.arguments.dropFirst() {
     print(line)
   }
   print("  table: " + Recognizer.valid(World.melds(table)).map(line).joined(separator: ", "))
+  // What the app takes from that, by the game's rules (`World.parts`).
+  let parts = world.parts(from: last, knowing: before)
+  print("  parts: table " + parts.table.map(line).joined(separator: ", ") + " | rack " + line(parts.rack))
   for (place, _) in seen.sorted(by: { $0.place.seen > $1.place.seen }) {
     let reads = place.reads.sorted { $0.value > $1.value }.map { String(format: "%@ %.1f", $0.key.description, $0.value) }
       .joined(separator: " ")

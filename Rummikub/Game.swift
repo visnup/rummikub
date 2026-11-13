@@ -209,14 +209,10 @@ import UniformTypeIdentifiers
       let leveled = world.level(pose)
       self.ar?.pose = leveled
       footprints = self.boxes.map(leveled.footprint)
-      // A new game deals 14 tiles, so 14 in all are the rack's, wherever they lie.
-      let dealt = before.table.isEmpty && before.rack.isEmpty && world.places.count(where: \.sure) == 14
-      let placed = world.detections(from: pose, allRack: dealt)
-      let melds = dealt ? [] : Recognizer.valid(World.melds(placed.filter { !$0.place.isRack }))
-      await update(.table, voted: melds.flatMap(\.self), melds: melds,
+      let known = world.parts(from: pose, knowing: before)
+      await update(.table, voted: known.table.flatMap(\.self), melds: known.table,
         inView: racks.allSatisfy { $0 == nil } || racks.contains(false))
-      await update(.rack, voted: placed.filter { dealt || $0.place.isRack }.map(\.detection),
-        inView: dealt || racks.contains(true))
+      await update(.rack, voted: known.rack, inView: !known.rack.isEmpty || racks.contains(true))
     } else {
       keyframe()
       let part = looking

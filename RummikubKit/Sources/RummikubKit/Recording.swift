@@ -15,6 +15,8 @@ public struct Recording: Sendable {
     public let pose: Pose
     public let mask: World.Mask?
     public let detections: [Detection]
+    /// The table and rack the app showed going into the frame, its tiles without places; logged since 2026-11-13.
+    public let shown: Scene?
   }
 
   public let frames: [Frame]
@@ -49,9 +51,14 @@ public struct Recording: Sendable {
         World.Mask(width: $0["width"] as! Int, height: $0["height"] as! Int,
           bytes: [UInt8](Data(base64Encoded: $0["bytes"] as! String)!))
       }
+      let shown = (frame["shown"] as? [String: Any]).map { shown in
+        func tiles(_ s: some StringProtocol) -> [Detection] { Tile.parse(String(s)).map { Detection(tile: $0, frame: .zero) } }
+        return Scene(table: (shown["table"] as? [String] ?? []).map(tiles),
+          rack: (shown["rack"] as? [String] ?? []).flatMap(tiles))
+      }
       return Frame(time: frame["time"] as! Double, looking: frame["looking"] as? String ?? "",
         tracking: frame["tracking"] as? String ?? "normal", pose: pose, mask: mask,
-        detections: detections)
+        detections: detections, shown: shown)
     }
   }
 }

@@ -75,8 +75,16 @@ What was tried and dropped, so nobody repeats it.
   (missed, phantom): the kept D-FINE small 24 and 35; a fresh D-FINE small 9 and 38 at .6; D-FINE nano 34 and 46 at
   .6, 28 and 95 at .5; YOLO26s 7 and 50 at .5, 22 and 37 at .6; OWLv2 with a probe 123 and 292. YOLO26s matches
   D-FINE small's finds with a few more phantoms, but it's AGPL. The scripts were `yolo.py` and `owl.py`, not kept.
+- **D-FINE small from Objects365 then COCO** (`PRETRAINED=obj2coco`, 2026-11-12), against COCO alone: on 2309
+  held-out tiles it missed 30 with 23 phantoms, where the kept finder missed 9 with 22. One run, but runs vary by
+  about 10 misses.
 - **Vision's rectangle detector as the finder** (`VNDetectRectanglesRequest`, every rectangle, 2026-11-11): 789 of
   2114 held-out tiles found, with 1862 phantom boxes.
+- **Cheat at SET's card finder** (`visnup/cheat-at-set`, 2026-11-12), ported to tiles: luminosity over a threshold,
+  bright 8-connected blobs, filled hulls kept by area and some ink inside. At its best threshold, 195, it found 1073
+  of 2309 held-out tiles with 358 phantoms; at its own 212, 1009 with 270. Set cards lie apart, but tiles in a meld
+  or on a rack touch, and a bright tabletop merges with them, so their blobs come out too big (fits the misses, not
+  checked on the images).
 - **Rack or table by a tile's taper** (`Standing`, 2026-11-11): cast onto a plane level with the table, a standing
   tile's top edge comes out longer than its bottom edge, about 1.15 at 30–40 cm, and a flat tile's the same length;
   gravity alone places the plane. Corners are the extremes of the box's largest bright patch. On the 14 held-out

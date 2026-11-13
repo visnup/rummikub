@@ -38,11 +38,16 @@ struct Board<Controls: View>: View {
               .onEnded { self.pan = CGSize(width: self.pan.width + $0.translation.width,
                 height: self.pan.height + $0.translation.height) }))
       controls
-      part(.rack, tiles: rack, marks: fromRack ? rackMarks : [])
-        .frame(height: CGFloat(max(rows, 1)) * 64 + 56)
-        .background(.fill.tertiary, in: .rect(cornerRadius: 16))
     }
     .padding()
+    // The system's place for a bar, with the display's corners: above the tab bar, or down level with it where the
+    // tab bar is at the side, as on the iPhone Duo.
+    .safeAreaBar(edge: .bottom) {
+      part(.rack, tiles: rack, marks: fromRack ? rackMarks : [])
+        .frame(height: CGFloat(max(rows, 1)) * 36 + 48)
+        .background(.fill.tertiary, in: .rect(corners: .concentric(minimum: .fixed(16)), isUniform: true))
+        .scenePadding(.horizontal)
+    }
   }
 
   /// The current step's marks in the table's pixels, but for a tile from the rack, whose source is in the rack's.
@@ -98,6 +103,8 @@ struct Board<Controls: View>: View {
       }
       Overlay.draw(marks, in: &context, fit: fit)
     }
+    // Below its label: the rack fills its box, where the table has room above its tiles.
+    .padding(.top, part == .rack ? 24 : 0)
     .overlay(alignment: .topLeading) {
       Label("\(part.rawValue.capitalized) \(tiles.count)", systemImage: "checkmark.circle.fill")
         .font(.caption.bold().monospacedDigit()).foregroundStyle(.green).padding(10)

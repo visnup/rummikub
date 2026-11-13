@@ -201,6 +201,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   no tile more than twice; until then the Solver lists the table's tiles still to find. With ARKit the parts come from
   `World.parts`: with nothing known yet, as at a new game, 14 tiles in all are the dealt rack, wherever they lie; with
   the rack known, a tile in no valid meld is the rack's if the rack had it, and the rack keeps only the tiles it had.
+  Scanning the rack again forgets what it had, since that says it was wrong.
   `swift run world` prints its parts too, knowing what the app showed at each restart. Then frames stop changing
   them and the plays are solved once. A locked
   part that reads differently for three seconds shows "changed?"; its chip in the Solver panel scans it again. While a play is being shown, readings don't re-solve; they advance the step instead

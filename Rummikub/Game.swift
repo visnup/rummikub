@@ -341,6 +341,9 @@ import UniformTypeIdentifiers
   /// Scans a part again, from scratch.
   func rescan(_ part: Looking) {
     if locked.contains(part) { before = scene }
+    // Scanning the rack again says it's wrong, so it's read afresh: held to what it had, a 13-tile rack missing o4
+    // never took the o4 back (2026-11-13).
+    if part == .rack { before.rack = [] }
     locked.remove(part)
     readings[part] = nil
     world.forget(rack: part == .rack)

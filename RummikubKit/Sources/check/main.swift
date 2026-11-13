@@ -22,8 +22,7 @@
 
   let tiles = try MLModel.compileModel(at: captures.appending(path: "Tiles.mlpackage"))
   let classes = try MLModel.compileModel(at: captures.appending(path: "Values.mlpackage"))
-  func rect(_ f: [Double]) -> CGRect { CGRect(x: f[0], y: f[1], width: f[2], height: f[3]) }
-  func array(_ r: CGRect) -> [Double] { [r.minX, r.minY, r.width, r.height].map { Double(($0 * 10).rounded() / 10) } }
+  func array(_ r: CGRect) -> [Double] { r.xywh.map { ($0 * 10).rounded() / 10 } }
 
   // The labeler's numbers: line numbers in ids.txt.
   let ids = Dictionary(
@@ -52,7 +51,7 @@
       as! [[String: Any]]
     let url = captures.appending(path: name + ".png")
     let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
-    let truth = labels.map { rect($0["frame"] as! [Double]) }
+    let truth = labels.map { CGRect(xywh: $0["frame"] as! [Double]) }
 
     var left = Array(truth.indices), extra = [[Double]]()
     for box in try finder.tiles(in: image) {

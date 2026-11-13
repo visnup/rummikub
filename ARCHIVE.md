@@ -91,7 +91,13 @@ What was tried and dropped, so nobody repeats it.
   rack captures with background marked, rack tiles' median was 1.23 and table tiles' 1.02, but they overlap: at 1.08
   it kept 116 of 135 rack tiles and let 6 table tiles through, where Values' rack head keeps 135 with 4. Of those 4,
   it would drop 3, at the cost of 19 rack tiles. Touching rack tiles likely merge into one bright patch, so better
-  corners might close the gap; `score` still prints it (`TAPER`, `TAPERS`).
+  corners might close the gap. Removed from `score` 2026-11-13; it's in history.
+- **The non-AR camera** (AVFoundation, removed 2026-11-13 for ARKit alone). It had a .5× ultra wide, so a whole
+  table fit from closer, which ARKit's wide lens can't. Rack or table came from the `Looking` model (logistic
+  regression over Vision's feature print of the whole frame: 21 of 24 held-out frames, two misses judgment calls)
+  where tilt couldn't say (racks shot at 24–48°, tables from 35° up), and each part was voted over its last five
+  frames. At the rack, boxes under .4 of the tallest (`Finder.nearest`) were the table behind it: it dropped 5 of 300
+  rack tiles and kept 49 of 307 table ones. `World` and the game's rules replaced all of it.
 - **Create ML's own pre-labels**: `train` used to draw its boxes on unchecked captures. On the same held-out captures
   it found 199 of 263 tiles with 110 extras; OWLv2 with a probe found 248 with 14.
 - **OWLv2 with a linear probe as the pre-labeler** (`prelabel.py`, replaced 2026-11-08 by the finder). Frozen OWLv2 on

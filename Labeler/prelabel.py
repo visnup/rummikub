@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["pillow", "scipy", "torch", "torchvision", "transformers"]
 # ///
-"""Draws boxes on every capture not yet edited by hand, with the finder `finder.py` last trained, as the app reads
+"""Draws boxes on every capture not yet edited by hand, with the kept finder (`Captures/.finder`), as the app reads
 them: uv run Labeler/prelabel.py [--new].
 
 A box takes the value of the tile already there it overlaps most; confirmed tiles stay where no box overlaps them."""

@@ -14,49 +14,13 @@ extension VNRequest {
   }
 }
 
-/// An image classifier: Values reads each of the finder's boxes, its classes tiles at an orientation ("k6@2");
-/// Looking says from a whole frame whether it's a rack or the table.
+/// Values, an image classifier that reads each of the finder's boxes, its classes tiles at an orientation, maybe on a
+/// rack ("k6@2@rack").
 public struct Classifier: @unchecked Sendable {
-  /// An image classifier, run through Vision.
-  let request: VNCoreMLRequest?
-  /// Or one over Vision's feature print, as the `looking` tool trains them, with the print as its "features" input.
-  let model: MLModel?
+  let model: VNCoreMLModel
 
   public init(model: MLModel) throws {
-    if model.modelDescription.inputDescriptionsByName["features"] != nil {
-      self.model = model
-      request = nil
-    } else {
-      request = VNCoreMLRequest(model: try VNCoreMLModel(for: model))
-      request!.imageCropAndScaleOption = .scaleFill
-      request!.onCPUInSimulator()
-      self.model = nil
-    }
-  }
-
-  /// The most likely class for the whole image, with its probability.
-  public func label(of image: CGImage) throws -> (label: String, confidence: Float)? {
-    try probabilities(of: image).max { $0.value < $1.value }.map { ($0.key, $0.value) }
-  }
-
-  /// Every class's probability for the whole image.
-  public func probabilities(of image: CGImage) throws -> [String: Float] {
-    if let model {
-      let print = VNGenerateImageFeaturePrintRequest()
-      // Stretched square, as the crops it was trained on were.
-      print.imageCropAndScaleOption = .scaleFill
-      print.onCPUInSimulator()
-      try VNImageRequestHandler(cgImage: image).perform([print])
-      guard let observation = print.results?.first else { return [:] }
-      let features = observation.data.withUnsafeBytes { MLShapedArray<Float>(scalars: $0.bindMemory(to: Float.self), shape: [observation.elementCount]) }
-      let output = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: ["features": MLMultiArray(features)]))
-      let probabilities = output.featureValue(for: "labelProbability")?.dictionaryValue as? [String: Double] ?? [:]
-      return probabilities.mapValues(Float.init)
-    }
-    try VNImageRequestHandler(cgImage: image).perform([request!])
-    return Dictionary(
-      ((request!.results as? [VNClassificationObservation]) ?? []).map { ($0.identifier, $0.confidence) },
-      uniquingKeysWith: max)
+    self.model = try VNCoreMLModel(for: model)
   }
 
   /// The most likely tile in each box, where the image classifier is at least `least` sure, with its odds at each
@@ -67,11 +31,10 @@ public struct Classifier: @unchecked Sendable {
     // A frame's worth of requests at a time: Vision's buffers otherwise pile up until it fails with "Failed to
     // create CVPixelBufferPool", as it did over thousands of crops.
     let read: [[String: Float]] = try autoreleasepool {
-      guard let request else { return [] }
       // One handler for the frame, a request per box, so the frame is prepared once.
       let requests = kept.map { box in
         let r = box.intersection(whole).integral
-        let each = VNCoreMLRequest(model: request.model)
+        let each = VNCoreMLRequest(model: model)
         each.imageCropAndScaleOption = .scaleFill
         each.regionOfInterest = VNNormalizedRectForImageRect(
           CGRect(x: r.minX, y: whole.height - r.maxY, width: r.width, height: r.height), image.width, image.height)

@@ -1,4 +1,3 @@
-import CoreMotion
 import ImageIO
 import RummikubKit
 import SwiftUI
@@ -7,7 +6,6 @@ struct ContentView: View {
   @State private var game = Game()
   @State private var camera = Camera()
   @State private var live = false
-  @State private var motion = CMMotionManager()
   @State private var saved = 0
   @State private var justSaved = false
   @State private var tab = 0
@@ -40,14 +38,12 @@ struct ContentView: View {
           .toolbarVisibility(pressing ? .hidden : .visible, for: .tabBar)
           .safeAreaBar(edge: .top) {
             HStack {
-              if let tilt = game.tilt { Text("\(Int(tilt))°") }
               if let frame = game.ar {
                 if frame.tracking != "normal" {
                   Text(frame.tracking)
                 } else if let height = frame.pose.height {
-                  // The camera above the table, and how far `World.level` lifted ARKit's plane to reach it.
-                  let lift = (camera.pose?.height ?? height) - height
-                  Text("table \(Int(height * 100)) cm" + (lift > 0.05 ? ", lifted \(Int(lift * 100))" : ""))
+                  // The camera above the table, as `World.level` puts it.
+                  Text("table \(Int(height * 100)) cm")
                 } else {
                   Text("no table")
                 }
@@ -79,9 +75,7 @@ struct ContentView: View {
         NavigationStack {
           Group {
             if game.onBoard {
-              Board(game: game) { part in
-                game.rescan(part)
-              } report: {
+              Board(game: game) {
                 report()
               } controls: {
                 VStack(spacing: 12) { solver }
@@ -124,15 +118,6 @@ struct ContentView: View {
       send()
       live = await camera.start()
       if live {
-        motion.deviceMotionUpdateInterval = 0.2
-        motion.startDeviceMotionUpdates(to: .main) { data, _ in
-          guard let gravity = data?.gravity else { return }
-          // The back camera looks along the device's -z.
-          MainActor.assumeIsolated {
-            game.gravity = [gravity.x, gravity.y, gravity.z]
-            game.tilt = asin(max(-1, min(1, -gravity.z))) * 180 / .pi
-          }
-        }
         for await frame in camera.frames { await game.see(frame) }
       } else {
         // No camera, as in the simulator: replay an AR recording at its pace, over and over.
@@ -197,7 +182,7 @@ struct ContentView: View {
   /// The last two minutes and a capture, sent when the Solver has gone wrong: a long press while scanning or on the
   /// Board.
   func report() {
-    game.report(camera: camera.settings)
+    game.report()
     saved += 1
     justSaved = true
     send()
@@ -206,7 +191,7 @@ struct ContentView: View {
   /// A recording started or stopped.
   func shoot() {
     if game.recording == nil {
-      game.startRecording(camera: camera.settings)
+      game.startRecording()
     } else {
       game.stopRecording()
     }
@@ -395,8 +380,8 @@ struct Fit {
 
 struct Overlay: View {
   let boxes: [CGRect]
-  /// Each box's size on the table, in metres, with ARKit.
-  var footprints = [SIMD2<Float>?]()
+  /// Each box's size on the table, in metres.
+  let footprints: [SIMD2<Float>?]
   let detections: [Detection]
   let marks: [Mark]
   let fit: Fit
@@ -462,8 +447,6 @@ struct Overlay: View {
           path.addLine(to: CGPoint(x: to.x - 18 * cos(angle + side * 0.5), y: to.y - 18 * sin(angle + side * 0.5)))
         }
         context.stroke(path, with: .color(.yellow), lineWidth: 4)
-      case .caption:
-        break
       }
     }
   }

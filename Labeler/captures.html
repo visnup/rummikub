@@ -151,7 +151,6 @@ async function open(i, push = true) {
   selected = null; typed = ""; many.clear(); fit = true; mark = -1; focus = null; opened = Date.now();
   const shown = image = new Image();
   image.src = photo(c);
-  // Drawn once decoded: Safari's drawImage in onload drew nothing while a decode() was under way.
   image.decode().then(() => {
     if (image !== shown) return;
     // One zoom step in from fit, centered.

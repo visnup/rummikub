@@ -147,7 +147,7 @@ if __name__ == "__main__":
         t, k, s = predict(model, [x for x, *_ in test], device)
         right = sum(a == b for a, (_, b, _, _) in zip(t.argmax(1).tolist(), test))
         turned = sum(a == c for a, (_, _, c, _) in zip(k.argmax(1).tolist(), test))
-        known = [(a, d) for a, (*_, d) in zip(s.argmax(1).tolist(), test) if d >= 0]
+        known = [(a, d) for a, (*_, d) in zip(s.argmax(1).tolist(), test)]
         racks = [a for a, d in known if d == 1]
         print(f"epoch {epoch} {time.time() - start:.0f}s: held out, {right} of {len(test)} tiles right, {turned} orientations, "
               f"{sum(a == d for a, d in known)} of {len(known)} rack or table ({sum(racks)} of {len(racks)} rack)", flush=True)

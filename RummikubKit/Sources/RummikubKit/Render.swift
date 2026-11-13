@@ -6,11 +6,12 @@ import Foundation
 public enum Render {
   static let tileSize = CGSize(width: 60, height: 84)
 
-  /// Where `table` draws each tile: melds in rows from `top` down, then the rack `bottom` up from the bottom edge.
-  public static func scene(
-    _ melds: [[Tile]], rack: [Tile] = [], width: Int = 1200, height: Int = 900, top: CGFloat = 30, bottom: CGFloat = 50
-  ) -> Scene {
-    var origin = CGPoint(x: 30, y: top)
+  /// The rack's margin above the bottom edge.
+  static let bottom: CGFloat = 50
+
+  /// Where `table` draws each tile: melds in rows from the top down, then the rack along the bottom.
+  public static func scene(_ melds: [[Tile]], rack: [Tile] = [], width: Int = 1200, height: Int = 900) -> Scene {
+    var origin = CGPoint(x: 30, y: 30)
     let table = melds.map { meld in
       let meldWidth = CGFloat(meld.count) * (tileSize.width + 2)
       if origin.x + meldWidth > CGFloat(width) - 30 {
@@ -28,9 +29,7 @@ public enum Render {
   }
 
   /// The table and rack `scene` lays out, drawn.
-  public static func table(
-    _ melds: [[Tile]], rack: [Tile] = [], width: Int = 1200, height: Int = 900, top: CGFloat = 30, bottom: CGFloat = 50
-  ) -> CGImage {
+  public static func table(_ melds: [[Tile]], rack: [Tile] = [], width: Int = 1200, height: Int = 900) -> CGImage {
     let context = CGContext(
       data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
       space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -38,7 +37,7 @@ public enum Render {
     context.scaleBy(x: 1, y: -1)
     context.setFillColor(CGColor(srgbRed: 0.13, green: 0.35, blue: 0.22, alpha: 1))
     context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-    let scene = scene(melds, rack: rack, width: width, height: height, top: top, bottom: bottom)
+    let scene = scene(melds, rack: rack, width: width, height: height)
     for detection in scene.table.joined() { draw(detection.tile, in: detection.frame, context: context) }
     context.setFillColor(CGColor(srgbRed: 0.35, green: 0.22, blue: 0.12, alpha: 1))
     let rackY = CGFloat(height) - tileSize.height - bottom
@@ -81,28 +80,7 @@ public enum Render {
           context.addLine(to: CGPoint(x: to.x - 24 * cos(angle + side * 0.5), y: to.y - 24 * sin(angle + side * 0.5)))
         }
         context.strokePath()
-      case .caption(let caption):
-        let line = line(caption, size: 40, color: highlight)
-        text(line, at: CGPoint(x: CGFloat(width) - CTLineGetTypographicBounds(line, nil, nil, nil) - 30, y: 60))
       }
-    }
-    func line(_ string: String, size: CGFloat, color: CGColor) -> CTLine {
-      let font = CTFontCreateWithName("Helvetica-Bold" as CFString, size, nil)
-      return CTLineCreateWithAttributedString(
-        NSAttributedString(
-          string: string,
-          attributes: [
-            NSAttributedString.Key(kCTFontAttributeName as String): font,
-            NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
-          ]))
-    }
-    func text(_ line: CTLine, at point: CGPoint) {
-      context.saveGState()
-      context.translateBy(x: point.x, y: point.y)
-      context.scaleBy(x: 1, y: -1)
-      context.textPosition = .zero
-      CTLineDraw(line, context)
-      context.restoreGState()
     }
     return context.makeImage()!
   }

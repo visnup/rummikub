@@ -1,5 +1,11 @@
 import CoreGraphics
 
+extension CGRect {
+  /// From `[x, y, width, height]`, as captures, labels and logs write boxes.
+  public init(xywh f: [Double]) { self.init(x: f[0], y: f[1], width: f[2], height: f[3]) }
+  public var xywh: [Double] { [minX, minY, width, height] }
+}
+
 public struct Detection: Hashable, Sendable {
   public let tile: Tile
   /// In top-left-origin pixels.

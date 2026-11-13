@@ -5,7 +5,6 @@ import SwiftUI
 /// and the controls between them. The table pans and zooms. Tapping either scans it again.
 struct Board<Controls: View>: View {
   let game: Game
-  let scan: (Game.Area) -> Void
   /// A long press on either part, for when it's gone wrong.
   let report: () -> Void
   @ViewBuilder let controls: Controls
@@ -53,8 +52,7 @@ struct Board<Controls: View>: View {
   /// The current step's marks in the table's pixels, but for a tile from the rack, whose source is in the rack's.
   var marks: [Mark] {
     guard let play = game.play, let step = game.step, play.steps.indices.contains(step) else { return [] }
-    let marks = play.group(at: step).flatMap { play.marks(in: game.scene, step: $0, within: game.tableBounds) }
-    return fromRack ? marks.filter { if case .arrow = $0 { false } else { true } } : marks
+    return play.group(at: step).flatMap { play.marks(in: game.scene, step: $0, within: game.tableBounds) }
   }
 
   /// The tiles to pick up from the rack, where `Scene.laid` draws them.
@@ -112,7 +110,7 @@ struct Board<Controls: View>: View {
     .overlay { if tiles.isEmpty { Text("Tap to scan").foregroundStyle(.secondary) } }
     .contentShape(.rect)
     .onLongPressGesture { report() }
-    .onTapGesture { scan(part) }
+    .onTapGesture { game.rescan(part) }
   }
 }
 

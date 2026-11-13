@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["numpy", "pillow"]
 # ///
-"""Turns an outside dataset into captures `train` reads: each photo upright, as <name>.jpg beside its
+"""Turns an outside dataset into captures `finder.py` and `crops.py` read: each photo upright, as <name>.jpg beside its
 <name>.tiles.json. Two formats:
 - sverrela/rummikub (Kaggle, CC0, from arXiv 2411.18172), VIA JSON: shrunk to 1920 px like ours. Its boxes are in the
   photos' displayed orientation, so EXIF rotation comes first.
@@ -23,7 +23,7 @@ from PIL import Image, ImageOps
 
 source, out = Path(sys.argv[1]), Path(sys.argv[2])
 out.mkdir(parents=True, exist_ok=True)
-colors = {"black": "k", "blue": "b", "bliue": "b", "orange": "o", "yellow": "o", "red": "r"}
+colors = {"black": "k", "blue": "b", "orange": "o", "yellow": "o", "red": "r"}
 
 
 def save(image, name, tiles):
@@ -61,12 +61,6 @@ def sverrela():
     return count
 
 
-def inside_of(inner, outer) -> bool:
-    """Whether inner's center is in outer."""
-    x, y = inner[0] + inner[2] / 2, inner[1] + inner[3] / 2
-    return outer[0] <= x <= outer[0] + outer[2] and outer[1] <= y <= outer[1] + outer[3]
-
-
 def edge(row) -> int:
     """How many dark pixels lead the row."""
     lit = np.nonzero(row > 12)[0]
@@ -96,18 +90,8 @@ def roboflow():
                 frame = [c["x"] - c["width"] / 2 - left, c["y"] - c["height"] / 2 - top, c["width"], c["height"]]
                 frame = [v * scale for v in frame]
                 boxes.append((a["label"], frame))
-            # rummikub-3gqr9 labels a tile with its color or its value, each its own box, in different photos.
-            values = [(label, f) for label, f in boxes if re.fullmatch(r"\d+|J", label)]
-            tiles = []
-            for label, frame in boxes:
-                if (label, frame) in values:
-                    if any(inside_of(frame, f) for other, f in boxes if other.lower() in colors):
-                        continue
-                    label = "joker" if label == "J" else "?"
-                elif label.lower() in colors:
-                    inside = [v for v, f in values if inside_of(f, frame)]
-                    label = "joker" if inside == ["J"] else label + inside[0] if len(inside) == 1 else "?"
-                tiles.append({"tile": tile(label), "frame": frame, "turns": 0, "confirmed": True, "source": source.name})
+            tiles = [{"tile": tile(label), "frame": frame, "turns": 0, "confirmed": True, "source": source.name}
+                     for label, frame in boxes]
             save(image, Path(entry["image"]).stem, tiles)
             count += 1
     print(skipped, "rotated photos skipped")

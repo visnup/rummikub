@@ -41,10 +41,9 @@ public struct Recording: Sendable {
         transform: matrix4((frame["transform"] as! [NSNumber]).map(\.floatValue)),
         plane: (frame["plane"] as? [NSNumber]).map { matrix4($0.map(\.floatValue)) })
       let detections = (frame["detections"] as! [[String: Any]]).map { d in
-        let f = d["frame"] as! [Double]
         let odds = (d["odds"] as? [String: NSNumber] ?? [:]).reduce(into: [Tile: Float]()) { $0[Tile($1.key)!] = $1.value.floatValue }
         return Detection(
-          tile: Tile(d["tile"] as! String)!, frame: CGRect(x: f[0], y: f[1], width: f[2], height: f[3]),
+          tile: Tile(d["tile"] as! String)!, frame: CGRect(xywh: d["frame"] as! [Double]),
           turns: d["turns"] as? Int ?? 0, odds: odds, rack: (d["rack"] as? NSNumber)?.floatValue)
       }
       let mask = (frame["mask"] as? [String: Any]).map {

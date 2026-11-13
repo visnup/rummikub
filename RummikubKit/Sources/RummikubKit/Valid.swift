@@ -21,11 +21,11 @@ extension Recognizer {
     return turned
   }
 
-  /// One patch at its likeliest turn, or at `turn`.
-  static func oneTurn(_ patch: [Detection], at turn: Int? = nil) -> [Detection] {
-    guard turn != nil || patch.count >= 2, patch.allSatisfy({ !$0.turned.isEmpty }) else { return patch }
+  /// One patch at its likeliest turn.
+  static func oneTurn(_ patch: [Detection]) -> [Detection] {
+    guard patch.count >= 2, patch.allSatisfy({ !$0.turned.isEmpty }) else { return patch }
     func fit(_ k: Int) -> Float { patch.reduce(0) { $0 + log(max($1.turned.values.reduce(0) { $0 + $1[k] }, 1e-4)) } }
-    let turn = turn ?? (0..<4).max { fit($0) < fit($1) }!
+    let turn = (0..<4).max { fit($0) < fit($1) }!
     return patch.map { d in
       let odds = d.turned.mapValues { $0[turn] }
       let total = odds.values.reduce(0, +)
@@ -39,10 +39,11 @@ extension Recognizer {
   /// Each meld that isn't valid read as the likeliest one that is, by the classifier's odds for each tile: a run in
   /// one color either way along the row, or a group of distinct colors, with any tile a joker. Between turns every meld
   /// on the table is valid, so a black 4 5 9 is likelier 4 5 6, our tiles' 6 and 9 differing only in which way is up.
-  /// A meld stays as read when nothing valid is within `slack` of it (summed −log odds), since then the meld's
-  /// grouping is likelier wrong than its tiles.
-  public static func valid(_ melds: [[Detection]], slack: Float = 3) -> [[Detection]] {
-    melds.map { meld in
+  /// A meld stays as read when nothing valid is within 3 of it (summed −log odds), since then the meld's grouping is
+  /// likelier wrong than its tiles.
+  public static func valid(_ melds: [[Detection]]) -> [[Detection]] {
+    let slack: Float = 3
+    return melds.map { meld in
       guard meld.count >= 3, !isMeld(meld.map(\.tile)), meld.allSatisfy({ !$0.odds.isEmpty }) else { return meld }
       func cost(_ detection: Detection, _ tile: Tile) -> Float { -log(max(detection.odds[tile] ?? 0, 1e-4)) }
       var best: (cost: Float, tiles: [Tile])?

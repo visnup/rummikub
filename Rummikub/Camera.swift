@@ -9,7 +9,7 @@ nonisolated struct Frame: Sendable {
   let image: CGImage
   var pose: Pose
   var planes = [Plane]()
-  var tracking = ""
+  var tracking: String
   /// Where a person, like a hand reaching in, covers the frame.
   var mask: World.Mask?
 
@@ -20,8 +20,7 @@ nonisolated struct Frame: Sendable {
   }
 }
 
-/// The back camera through ARKit, as a session to preview and a stream of upright frames a few times a second. ARKit
-/// tracks only with the wide lens, so there's no zoom.
+/// The back camera through ARKit, as a session to preview and a stream of upright frames a few times a second.
 nonisolated final class Camera: NSObject, ARSessionDelegate, @unchecked Sendable {
   let session = ARSession()
   let frames: AsyncStream<Frame>
@@ -47,7 +46,7 @@ nonisolated final class Camera: NSObject, ARSessionDelegate, @unchecked Sendable
   }()
 
   /// What the camera is set to, for a capture's notes.
-  var settings: [String: Any] { ["lens": "arkit", "arkit": Self.arkit] }
+  static var settings: [String: Any] { ["lens": "arkit", "arkit": arkit] }
 
   /// What ARKit could give on this phone: LiDAR depth, and each camera and size it can track with.
   static var arkit: [String: Any] {

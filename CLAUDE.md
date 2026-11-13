@@ -30,8 +30,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     and .5's 1308 with 37. On the Simulator the model must run on the CPU, or Vision can't create an inference
     context. With crops half the short side, 19 regions, it took 290–500 ms a frame on the phone (2026-11-09).
     Tiles under 30 px on their short side in a 1920 px frame (`Finder.smallest`) are out of scope for `score` and
-    `check`: the far end of a table, which a table panned with ARKit won't need. The app doesn't apply it. The table
-    behind a rack is nearer (37–55 px in #280), and the app leaves that out by `Finder.nearest` instead. Of 1054
+    `check`: the far end of a table, which a table panned with ARKit won't need. The app doesn't apply it. Of 1054
     held-out tiles 960 are in scope.
     There the 4 regions found 932 with 14 extras, the 19 found 937 with 16, and the whole image alone 908 with 12.
     The app sets `enough` to 80: when every box the whole image finds is 80 px or more, it skips the squares. On
@@ -49,7 +48,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     direction, within 37°, so a meld at an angle stays whole and a tile just behind another stays apart. Both bounds
     are fit to #319–326's one table, where melds measured .7–.83 widths and 26° at most, and other neighbors 1.2 and
     58° at least. `swift run world <start>.jsonl …` replays a recording's log through it, or a 2026-11-11 capture's
-    `ar.history`: on #319–326 it read the rack's 7 tiles every time, and the table exactly in all four that saw it
+    `ar.history`, and prints `World.parts` too, knowing what the app showed at each restart: on #319–326 it read the rack's 7 tiles every time, and the table exactly in all four that saw it
     whole (#319, #323, #325, #326). ARKit doesn't always find the tabletop: over dark felt (#327–331) it found only
     the floor, 0.97 m down, and called it a table. So `World.level` lifts the plane, kept level, to where the tiles
     Values says lie on the table measure 36 mm along their bottom edge (35–37 in #325 and #326), the running median
@@ -68,13 +67,12 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     2234 read correctly, 14 misread, 20 unread, 12 phantom reads. Then, with 2309 tiles and phantoms scoped as
     `check` scopes them, 11 missed and 19 phantom where the old count said 28: #156's six were loose boxes on far
     tiles. #114's are two empty rack slots and a thing on the stove. Each value's confirmed tiles missed, misread (and as
-    what) and unread go to `Captures/.score.json` for the values page, unless `TILES` or `BOXES` names another
-    model. As the app does in AR, reads Values says are on the table go through the valid-meld pass and the rack's
-    don't. For captures with rack tiles marked, it also counts the rack's tiles `Finder.nearest` keeps and the
-    table's it lets through, then Values' rack odds: on 2026-11-12, 2309 tiles, 9 missed, 22 phantom; of 2297
-    confirmed, 2252 read correctly, 17 misread, 19 unread, 17 phantom reads; of 258 rack tiles, `nearest` kept 249
-    with 38 of the table's, and Values kept all 249 and dropped those 38. Retrained once table captures' racks were
-    marked: 2265 read correctly, 8 misread, 15 unread, but 238 of 256 rack tiles kept with 1 of the table's, 10 of
+    what) and unread go to `Captures/.score.json` for the values page, unless `TILES` names another model. As the
+    app does, reads Values says are on the table go through the valid-meld pass and the rack's don't. For captures
+    with rack tiles marked, it also counts the rack's tiles Values says are on a rack, and the table's it says are
+    too. On 2026-11-12, 2309 tiles, 9 missed, 22 phantom; of 2297 confirmed, 2252 read correctly, 17 misread, 19
+    unread, 17 phantom reads. Retrained once table captures' racks were marked: 2265 read correctly, 8 misread, 15
+    unread, and of 256 rack tiles, after a height filter since dropped, Values kept 238 with 1 of the table's, 10 of
     the 11 lost in #114's two racks far off.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks
@@ -120,7 +118,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `make labels` runs `prelabel.py`, then `fill`, then serves the pages on Vite's dev server at
     http://localhost:8765/captures
     (`/captures/48` is #48; also `labeler` in `.claude/launch.json`). Over the VPN bytes matter most, so photos go
-    out as WebP (q90, about 290 kB against the PNG's 2.6 MB), made once into `Captures/.web/`, and JSON is brotli-compressed (`/api/values` 2.6 MB to 426 kB).
+    out as WebP (q90, about 290 kB against the PNG's 2.6 MB), made once into `Captures/.web/`, and JSON is gzipped, brotli over HTTPS (`/api/values` 2.6 MB to 426 kB with brotli).
   - `prelabel.py` draws boxes on every capture not yet edited by hand, keeping values already confirmed, so each
     round of fixing boxes leaves less for the next. `--new` only boxes captures with none yet. `make watch` runs it
     every 30 s while capturing, beside `make labels`, which takes the app's pushes. It's the finder, from the
@@ -140,9 +138,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     a new capture's boxes arrive with values too. A box it fills first is marked rack where Values' rack odds are .5
     or more.
   - Each box is on the table or a rack, not each capture: `x` toggles it on either page, and a rack box is dashed
-    violet. On 2026-11-12 the old per-capture Rack and the background marks (`x` then) became 1301 rack boxes: a
-    rack capture's boxes on the rack unless marked background, a table capture's on the table, though some of
-    those hold racks still to be marked.
+    violet. Some table captures still hold racks not yet marked.
   - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones
@@ -185,9 +181,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     arthurvanmeerbeeck), ferhatcelik/test (konstantin's), rummikub/rummikub-pvln1 (a suited tile design, numerals
     boxed), bluebox (NC-SA), Okey sets (another game's tiles).
 
-- `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone), on ARKit alone since 2026-11-13: the AVFoundation
-  camera, its lenses, the `Looking` model and tilt that said rack or table, and the five-frame vote are gone, kept in
-  history. `Camera` streams ARKit's upright frames at most five times a second, fewer when a frame takes longer to
+- `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone), on ARKit alone (`ARCHIVE.md` has what it
+  replaced). `Camera` streams ARKit's upright frames at most five times a second, fewer when a frame takes longer to
   read; `Game` finds the tiles (`Tiles`), reads each box and its orientation (`Values`), adds them to `World`, keeps
   the table and rack, solves, and tracks the step shown; `ContentView` draws each tile read in the last frame over the
   camera, labeled with what it was read as, its border purple on the rack and white on the table. Until ARKit has
@@ -198,14 +193,12 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   no tile more than twice; until then the Solver lists the table's tiles still to find. The parts come from
   `World.parts`: with nothing known yet, as at a new game, 14 tiles in all are the dealt rack, wherever they lie; with
   the rack known, a tile in no valid meld is the rack's if the rack had it, and the rack keeps only the tiles it had.
-  Scanning the rack again forgets what it had, since that says it was wrong.
-  `swift run world` prints its parts too, knowing what the app showed at each restart. Then frames stop changing
-  them and the plays are solved once. A locked
+  Scanning the rack again forgets what it had, since that says it was wrong. Once locked, frames stop changing a
+  part and the plays are solved once. A locked
   part that reads differently for three seconds shows "changed?"; its chip in the Solver panel scans it again. While a play is being shown, readings don't re-solve; they advance the step instead
   (`Play.stepsDone`). The simulator never uses a camera: it replays an AR recording in `Captures/` (`Replay`, #327–331's),
   straight off the Mac's disk, each frame's pose, person mask and reads through the AR path, with the last photo it
-  captured by then. It takes a few seconds to launch, reading every capture's notes for its photos. The tilt from
-  CoreMotion (`Game.tilt`) shows in degrees in the top pill and is written into each capture. In the Simulator,
+  captured by then. It takes a few seconds to launch, reading every capture's notes for its photos. In the Simulator,
   Vision requests are pinned to the CPU, else it can't create an inference context; the finder's boxes there still
   come out wrong, so check on the phone.
   - Two tabs. Capture's controls are one row in the tab bar's accessory (`tabViewBottomAccessory`), which the system
@@ -276,10 +269,10 @@ How a game goes, as settled on 2026-11-13 (`TODO.md` has what's built of it):
 - Captures from the phone: each capture saves three files to the app's Documents, and pushes them to the labeler:
   - `<ISO time>.png`. PNG, so it holds the pixels the phone read; the first seven were JPEG, converted to PNG on the
     Mac.
-  - `<ISO time>.txt`: what it was looking at and the tilt, then the truth, one meld per line. The truth is what was
+  - `<ISO time>.txt`: the part most of its tiles are on, then the truth, one meld per line. The truth is what was
     read, unless the Layout picker names a known layout.
-  - `<ISO time>.json`: the layout, notes, gravity, camera settings, read time and every detection's box, with ARKit
-    its `part`, rack or table, by its place in `World`. Notes are
+  - `<ISO time>.json`: the layout, notes, camera settings, read time, ARKit's pose and every detection's box, with
+    its `part`, rack or table, by its place in `World`. Earlier ones have the gravity and tilt from CoreMotion. Notes are
     single-word tags separated by spaces, which `check` totals by, and the app keeps the last ones typed. Each
     capture is tagged with its tile set: `pouch`, `large` (#202–285) or `curved` (#80–89); No tiles ones have none.
 

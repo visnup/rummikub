@@ -33,7 +33,6 @@ import UniformTypeIdentifiers
   var notes = UserDefaults.standard.string(forKey: "notes") ?? "" {
     didSet { UserDefaults.standard.set(notes, forKey: "notes") }
   }
-  var gravity: [Double]?
   /// How long the last frame took to read: classifying the finder's boxes.
   var readTime = Duration.zero
   /// How long the finder took on the last frame.
@@ -86,14 +85,12 @@ import UniformTypeIdentifiers
       try? MLModel(contentsOf: $0, configuration: configuration)
     }
   }
-  /// How far the camera points below the horizon, in degrees, written into captures.
-  var tilt: Double?
   /// The last frame read, and what was read in it.
-  var frame: CGImage?
+  var frame: CGImage? { ar?.image }
   var detections = [Detection]()
-  /// With ARKit, whether each detection's place in `World` is on the rack, nil where it has none.
+  /// Whether each detection's place in `World` is on the rack, nil where it has none.
   private var parts = [Bool?]()
-  var scene = Scene(table: [], rack: [])
+  var scene = Scene()
   var plays = [Play]()
   var choice = 0
   /// Whether I've laid down my first 30 points, after which I may play on the table: off at a new game, on once an
@@ -140,7 +137,6 @@ import UniformTypeIdentifiers
       let time = clock.measure { found = boxes.flatMap { try? classifier?.tiles(in: image, boxes: $0) } ?? [] }
       return (found, boxes, scored?.map(\.confidence) ?? [], findTime, time)
     }.value
-    frame = image
     readTime = time
     self.findTime = findTime
     self.boxes = boxes ?? []
@@ -156,42 +152,38 @@ import UniformTypeIdentifiers
     // between turns they all are.
     let turned = Recognizer.turned(found)
     record(turned, ar)
-    if let pose {
-      // Each tile read is on the rack or the table by its place. A part with none in view only follows the camera;
-      // a frame with no tiles is an empty tabletop.
-      // While ARKit is still finding its feet, as when the camera restarts, the pose holds still and the plane wanders,
-      // so reads then would start a second table.
-      let ids = ar.tracking == "normal" ? world.add(turned, pose: pose, mask: ar.mask) : turned.map { _ in nil }
-      let racks = ids.map { id in world.places.first { $0.id == id }?.isRack }
-      parts = racks
-      detections = zip(turned, racks).map { d, rack in
-        var d = d
-        if let rack { d.rack = rack ? 1 : 0 }
-        return d
-      }
-      keyframe()
-      // Drawn and measured on the tabletop, not on whatever plane ARKit found; recorded as ARKit gave it.
-      let leveled = world.level(pose)
-      self.ar?.pose = leveled
-      footprints = self.boxes.map(leveled.footprint)
-      let known = world.parts(from: pose, knowing: before)
-      await update(.table, voted: known.table.flatMap(\.self), melds: known.table,
-        inView: racks.allSatisfy { $0 == nil } || racks.contains(false))
-      await update(.rack, voted: known.rack, inView: !known.rack.isEmpty || racks.contains(true))
-    } else {
-      // Until ARKit finds the table, there's nowhere to put what's read: the Solver waits for one.
-      keyframe()
+    // Until ARKit finds the table, there's nowhere to put what's read: the Solver waits for one.
+    guard let pose else { return keyframe() }
+    // Each tile read is on the rack or the table by its place. A part with none in view only follows the camera;
+    // a frame with no tiles is an empty tabletop.
+    // While ARKit is still finding its feet, as when the camera restarts, the pose holds still and the plane wanders,
+    // so reads then would start a second table.
+    let ids = ar.tracking == "normal" ? world.add(turned, pose: pose, mask: ar.mask) : turned.map { _ in nil }
+    let racks = ids.map { id in world.places.first { $0.id == id }?.isRack }
+    parts = racks
+    detections = zip(turned, racks).map { d, rack in
+      var d = d
+      if let rack { d.rack = rack ? 1 : 0 }
+      return d
     }
+    keyframe()
+    // Drawn and measured on the tabletop, not on whatever plane ARKit found; recorded as ARKit gave it.
+    let leveled = world.level(pose)
+    self.ar?.pose = leveled
+    footprints = self.boxes.map(leveled.footprint)
+    let known = world.parts(from: pose, knowing: before)
+    await update(.table, to: known, inView: racks.allSatisfy { $0 == nil } || racks.contains(false))
+    await update(.rack, to: known, inView: !known.rack.isEmpty || racks.contains(true))
   }
 
-  /// Takes a part's latest reading: follows the play's steps on the table, else settles, locks, or notes a change.
-  /// Out of view, it only moves the part's tiles to where the camera now sees them.
-  private func update(_ part: Area, voted: [Detection], melds: [[Detection]]? = nil, inView: Bool = true) async {
+  /// Takes a part as `known` now reads it: follows the play's steps on the table, else settles, locks, or notes a
+  /// change. Out of view, it only moves the part's tiles to where the camera now sees them.
+  private func update(_ part: Area, to known: Scene, inView: Bool) async {
     var next = scene
     if part == .table {
-      next.table = melds ?? Recognizer.melds(voted)
+      next.table = known.table
     } else {
-      next.rack = voted
+      next.rack = known.rack
     }
     guard inView else {
       if next.reads(like: scene) { scene = next }
@@ -222,7 +214,7 @@ import UniformTypeIdentifiers
       let since = steadySince[part] ?? .now
       steadySince[part] = since
       if !locked.contains(part), Date.now.timeIntervalSince(since) >= 2, follows(part),
-        part == .table || !voted.isEmpty
+        part == .table || !known.rack.isEmpty
       {
         locked.insert(part)
         await solve()
@@ -236,7 +228,7 @@ import UniformTypeIdentifiers
   }
 
   /// The table and rack as last known, when a part was last scanned again, for what a scan may say (`Rules.swift`).
-  private var before = Scene(table: [], rack: [])
+  private var before = Scene()
 
   /// Whether a part as read now can follow what was known of it.
   private func follows(_ part: Area) -> Bool {
@@ -246,7 +238,7 @@ import UniformTypeIdentifiers
   /// The table's tiles not read since it was last known, which it must still have.
   var unseen: [Tile] { Scene.missing(before.tableTiles.joined(), from: scene.tableTiles.joined()) }
 
-  /// With ARKit, every tile read, by place on the table (`World`).
+  /// Every tile read, by place on the table (`World`).
   @ObservationIgnored private var world = World()
   /// When each part's reading last changed while scanning.
   private var steadySince = [Area: Date]()
@@ -278,7 +270,7 @@ import UniformTypeIdentifiers
 
   /// Forgets the table and rack, and that 30 was laid down.
   func newGame() {
-    scene = Scene(table: [], rack: [])
+    scene = Scene()
     before = scene
     plays = []
     choice = 0
@@ -315,19 +307,12 @@ import UniformTypeIdentifiers
   }
 
   /// What the last frame read that agrees with the table and rack as known, so the Solver labels only those.
-  var settled: [Detection] {
-    var left = scene.tableTiles.flatMap { $0 } + scene.rackTiles
-    return detections.filter { detection in
-      guard let i = left.firstIndex(of: detection.tile) else { return false }
-      left.remove(at: i)
-      return true
-    }
-  }
+  var settled: [Detection] { Scene.among(detections, tile: \.tile, scene.tableTiles.joined() + scene.rackTiles) }
 
-  /// Saves the last frame to Documents as `<time>.png`, its truth as `<time>.txt` (what it was looking at, then a meld
-  /// a line), and everything else known about it as `<time>.json`, to become test fixtures. PNG, so the fixture is the
-  /// same pixels the phone read.
-  func capture(camera: [String: Any], recording: Date? = nil) {
+  /// Saves the last frame to Documents as `<time>.png`, its truth as `<time>.txt` (the part most of its tiles are on,
+  /// then a meld a line), and everything else known about it as `<time>.json`, to become test fixtures. PNG, so the
+  /// fixture is the same pixels the phone read.
+  func capture(recording: Date? = nil) {
     guard let frame else { return }
     let base = URL.documentsDirectory.appending(path: Date.now.formatted(.iso8601))
     let destination = CGImageDestinationCreateWithURL(
@@ -335,18 +320,17 @@ import UniformTypeIdentifiers
     CGImageDestinationAddImage(destination, frame, nil)
     CGImageDestinationFinalize(destination)
     let read = Recognizer.melds(detections).map { $0.map(\.tile.description).joined(separator: " ") }
-    let tilt = tilt.map { " \(Int($0))°" } ?? ""
     let looking = mostly
-    try? (looking.rawValue + tilt + "\n" + (layout.melds ?? read).map { $0 + "\n" }.joined())
+    try? (looking.rawValue + "\n" + (layout.melds ?? read).map { $0 + "\n" }.joined())
       .write(to: base.appendingPathExtension("txt"), atomically: true, encoding: .utf8)
     var info: [String: Any] = [
-      "looking": looking.rawValue, "layout": layout.rawValue, "notes": notes, "tilt": self.tilt ?? NSNull(),
-      "gravity": gravity ?? [], "readMilliseconds": readTime / .milliseconds(1),
-      "findMilliseconds": findTime / .milliseconds(1), "camera": camera, "read": read,
-      "boxes": boxes.map { [$0.minX, $0.minY, $0.width, $0.height] },
+      "looking": looking.rawValue, "layout": layout.rawValue, "notes": notes,
+      "readMilliseconds": readTime / .milliseconds(1),
+      "findMilliseconds": findTime / .milliseconds(1), "camera": Camera.settings, "read": read,
+      "boxes": boxes.map(\.xywh),
       "detections": detections.enumerated().map { i, d in
         var detection: [String: Any] = [
-          "tile": d.tile.description, "frame": [d.frame.minX, d.frame.minY, d.frame.width, d.frame.height]]
+          "tile": d.tile.description, "frame": d.frame.xywh]
         if parts.indices.contains(i), let rack = parts[i] { detection["part"] = rack ? "rack" : "table" }
         if let confidence = confidence(of: d) { detection["confidence"] = confidence }
         return detection
@@ -375,23 +359,21 @@ import UniformTypeIdentifiers
     ]
   }
 
-  /// When the recording under way started. While it runs, every frame read with ARKit goes to a log, a line each,
-  /// and every two seconds the frame is captured as well; it lands in Documents as `<start>.jsonl` once stopped.
+  /// When the recording under way started. While it runs, every frame read goes to a log, a line each, and every two
+  /// seconds the frame is captured as well; it lands in Documents as `<start>.jsonl` once stopped.
   private(set) var recording: Date?
   @ObservationIgnored private var log: FileHandle?
   @ObservationIgnored private var lastKeyframe = Date.distantPast
-  @ObservationIgnored private var recordingCamera = [String: Any]()
   /// Where the log is written until it's done, apart from what `Sync` sends.
   private static let recordings = URL.documentsDirectory.appending(path: "recording")
 
-  func startRecording(camera: [String: Any]) {
+  func startRecording() {
     let start = Date.now
     try? FileManager.default.createDirectory(at: Self.recordings, withIntermediateDirectories: true)
     let url = Self.recordings.appending(path: start.formatted(.iso8601) + ".jsonl")
     guard FileManager.default.createFile(atPath: url.path, contents: nil) else { return }
     log = try? FileHandle(forWritingTo: url)
     recording = start
-    recordingCamera = camera
     lastKeyframe = start
   }
 
@@ -420,7 +402,7 @@ import UniformTypeIdentifiers
       return ["width": small.width, "height": small.height, "bytes": Data(small.bytes).base64EncodedString()] as [String: Any]
     } ?? NSNull()
     line["detections"] = read.map {
-      ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height],
+      ["tile": $0.tile.description, "frame": $0.frame.xywh,
        "turns": $0.turns, "rack": $0.rack ?? NSNull(), "confidence": confidence(of: $0) ?? NSNull(),
        "odds": Dictionary(uniqueKeysWithValues: $0.odds.map { ($0.key.description, $0.value) })] as [String: Any]
     }
@@ -435,20 +417,20 @@ import UniformTypeIdentifiers
 
   /// Saves the last two minutes as a recording, `<time>.jsonl`, with the last frame captured, for when the app has
   /// gone wrong in a game nobody was recording.
-  func report(camera: [String: Any]) {
+  func report() {
     // Named when reported, not when it starts: a second report soon after started at the same line, and the labeler
     // kept the first one's log.
-    guard !recent.isEmpty else { return capture(camera: camera) }
+    guard !recent.isEmpty else { return }
     let now = Date.now, name = now.formatted(.iso8601) + ".jsonl"
     try? Data(recent.map { $0.line + Data("\n".utf8) }.joined()).write(to: URL.documentsDirectory.appending(path: name))
-    capture(camera: camera, recording: now)
+    capture(recording: now)
   }
 
   /// While recording, captures the frame every 2 s, once its reads have their parts.
   private func keyframe() {
     guard recording != nil, Date.now.timeIntervalSince(lastKeyframe) >= 2 else { return }
     lastKeyframe = .now
-    capture(camera: recordingCamera)
+    capture()
   }
 
   private func confidence(of d: Detection) -> Float? {

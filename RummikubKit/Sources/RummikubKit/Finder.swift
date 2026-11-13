@@ -6,14 +6,8 @@ import Vision
 /// `boxes` Vision can't read as objects. Tiles small in a photo are found in its crops.
 public struct Finder: @unchecked Sendable {
   let request: VNCoreMLRequest
-  /// Whether to look in crops too, for tiles too small to find in the whole image.
-  public var cropped = true
-  /// The crops' side, as a share of the image's short side. Squares the whole short side, three down a 1080p frame,
-  /// found 932 of 960 held-out tiles in scope with 14 extras, where half of it (19 regions) found 937 with 16.
-  public var side = 1.0
   /// Tiles under this many px on their short side, in a frame 1920 px long, are out of scope for `score` and `check`:
-  /// the far end of a table, which a table panned with ARKit won't need. The table behind a rack is nearer, and
-  /// `nearest` leaves it out.
+  /// the far end of a table, which a table panned with ARKit won't need.
   public static let smallest = 30.0
   /// Skips the crops when every box the whole image finds is at least this many px on its short side, in a frame
   /// 1920 px long, since then there are no small tiles to look closer for.
@@ -45,7 +39,7 @@ public struct Finder: @unchecked Sendable {
     let handler = VNImageRequestHandler(cgImage: image)
     var found = [(box: CGRect, confidence: Float)]()
     var regions = 0
-    for region in [whole] + (cropped ? Self.crops(width: w, height: h, side: side) : []) {
+    for region in [whole] + Self.crops(width: w, height: h) {
       // Decided once, after the whole image.
       if regions == 1, let enough, !found.isEmpty,
         found.allSatisfy({ min($0.box.width, $0.box.height) * 1920 / Double(max(w, h)) >= enough })
@@ -89,9 +83,11 @@ public struct Finder: @unchecked Sendable {
     }
   }
 
-  /// Squares `side` of the short side, overlapping by about half, spread evenly from edge to edge.
-  static func crops(width: Int, height: Int, side: Double) -> [CGRect] {
-    let s = Int(Double(min(width, height)) * side)
+  /// Squares the short side, three down a 1080p frame, overlapping by about half, spread evenly from edge to edge.
+  /// They found 932 of 960 held-out tiles in scope with 14 extras, where squares half that (19 regions) found 937 with
+  /// 16.
+  static func crops(width: Int, height: Int) -> [CGRect] {
+    let s = min(width, height)
     func starts(_ length: Int) -> [Int] {
       let n = Int((Double(length - s) / Double(s / 2)).rounded(.up)) + 1
       return n == 1 ? [0] : (0..<n).map { (length - s) * $0 / (n - 1) }
@@ -103,16 +99,6 @@ public struct Finder: @unchecked Sendable {
   /// more captures never moves one in or out.
   public static func isHeldOut(_ name: String) -> Bool {
     name.utf8.reduce(14_695_981_039_346_656_037 as UInt64) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 } % 5 == 0
-  }
-
-  /// The boxes at least .4 as tall as the tallest. A rack's tiles stand nearest, so this drops the table's behind it,
-  /// which lie flat. On the 15 rack captures with the table marked background (2026-11-10), .4 dropped 5 of 300 rack
-  /// tiles and kept 49 of 307 table ones; .5 dropped 34 and kept 32. No cutoff on height, width, area or either side
-  /// did better: in #284 and #285 the table's tiles are as big as the rack's, and a back-row tile hidden by the one in
-  /// front loses height.
-  public static func nearest(_ boxes: [CGRect]) -> [CGRect] {
-    let tallest = boxes.map(\.height).max() ?? 0
-    return boxes.filter { $0.height >= tallest * 0.4 }
   }
 
   /// Whether a tile's box is big enough to be in scope, in an image this size.

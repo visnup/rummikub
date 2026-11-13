@@ -9,7 +9,7 @@ for path in CommandLine.arguments.dropFirst() {
   let history = try Recording(contentsOf: URL(filePath: path)).frames
   guard let first = history.first else { continue }
   print(URL(filePath: path).lastPathComponent)
-  var world = World(), last: Pose?, previous = first.time, before = Scene(table: [], rack: [])
+  var world = World(), last: Pose?, previous = first.time, before = Scene()
   for frame in history {
     // The camera restarted, and the app with it forgets every place, but knows what it showed.
     if frame.time - previous > 2, frame.tracking != "normal" {

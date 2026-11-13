@@ -83,7 +83,7 @@ values:
 	uv run Labeler/values.py $(dir)
 	rm -rf Rummikub/Values.mlpackage && cp -R $(dir)/Values.mlpackage Rummikub/
 
-# Lists where the models disagree with the done captures' labels, for the labeler's Check section.
+# Lists where the models disagree with the done captures' labels, for the labeler's miss, extra and val columns.
 check:
 	cd RummikubKit && swift run -c release check ../$(dir)
 

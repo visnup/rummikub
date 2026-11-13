@@ -5,7 +5,7 @@ public struct Scene: Sendable {
   public var table: [[Detection]]
   public var rack: [Detection]
 
-  public init(table: [[Detection]], rack: [Detection]) {
+  public init(table: [[Detection]] = [], rack: [Detection] = []) {
     self.table = table
     self.rack = rack
   }
@@ -21,8 +21,6 @@ public enum Mark: Hashable, Sendable {
   /// Where it goes, with the tile drawn as a ghost.
   case target(CGRect, Tile)
   case arrow(from: CGPoint, to: CGPoint)
-  /// "Step 2 of 5" and the like.
-  case caption(String)
 }
 
 extension Play {
@@ -146,7 +144,6 @@ extension Play {
     let positions = melds[step.to].tiles.indices.filter { melds[step.to].tiles[$0] == step.tile }
     let target = slots[step.to][positions[min(earlier, positions.count - 1)]]
     return [
-      .caption("Step \(index + 1) of \(steps.count)"),
       .source(source),
       .target(target, step.tile),
       .arrow(from: CGPoint(x: source.midX, y: source.midY), to: CGPoint(x: target.midX, y: target.midY)),

@@ -28,10 +28,7 @@
     guard !open.isEmpty, let source = CGImageSourceCreateWithURL(png as CFURL, nil),
       let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
     else { continue }
-    let frames = open.map { i in
-      let f = labels[i]["frame"] as! [Double]
-      return CGRect(x: f[0], y: f[1], width: f[2], height: f[3])
-    }
+    let frames = open.map { CGRect(xywh: labels[$0]["frame"] as! [Double]) }
     let reads = try values.tiles(in: image, boxes: frames, least: 0)
     for (i, frame) in zip(open, frames) {
       guard let read = reads.first(where: { $0.frame == frame }) else { continue }

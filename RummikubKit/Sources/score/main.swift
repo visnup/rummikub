@@ -16,12 +16,6 @@
   var finder = try Finder(model: MLModel(contentsOf: MLModel.compileModel(at: tiles)))
   // CONFIDENCE=0.4 moves the finder's cutoff, for detectors whose scores run lower.
   if let confidence = environment["CONFIDENCE"].flatMap(Float.init) { finder.confidence = confidence }
-  // BOXES=<folder> scores boxes found elsewhere, `<name>.json` a capture, each box [x, y, width, height] in pixels.
-  let found = environment["BOXES"].map { URL(filePath: $0) }
-  // WHOLE=1 looks in the whole image only, without crops.
-  finder.cropped = (environment["WHOLE"] ?? "").isEmpty
-  // SIDE=0.5 crops squares half the short side of the image, rather than all of it.
-  if let side = environment["SIDE"].flatMap(Double.init) { finder.side = side }
   // ENOUGH=60 skips the crops when every box the whole image finds is 60 px or more.
   finder.enough = environment["ENOUGH"].flatMap(Double.init)
   var regions = 0, frames = 0
@@ -64,41 +58,16 @@
   }
   var byTile = [String: PerTile]()
   print((["capture"] + Score.header).joined(separator: "\t"))
-  /// The rack's tiles kept, and the table's let through, by `Finder.nearest` and then by Values' rack-or-table; and,
-  /// of `nearest`'s, by `Standing.taper` alone, with how many it found no corners for.
-  struct Rack: CustomStringConvertible {
-    var tiles = 0, nearest = 0, nearestTable = 0, standing = 0, standingTable = 0, tapered = 0, taperedTable = 0,
-      cornerless = 0
-
-    static func += (a: inout Rack, b: Rack) {
-      a = Rack(
-        tiles: a.tiles + b.tiles, nearest: a.nearest + b.nearest, nearestTable: a.nearestTable + b.nearestTable,
-        standing: a.standing + b.standing, standingTable: a.standingTable + b.standingTable,
-        tapered: a.tapered + b.tapered, taperedTable: a.taperedTable + b.taperedTable,
-        cornerless: a.cornerless + b.cornerless)
-    }
-
-    var description: String {
-      "nearest \(nearest)/\(tiles) +\(nearestTable) table, then on a rack \(standing)/\(tiles) +\(standingTable) table, "
-        + "or tapered \(tapered)/\(tiles) +\(taperedTable) table (\(cornerless) without corners)"
-    }
-  }
-  // TAPER=1.1 is how much longer a tile's top edge must come out than its bottom to stand.
-  let taperCutoff = environment["TAPER"].flatMap(Double.init) ?? 1.08
-  var rackTotal = Rack()
+  /// Of the captures with rack tiles marked, the rack's tiles, those Values says are on a rack, and the table's it
+  /// says are too.
+  var rackTiles = 0, rackKept = 0, tableKept = 0
   for name in done.filter(Finder.isHeldOut).sorted() {
     let labels = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
       as! [[String: Any]]
-    let truth = labels.map { t in
-      let f = t["frame"] as! [Double]
-      return CGRect(x: f[0], y: f[1], width: f[2], height: f[3])
-    }
+    let truth = labels.map { CGRect(xywh: $0["frame"] as! [Double]) }
     let url = captures.appending(path: name + ".png")
     let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
-    let (boxes, used) = try found.map { folder in
-      let frames = try JSONSerialization.jsonObject(with: Data(contentsOf: folder.appending(path: name + ".json"))) as! [[Double]]
-      return (frames.map { CGRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]) }, 0)
-    } ?? finder.find(in: image)
+    let (boxes, used) = try finder.find(in: image)
     regions += used
     frames += 1
 
@@ -155,50 +124,13 @@
       }
     }
     let reads = try classifier?.tiles(in: image, boxes: boxes)
-    // At the rack the app keeps only `Finder.nearest`'s boxes, then the reads Values says are on a rack: how many of the
-    // rack's tiles survive each, and how many of the table's do too. Only captures with a rack tile marked.
     let rack = Set(labels.indices.filter { labels[$0]["rack"] as? Bool == true })
-    if !rack.isEmpty {
-      var left = Set(truth.indices)
-      var n = Rack(tiles: rack.count)
-      // The camera from the capture's notes: ARKit's intrinsics, else the lens's field of view at its zoom.
-      let notes = try JSONSerialization.jsonObject(with: Data(contentsOf: url.deletingPathExtension().appendingPathExtension("json")))
-        as! [String: Any]
-      let gravity = (notes["gravity"] as? [Double]).flatMap { $0.count == 3 ? SIMD3($0[0], $0[1], $0[2]) : nil }
-      let camera = notes["camera"] as? [String: Any]
-      let lens: (focal: Double, center: CGPoint)? =
-        if let k = (notes["ar"] as? [String: Any])?["intrinsics"] as? [Double] {
-          (k[0], CGPoint(x: Double(image.width) - k[7], y: k[6]))
-        } else if let fov = camera?["fieldOfView"] as? Double {
-          (Double(image.height) / 2 / tan(fov * .pi / 360) * (camera?["zoom"] as? Double ?? 1),
-           CGPoint(x: Double(image.width) / 2, y: Double(image.height) / 2))
-        } else { nil }
-      for box in Finder.nearest(boxes) {
-        guard let i = left.max(by: { Finder.overlap(truth[$0], box) < Finder.overlap(truth[$1], box) }),
-          Finder.overlap(truth[i], box) > 0.5
-        else { continue }
-        left.remove(i)
-        let standing = (reads?.first { $0.frame == box }?.rack ?? 1) >= 0.5
-        let taper = Standing.corners(in: image, box: box).flatMap { corners in
-          gravity.flatMap { g in lens.flatMap { Standing.taper(corners, gravity: g, focal: $0.focal, center: $0.center) } }
-        }
-        // TAPERS=1 prints each tile's taper.
-        if environment["TAPERS"] != nil {
-          print("taper", name, rack.contains(i) ? "rack" : "table", taper.map { String(format: "%.3f", $0) } ?? "-",
-            Int(box.height), standing ? "on a rack" : "", separator: "\t")
-        }
-        if taper == nil { n.cornerless += 1 }
-        if let taper, taper >= taperCutoff { if rack.contains(i) { n.tapered += 1 } else { n.taperedTable += 1 } }
-        if rack.contains(i) {
-          n.nearest += 1
-          if standing { n.standing += 1 }
-        } else {
-          n.nearestTable += 1
-          if standing { n.standingTable += 1 }
-        }
+    if !rack.isEmpty, let reads {
+      rackTiles += rack.count
+      for (box, i) in zip(boxes, tileOf) {
+        guard let i, (reads.first { $0.frame == box }?.rack ?? 0) >= 0.5 else { continue }
+        if rack.contains(i) { rackKept += 1 } else { tableKept += 1 }
       }
-      print("rack", name, n.description, separator: "\t")
-      rackTotal += n
     }
     if let classifier {
       let classified = reads!
@@ -216,7 +148,7 @@
             Int(frame.height), t["turns"] as? Int ?? 0, read.turns, separator: "\t")
         }
       }
-      // As the app does with ARKit: the tiles Values says lie on the table as valid melds, the rack's as read.
+      // Near how the app reads: the tiles Values says lie on the table as valid melds, the rack's as read.
       let turned = Recognizer.turned(classified)
       let onRack = { (d: Detection) in (d.rack ?? 0) >= 0.5 }
       score(Recognizer.valid(Recognizer.melds(turned.filter { !onRack($0) })).flatMap(\.self) + turned.filter(onRack))
@@ -226,9 +158,9 @@
   }
   print((["total"] + total.columns.map(String.init)).joined(separator: "\t"))
   print("regions", regions, "in", frames, "frames")
-  if rackTotal.tiles > 0 { print("rack tiles kept", rackTotal.description, separator: "\t") }
+  if rackTiles > 0 { print("rack tiles", "\(rackKept)/\(rackTiles) on a rack, +\(tableKept) table", separator: "\t") }
   // Only for the models the app has, not one being compared.
-  if environment["TILES"] == nil, found == nil, classifier != nil {
+  if environment["TILES"] == nil, classifier != nil {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     try encoder.encode(byTile).write(to: captures.appending(path: ".score.json"))

@@ -137,10 +137,13 @@ nonisolated final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     }
   }
 
-  /// Starts or stops the camera, off the main thread, since starting blocks. ARKit keeps running: paused and run
-  /// again, it started over, initializing for seconds, and the table it then saw no longer lined up with `World`'s.
+  /// Starts or stops the camera, off the main thread, since starting blocks. ARKit starts over each time: paused and
+  /// run again, it initialized for seconds anyway, and the table it then saw no longer lined up with the last one.
   func run(_ on: Bool) {
-    if ar { return }
+    if ar {
+      on ? arSession.run(arSession.configuration!, options: [.resetTracking, .removeExistingAnchors]) : arSession.pause()
+      return
+    }
     control.async {
       if on && !self.session.isRunning {
         self.session.startRunning()

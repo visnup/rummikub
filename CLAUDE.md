@@ -211,7 +211,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     were off on one device or the other. Notes are typed in an alert, since the accessory stays behind the keyboard.
     Solver keeps a two-row panel.
   - Once table and rack are both locked, the Solver shows the Board (`Board.swift`) and the camera stops, to save
-    battery, except ARKit's, which lost the table when paused: the table on top as it sat in its frame, pinch-zoomed and panned, then the controls, then the rack in up
+    battery. ARKit starts over when it runs again, and `World` with it: its places wouldn't line up, so the parts
+    keep their tiles but not where they were. The table on top as it sat in its frame, pinch-zoomed and panned, then the controls, then the rack in up
     to three rows, each tile where `World` measured it along the rack (`Scene.laid`), each with the step shown drawn on it. Tapping a part
     scans it again.
     Finish on a play's last step takes its melds as the table (`Play.finished`, in the slots the steps put them) and

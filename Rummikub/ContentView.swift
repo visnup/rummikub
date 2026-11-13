@@ -118,7 +118,11 @@ struct ContentView: View {
     .sensoryFeedback(.success, trigger: saved)
     .onChange(of: scenePhase) { if scenePhase == .active { send() } }
     // The camera runs only while something needs it: the Capture tab, or a part of the Solver's being scanned.
-    .onChange(of: tab == 0 || !game.onBoard) { if live { camera.run(tab == 0 || !game.onBoard) } }
+    .onChange(of: tab == 0 || !game.onBoard) {
+      guard live else { return }
+      if tab == 0 || !game.onBoard { game.restart() }
+      camera.run(tab == 0 || !game.onBoard)
+    }
     .task(id: saved) {
       try? await Task.sleep(for: .seconds(1.5))
       justSaved = false

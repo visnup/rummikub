@@ -309,6 +309,9 @@ import UniformTypeIdentifiers
   func changed(_ part: Looking) -> Bool { changedSince[part].map { Date.now.timeIntervalSince($0) >= 3 } ?? false }
 
   /// Scans a part again, from scratch.
+  /// Forgets where every tile was, as ARKit starts over: the parts keep their tiles, not their places.
+  func restart() { world = World() }
+
   func rescan(_ part: Looking) {
     locked.remove(part)
     readings[part] = nil

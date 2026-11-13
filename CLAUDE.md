@@ -1,8 +1,8 @@
 # Rummikub
 
-An iOS app that reads a Rummikub table and your rack from the camera and shows, AR-style, where to place your
-tiles. When a play rearranges the table, it shows how many steps it takes and walks through them one at a time,
-advancing as the camera sees each step done.
+An iOS app that reads a Rummikub table and your rack from the camera and shows where to place your tiles. When a
+play rearranges the table, it shows how many steps it takes and walks through them one at a time on a drawing of
+the table and rack.
 
 This file describes the project as it is. What was tried and dropped goes in `ARCHIVE.md`, so nobody repeats it.
 What's next is in `TODO.md`.
@@ -197,8 +197,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   more. "Draw a tile", the play that places nothing ("No moves." when it's the only one), scans the rack keeping
   every tile it had, hidden or not, and locks once it has one more (`World.RackScan`). Once locked, frames stop changing a
   part and the plays are solved once. A locked
-  part that reads differently for three seconds shows "changed?"; its chip in the Solver panel scans it again. While a play is being shown, readings don't re-solve; they advance the step instead
-  (`Play.stepsDone`). The simulator never uses a camera: it replays an AR recording in `Captures/` (`Replay`, #327–331's),
+  part that reads differently for three seconds shows "changed?"; its chip in the Solver panel scans it again, which drops a play being
+  stepped through. The simulator never uses a camera: it replays an AR recording in `Captures/` (`Replay`, #327–331's),
   straight off the Mac's disk, each frame's pose, person mask and reads through the AR path, with the last photo it
   captured by then. It takes a few seconds to launch, reading every capture's notes for its photos. In the Simulator,
   Vision requests are pinned to the CPU, else it can't create an inference context; the finder's boxes there still

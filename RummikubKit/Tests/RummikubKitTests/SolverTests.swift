@@ -79,15 +79,10 @@ func options(_ table: String, _ rack: String, opened: Bool = true) -> [[Int]] {
   #expect(play.steps.allSatisfy { $0.to == 2 })
 }
 
-@Test func stepsDoneFollowTheTable() throws {
+@Test func stepsMoveTableTilesFirst() throws {
   let table = melds("r3 r4 r5 r6, k1 k2 k3")
   let play = try #require(solve(table: table, rack: Tile.parse("b6 k6")).last)
   #expect(play.steps.map(\.tile) == Tile.parse("r6 k6 b6"))
-  #expect(play.stepsDone(table, from: table) == 0)
-  #expect(play.stepsDone(melds("r3 r4 r5, k1 k2 k3, r6"), from: table) == 1)
-  #expect(play.stepsDone(melds("r3 r4 r5, k1 k2 k3, r6 k6"), from: table) == 2)
-  #expect(play.stepsDone(melds("r3 r4 r5, k1 k2 k3, k6 r6 b6"), from: table) == 3)
-  #expect(play.stepsDone(melds("r3 r4 r5 r6, k1 k2 k3, k6"), from: table) == 0)
 }
 
 @Test func extendLongRun() {

@@ -187,7 +187,7 @@ struct ContentView: View {
           let overlay = { (fit: Fit) in
             Overlay(
               boxes: game.boxes, footprints: game.footprints, detections: tab == 1 ? game.settled : game.detections,
-              marks: game.marks, fit: fit)
+              fit: fit)
           }
           // Redrawn every display frame where the camera is now, as if on the table, between reads.
           if live, let then = game.ar?.pose, then.plane != nil {
@@ -412,7 +412,6 @@ struct Overlay: View {
   /// Each box's size on the table, in metres.
   let footprints: [SIMD2<Float>?]
   let detections: [Detection]
-  let marks: [Mark]
   let fit: Fit
 
   var body: some View {
@@ -445,7 +444,6 @@ struct Overlay: View {
         context.fill(Path(roundedRect: chip, cornerRadius: 4), with: .color(.white.opacity(0.85)))
         context.draw(label, in: chip.insetBy(dx: 4, dy: 1))
       }
-      Self.draw(marks, in: &context, fit: fit)
     }
     .allowsHitTesting(false)
   }

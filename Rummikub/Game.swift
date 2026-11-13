@@ -98,7 +98,7 @@ import UniformTypeIdentifiers
   var opened = UserDefaults.standard.bool(forKey: "opened") {
     didSet { UserDefaults.standard.set(opened, forKey: "opened") }
   }
-  /// The step shown, or nil before starting a play. While stepping, new readings don't re-solve.
+  /// The step shown on the Board, or nil before starting a play.
   var step: Int?
   /// Every frame's timing, a file a launch in Documents/timing, for `make timing`.
   private let timing: FileHandle? = {
@@ -119,9 +119,8 @@ import UniformTypeIdentifiers
   /// Reads a frame, or takes `read`, a recording's reads of it, as the simulator replays one.
   func see(_ ar: Frame, read: [Detection]? = nil) async {
     guard models != nil else { return }
-    // Once locked, frames only watch for changes, so a second apart is enough and the phone stays cooler; while
-    // stepping through a play, every frame, to follow each move.
-    if onBoard, step == nil, Date.now.timeIntervalSince(lastSeen) < 1 { return }
+    // Once locked, frames only watch for changes, so a second apart is enough and the phone stays cooler.
+    if onBoard, Date.now.timeIntervalSince(lastSeen) < 1 { return }
     lastSeen = .now
     // ARKit started a new world rather than relocalizing in the old one, so the places are gone: the parts keep their
     // tiles, not where they were. Relocalized, the old places line up again and are kept.
@@ -179,8 +178,8 @@ import UniformTypeIdentifiers
     await update(.rack, to: known, inView: !known.rack.isEmpty || racks.contains(true))
   }
 
-  /// Takes a part as `known` now reads it: follows the play's steps on the table, else settles, locks, or notes a
-  /// change. Out of view, it only moves the part's tiles to where the camera now sees them.
+  /// Takes a part as `known` now reads it: settles, locks, or notes a change. Out of view, it only moves the part's
+  /// tiles to where the camera now sees them.
   private func update(_ part: Area, to known: Scene, inView: Bool) async {
     var next = scene
     if part == .table {
@@ -190,21 +189,6 @@ import UniformTypeIdentifiers
     }
     guard inView else {
       if next.reads(like: scene) { scene = next }
-      return
-    }
-
-    if let play, let step, part == .table {
-      let done = play.stepsDone(next.tableTiles, from: scene.tableTiles)
-      if done == play.steps.count {
-        // The play is on the table: take the table as it now reads, and the rack without what came from it.
-        let used = Set(play.steps.compactMap { if case .rack(let i) = $0.from { i } else { nil } })
-        scene = Scene(table: next.table, rack: scene.rack.indices.filter { !used.contains($0) }.map { scene.rack[$0] })
-        self.step = nil
-        opened = true
-        await solve()
-      } else if done > step {
-        self.step = done
-      }
       return
     }
 
@@ -309,6 +293,8 @@ import UniformTypeIdentifiers
   private(set) var rackScan = World.RackScan.known
 
   private func scan(_ part: Area) {
+    // A play's steps name tiles by where they were, so scanning drops the play.
+    step = nil
     if locked.contains(part) { before = scene }
     locked.remove(part)
     world.forget(rack: part == .rack)
@@ -441,13 +427,6 @@ import UniformTypeIdentifiers
     let table = scene.tableTiles, rack = scene.rackTiles, opened = opened
     plays = await Task.detached { RummikubKit.solve(table: table, rack: rack, opened: opened) }.value
     choice = max(0, plays.count - 1)
-  }
-
-  /// What to draw for the current step, on both parts at once, where the camera sees their tiles now.
-  var marks: [Mark] {
-    guard let play, let step, play.steps.indices.contains(step) else { return [] }
-    let bounds = frame.map { CGRect(x: 0, y: 0, width: $0.width, height: $0.height) }
-    return play.group(at: step).flatMap { play.marks(in: scene, step: $0, within: bounds) }
   }
 }
 

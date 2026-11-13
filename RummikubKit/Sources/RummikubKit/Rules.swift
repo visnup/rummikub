@@ -39,13 +39,23 @@ extension World {
       tile: { placed[$0].detection.tile }, before.rackTiles))
     var rack = loose.filter(kept.contains).map { placed[$0].detection }
     if scan == .drawing {
-      // Unseen this time, so placed nowhere: where they were is in a world since forgotten.
-      rack += Scene.among(before.rack, tile: \.tile, Scene.missing(before.rackTiles, from: rack.map(\.tile))).map {
-        Detection(tile: $0.tile, frame: .null, turns: $0.turns, odds: $0.odds)
+      var left = loose.filter { !kept.contains($0) }
+      for tile in Scene.missing(before.rackTiles, from: rack.map(\.tile)) {
+        // A tile it had, misread now: the place most read as it, as a k9 read k7 doubled the k7 and lost the k9.
+        if let i = left.filter({ (placed[$0].place.odds[tile] ?? 0) > 0.05 })
+          .max(by: { placed[$0].place.odds[tile]! < placed[$1].place.odds[tile]! })
+        {
+          let d = placed[i].detection
+          var read = Detection(tile: tile, frame: d.frame, turns: d.turns, odds: d.odds, rack: d.rack)
+          read.along = d.along
+          rack.append(read)
+          left.removeAll { $0 == i }
+        } else if let old = Scene.among(before.rack, tile: \.tile, [tile]).first {
+          // Unseen, so placed nowhere: where it was is in a world since forgotten.
+          rack.append(Detection(tile: old.tile, frame: .null, turns: old.turns, odds: old.odds))
+        }
       }
-      if let new = loose.filter({ !kept.contains($0) }).max(by: { placed[$0].place.seen < placed[$1].place.seen }) {
-        rack.append(placed[new].detection)
-      }
+      if let new = left.max(by: { placed[$0].place.seen < placed[$1].place.seen }) { rack.append(placed[new].detection) }
     }
     return Scene(table: melds, rack: rack)
   }

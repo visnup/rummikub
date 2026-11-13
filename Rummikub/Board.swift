@@ -6,6 +6,8 @@ import SwiftUI
 struct Board<Controls: View>: View {
   let game: Game
   let scan: (Game.Looking) -> Void
+  /// A long press on either part, for when it's gone wrong.
+  let report: () -> Void
   @ViewBuilder let controls: Controls
   @State private var zoom: CGFloat = 1
   @State private var pan = CGSize.zero
@@ -109,6 +111,7 @@ struct Board<Controls: View>: View {
     }
     .overlay { if tiles.isEmpty { Text("Tap to scan").foregroundStyle(.secondary) } }
     .contentShape(.rect)
+    .onLongPressGesture { report() }
     .onTapGesture { scan(part) }
   }
 }

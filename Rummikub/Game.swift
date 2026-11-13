@@ -189,7 +189,7 @@ import UniformTypeIdentifiers
     // Touching tiles at the orientation they agree on; on the table, each meld then as the likeliest valid one, as
     // between turns they all are.
     let turned = Recognizer.turned(found)
-    if let ar, recording != nil { record(turned, ar) }
+    if let ar { record(turned, ar) }
     if let pose {
       // Each tile read is on the rack or the table by its place. A part with none in view only follows the camera;
       // a frame with no tiles is an empty tabletop.
@@ -353,7 +353,7 @@ import UniformTypeIdentifiers
   /// Saves the last frame to Documents as `<time>.png`, its truth as `<time>.txt` (what it was looking at, then a meld
   /// a line), and everything else known about it as `<time>.json`, to become test fixtures. PNG, so the fixture is the
   /// same pixels the phone read.
-  func capture(camera: [String: Any]) {
+  func capture(camera: [String: Any], recording: Date? = nil) {
     guard let frame else { return }
     let base = URL.documentsDirectory.appending(path: Date.now.formatted(.iso8601))
     let destination = CGImageDestinationCreateWithURL(
@@ -381,7 +381,7 @@ import UniformTypeIdentifiers
       },
     ]
     if let ar { info["ar"] = Self.info(ar, footprints: footprints) }
-    if let recording { info["recording"] = recording.formatted(.iso8601) }
+    if let recording = recording ?? self.recording { info["recording"] = recording.formatted(.iso8601) }
     try? JSONSerialization.data(withJSONObject: finite(info), options: [.prettyPrinted, .sortedKeys])
       .write(to: base.appendingPathExtension("json"))
   }
@@ -448,9 +448,22 @@ import UniformTypeIdentifiers
        "turns": $0.turns, "rack": $0.rack ?? NSNull(), "confidence": confidence(of: $0) ?? NSNull(),
        "odds": Dictionary(uniqueKeysWithValues: $0.odds.map { ($0.key.description, $0.value) })] as [String: Any]
     }
-    if let data = try? JSONSerialization.data(withJSONObject: finite(line), options: .sortedKeys) {
-      try? log?.write(contentsOf: data + Data("\n".utf8))
-    }
+    guard let data = try? JSONSerialization.data(withJSONObject: finite(line), options: .sortedKeys) else { return }
+    try? log?.write(contentsOf: data + Data("\n".utf8))
+    recent.append((.now, data))
+    recent.removeFirst(recent.prefix { Date.now.timeIntervalSince($0.time) > 120 }.count)
+  }
+
+  /// The last two minutes of lines, recording or not, for `report`.
+  @ObservationIgnored private var recent = [(time: Date, line: Data)]()
+
+  /// Saves the last two minutes as a recording, `<start>.jsonl`, with the last frame captured, for when the app has
+  /// gone wrong in a game nobody was recording.
+  func report(camera: [String: Any]) {
+    guard let start = recent.first?.time else { return }
+    let name = start.formatted(.iso8601) + ".jsonl"
+    try? Data(recent.map { $0.line + Data("\n".utf8) }.joined()).write(to: URL.documentsDirectory.appending(path: name))
+    capture(camera: camera, recording: start)
   }
 
   /// While recording, captures the frame every 2 s, once its reads have their parts.

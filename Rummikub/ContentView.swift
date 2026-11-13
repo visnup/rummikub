@@ -87,6 +87,11 @@ struct ContentView: View {
             Board(game: game) { part in
               game.rescan(part)
               game.pick(part)
+            } report: {
+              game.report(camera: camera.settings)
+              saved += 1
+              justSaved = true
+              send()
             } controls: {
               VStack(spacing: 12) { solver }
                 .padding()

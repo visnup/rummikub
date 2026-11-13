@@ -142,7 +142,7 @@ import UniformTypeIdentifiers
     guard models != nil else { return }
     // Once locked, frames only watch for changes, so a second apart is enough and the phone stays cooler; while
     // stepping through a play, every frame, to follow each move.
-    if locked.contains(looking), step == nil, Date.now.timeIntervalSince(lastSeen) < 1 { return }
+    if ar?.pose?.plane != nil ? onBoard : locked.contains(looking), step == nil, Date.now.timeIntervalSince(lastSeen) < 1 { return }
     lastSeen = .now
     // Only where tilt can't say: below 30° it's always been a rack, above 55° a table.
     if picked == nil, read == nil, ar?.pose == nil, let lookingModel, (30...55).contains(tilt ?? 40),
@@ -184,21 +184,24 @@ import UniformTypeIdentifiers
     let turned = Recognizer.turned(found)
     if let ar, recording != nil { record(turned, ar) }
     if let pose {
-      // Each part this frame's tiles landed in, by place, is updated; a frame with none is an empty tabletop.
+      // Each tile read is on the rack or the table by its place. A part with none in view only follows the camera;
+      // a frame with no tiles is an empty tabletop.
       let ids = world.add(turned, pose: pose, mask: ar?.mask)
-      let racks = ids.compactMap { id in world.places.first { $0.id == id }?.isRack }
-      let inView = Set(racks.map { $0 ? Looking.rack : .table })
-      if !racks.isEmpty { looking = racks.count(where: \.self) * 2 > racks.count ? .rack : .table }
+      let racks = ids.map { id in world.places.first { $0.id == id }?.isRack }
+      detections = zip(turned, racks).map { d, rack in
+        var d = d
+        if let rack { d.rack = rack ? 1 : 0 }
+        return d
+      }
       // Drawn and measured on the tabletop, not on whatever plane ARKit found; recorded as ARKit gave it.
       let leveled = world.level(pose)
       self.ar?.pose = leveled
       footprints = self.boxes.map(leveled.footprint)
       let placed = world.detections(from: pose)
-      if racks.isEmpty || inView.contains(.table) {
-        let melds = Recognizer.valid(World.melds(placed.filter { !$0.place.isRack }))
-        await update(.table, voted: melds.flatMap(\.self), melds: melds)
-      }
-      if inView.contains(.rack) { await update(.rack, voted: placed.filter(\.place.isRack).map(\.detection)) }
+      let melds = Recognizer.valid(World.melds(placed.filter { !$0.place.isRack }))
+      await update(.table, voted: melds.flatMap(\.self), melds: melds,
+        inView: racks.allSatisfy { $0 == nil } || racks.contains(false))
+      await update(.rack, voted: placed.filter(\.place.isRack).map(\.detection), inView: racks.contains(true))
     } else {
       let part = looking
       let seen = part == .rack ? onRack(turned) : Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self)
@@ -208,12 +211,17 @@ import UniformTypeIdentifiers
   }
 
   /// Takes a part's latest reading: follows the play's steps on the table, else settles, locks, or notes a change.
-  private func update(_ part: Looking, voted: [Detection], melds: [[Detection]]? = nil) async {
+  /// Out of view, it only moves the part's tiles to where the camera now sees them.
+  private func update(_ part: Looking, voted: [Detection], melds: [[Detection]]? = nil, inView: Bool = true) async {
     var next = scene
     if part == .table {
       next.table = melds ?? Recognizer.melds(voted)
     } else {
       next.rack = voted
+    }
+    guard inView else {
+      if next.reads(like: scene) { scene = next }
+      return
     }
 
     if let play, let step, part == .table {
@@ -322,8 +330,10 @@ import UniformTypeIdentifiers
   /// What the last frame read that agrees with the settled table or rack, whichever is being looked at, so the
   /// Solver labels only those.
   var settled: [Detection] {
-    var left = looking == .table ? scene.tableTiles.flatMap { $0 } : scene.rackTiles
-    return (looking == .table ? detections : onRack(detections)).filter { detection in
+    let anchored = ar?.pose?.plane != nil
+    var left = anchored ? scene.tableTiles.flatMap { $0 } + scene.rackTiles
+      : looking == .table ? scene.tableTiles.flatMap { $0 } : scene.rackTiles
+    return (anchored || looking == .table ? detections : onRack(detections)).filter { detection in
       guard let i = left.firstIndex(of: detection.tile) else { return false }
       left.remove(at: i)
       return true
@@ -436,11 +446,16 @@ import UniformTypeIdentifiers
     choice = max(0, plays.count - 1)
   }
 
-  /// What to draw for the current step. The rack is never in the same frame as the table, so a tile from it can't be
-  /// pointed at.
+  /// What to draw for the current step. Without ARKit the rack is never in the same frame as the table, so a tile
+  /// from it can't be pointed at.
   var marks: [Mark] {
     guard let play, let step, play.steps.indices.contains(step) else { return [] }
     let group = play.group(at: step)
+    // With ARKit both parts' tiles are where the camera sees them now, in view or not.
+    if ar?.pose?.plane != nil {
+      let bounds = frame.map { CGRect(x: 0, y: 0, width: $0.width, height: $0.height) }
+      return group.flatMap { play.marks(in: scene, step: $0, within: bounds) }
+    }
     if looking == .rack {
       guard case .rack = play.steps[step].from else { return [] }
       var left = detections

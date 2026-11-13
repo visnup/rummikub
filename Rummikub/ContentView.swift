@@ -454,7 +454,8 @@ struct Overlay: View {
       }
       for detection in detections {
         let rect = fit(detection.frame)
-        context.stroke(Path(roundedRect: rect, cornerRadius: 4), with: .color(.white.opacity(0.4)))
+        context.stroke(Path(roundedRect: rect, cornerRadius: 4),
+          with: .color((detection.rack ?? 0) >= 0.5 ? .purple : .white), lineWidth: 2)
         let label = context.resolve(
           Text(detection.tile.face).font(.system(size: max(12, rect.width * 0.35), weight: .bold))
             .foregroundStyle(Self.color(detection.tile)))

@@ -194,7 +194,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   captured by then. It takes a few seconds to launch, reading every capture's notes for its photos. On the phone, Table/Rack follows `Looking` when it's .8 sure, or
   without it the tilt from CoreMotion (`Game.tilt`), shown in degrees in the top pill and written into each capture.
   A pick by hand holds until that part locks. With a table plane there's no Table/Rack: a frame updates each part
-  its tiles' places in `World` belong to, the table when it reads none. In the Simulator, Vision requests are pinned to the
+  its tiles' places in `World` belong to, the table when it reads none, and the other part only follows the camera.
+  A step's marks are drawn on both parts at once, and each read's border is purple on the rack, white on the table. In the Simulator, Vision requests are pinned to the
   CPU, else it can't create an inference context; the finder's boxes there still come out wrong, so check on the phone.
   - Two tabs. Capture's controls are one row in the tab bar's accessory (`tabViewBottomAccessory`), which the system
     places above the tab bar, or level with it on the iPhone Duo, whose tab bar is at the side; hand-placed panels

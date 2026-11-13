@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Captures</title>
 <link rel="stylesheet" href="/common.css">
 <style>
@@ -25,12 +26,22 @@
     main { min-height: 0; }
     aside { grid-column: 2; max-height: 60vh; border-left: 0; border-top: 1px solid var(--line); align-content: start; }
   }
+  #back { display: none; }
+  /* The list alone at /captures, and a capture alone once picked. */
+  @media (max-width: 600px) {
+    body { display: flex; flex-direction: column; height: 100dvh; }
+    nav { width: 100%; flex: 1; border-right: 0; padding-bottom: 0; }
+    body.listing :is(main, aside), body:not(.listing) nav, #keys { display: none; }
+    aside { max-height: 40dvh; justify-content: start; }
+    #back { display: inline; text-decoration: none; color: inherit; font-size: 20px; line-height: 1; }
+  }
 </style>
 </head>
 <body>
 <nav id="list"></nav>
 <main>
   <header>
+    <a id="back" href="/captures">‹</a>
     <b id="name"></b>
     <select id="layout" title="What the capture was meant to show, which sets its truth">
       <option>As read</option><option>Full set</option><option>No tiles</option>
@@ -83,12 +94,29 @@ const time = c => when(c).toLocaleTimeString(undefined, { hour: "numeric", minut
 async function load() {
   captures = await (await fetch("/api/captures")).json();
   captures.sort((a, b) => when(b) - when(a));
-  const pending = captures.findIndex(c => !c.boxed);
-  open(numbered() ?? (pending < 0 ? 0 : pending), false);
+  const pending = captures.findIndex(c => !c.boxed), first = numbered() ?? (pending < 0 ? 0 : pending);
+  if (listing()) { current = first; list(); scrollToCurrent(); }
+  else open(first, false);
 }
 /** The capture the URL's /captures/number names, so reload, back and forward return to it. */
 const numbered = () => { const i = captures.findIndex(c => `/captures/${c.id}` === location.pathname); return i < 0 ? null : i; };
-addEventListener("popstate", () => { const i = numbered(); if (i !== null && i !== current) open(i, false); });
+const xs = matchMedia("(max-width: 600px)");
+/** On a phone, /captures shows the list alone and a capture shows without it. */
+const listing = () => document.body.classList.toggle("listing", xs.matches && numbered() === null);
+const scrollToCurrent = () => document.querySelector("nav tr.current")?.scrollIntoView({ block: "nearest" });
+addEventListener("popstate", () => {
+  const i = numbered();
+  if (i !== null && i !== current) open(i, false);
+  if (listing()) scrollToCurrent();
+});
+xs.onchange = listing;
+document.getElementById("back").onclick = e => {
+  e.preventDefault();
+  if (history.state?.list) return history.back();
+  history.pushState(null, "", "/captures");
+  listing();
+  scrollToCurrent();
+};
 /** How many places the models disagree with a done capture's labels, until it's looked over. */
 const disputes = c => c.boxed && c.check && !c.checked ? c.check.missed.length + c.check.extra.length + c.check.values.length : 0;
 /** 0 pending, 1 done but to check, 2 done. */
@@ -118,7 +146,8 @@ async function open(i, push = true) {
   if (mine !== opening) return;
   current = i;
   tiles = loaded;
-  if (location.pathname !== `/captures/${c.id}`) history[push ? "pushState" : "replaceState"](null, "", `/captures/${c.id}`);
+  if (location.pathname !== `/captures/${c.id}`) history[push ? "pushState" : "replaceState"]({ list: listing() }, "", `/captures/${c.id}`);
+  listing();
   selected = null; typed = ""; many.clear(); fit = true; mark = -1; focus = null; opened = Date.now();
   const shown = image = new Image();
   image.src = photo(c);
@@ -131,7 +160,7 @@ async function open(i, push = true) {
     view.scrollTo({ left: canvas.offsetLeft + (canvas.width - view.clientWidth) / 2, top: canvas.offsetTop + (canvas.height - view.clientHeight) / 2 });
   }, () => {});
   list();
-  document.querySelector("nav tr.current")?.scrollIntoView({ block: "nearest" });
+  scrollToCurrent();
 }
 const photo = c => `/photos/${encodeURIComponent(c.name).replace("%2F", "/")}.webp?${c.modified}`;
 const step = by => { const o = order(); open(o[(o.indexOf(current) + by + o.length) % o.length]); };

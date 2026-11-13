@@ -14,18 +14,17 @@ struct ContentView: View {
   @State private var pressing = false
   @State private var topInset: CGFloat = 0
   @State private var editingNotes = false
-  @State private var zoom = 1.0
   @State private var unsent: Int?
-  @AppStorage("ar") private var ar = false
   @Environment(\.scenePhase) private var scenePhase
 
   var body: some View {
     // Tab content is opaque, so each tab draws the camera behind itself; only the selected one, since a session
     // shows in one preview layer at a time.
-    // Tapping Capture again takes one, where the thumb already is.
+    // Tapping Capture again starts or stops a recording, where the thumb already is.
     TabView(selection: Binding(get: { tab }, set: { if $0 == 0 && tab == 0 && live && !justSaved { shoot() }; tab = $0 })) {
-      Tab("Capture", systemImage: game.recording != nil ? "stop.circle" : justSaved ? "checkmark" : ar ? "record.circle" : "camera", value: 0) {
-        // Holding a finger on the camera hides everything drawn over it to check the framing; lifting it captures.
+      Tab("Capture", systemImage: game.recording != nil ? "stop.circle" : justSaved ? "checkmark" : "record.circle", value: 0) {
+        // Holding a finger on the camera hides everything drawn over it to check the framing; lifting it starts or
+        // stops a recording.
         Color.clear
           .background {
             if tab == 0 {
@@ -42,10 +41,10 @@ struct ContentView: View {
           .safeAreaBar(edge: .top) {
             HStack {
               if let tilt = game.tilt { Text("\(Int(tilt))°") }
-              if ar, let frame = game.ar {
+              if let frame = game.ar {
                 if frame.tracking != "normal" {
                   Text(frame.tracking)
-                } else if let height = frame.pose?.height {
+                } else if let height = frame.pose.height {
                   // The camera above the table, and how far `World.level` lifted ARKit's plane to reach it.
                   let lift = (camera.pose?.height ?? height) - height
                   Text("table \(Int(height * 100)) cm" + (lift > 0.05 ? ", lifted \(Int(lift * 100))" : ""))
@@ -75,11 +74,6 @@ struct ContentView: View {
             .opacity(pressing ? 0 : 1)
           }
           .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { topInset = $0 }
-          .safeAreaBar(edge: .bottom) {
-            if live {
-              lenses.padding(.bottom, 8).opacity(pressing ? 0 : 1)
-            }
-          }
       }
       Tab("Solver", systemImage: "square.grid.3x3.fill", value: 1) {
         NavigationStack {
@@ -87,7 +81,6 @@ struct ContentView: View {
             if game.onBoard {
               Board(game: game) { part in
                 game.rescan(part)
-                game.pick(part)
               } report: {
                 report()
               } controls: {
@@ -97,15 +90,6 @@ struct ContentView: View {
               }
             } else {
               panel(over: Color.clear.contentShape(.rect).onLongPressGesture { report() }) { solver }
-            }
-          }
-          .safeAreaBar(edge: .top) {
-            if !game.onBoard {
-              HStack {
-                looking.fixedSize().padding(4).glassEffect()
-                if live { lenses }
-              }
-              .padding(.top, topInset == 0 ? 8 : 0)
             }
           }
           .background { if tab == 1 && !game.onBoard { preview } }
@@ -140,7 +124,6 @@ struct ContentView: View {
       send()
       live = await camera.start()
       if live {
-        zoom = camera.zooms[0]
         motion.deviceMotionUpdateInterval = 0.2
         motion.startDeviceMotionUpdates(to: .main) { data, _ in
           guard let gravity = data?.gravity else { return }
@@ -150,16 +133,12 @@ struct ContentView: View {
             game.tilt = asin(max(-1, min(1, -gravity.z))) * 180 / .pi
           }
         }
-        if ar { camera.use(ar: true) }
-        for await frame in camera.frames { await game.see(frame.image, ar: frame.pose == nil ? nil : frame) }
+        for await frame in camera.frames { await game.see(frame) }
       } else {
         // No camera, as in the simulator: replay an AR recording at its pace, over and over.
         while !Task.isCancelled, let first = Replay.frames.first {
           for (f, next) in zip(Replay.frames, Replay.frames.dropFirst() + [first]) where !Task.isCancelled {
-            if tab == 0 || !game.onBoard {
-              game.looking = f.looking
-              await game.see(f.frame.image, ar: f.frame, read: f.read)
-            }
+            if tab == 0 || !game.onBoard { await game.see(f.frame, read: f.read) }
             try? await Task.sleep(for: .seconds(min(max(next.time - f.time, 0.1), 1)))
           }
         }
@@ -182,10 +161,8 @@ struct ContentView: View {
     GeometryReader { geometry in
       let size = geometry.size
       ZStack {
-        if live && ar {
-          ARPreview(session: camera.arSession)
-        } else if live {
-          CameraPreview(session: camera.session)
+        if live {
+          ARPreview(session: camera.session)
         } else if let frame = game.frame {
           Image(decorative: frame, scale: 1)
             .resizable()
@@ -200,8 +177,8 @@ struct ContentView: View {
               boxes: game.boxes, footprints: game.footprints, detections: tab == 1 ? game.settled : game.detections,
               marks: game.marks, fit: fit)
           }
-          // With ARKit, redrawn every display frame where the camera is now, as if on the table, between reads.
-          if live && ar, let then = game.ar?.pose, then.plane != nil {
+          // Redrawn every display frame where the camera is now, as if on the table, between reads.
+          if live, let then = game.ar?.pose, then.plane != nil {
             TimelineView(.animation) { _ in overlay(fit.following(then, to: camera.pose)) }
           } else {
             overlay(fit)
@@ -210,45 +187,6 @@ struct ContentView: View {
       }
     }
     .ignoresSafeArea()
-  }
-
-  var lenses: some View {
-    HStack(spacing: 4) {
-      ForEach(camera.zooms, id: \.self) { z in
-        Button(z == 0.5 ? ".5×" : "\(Int(z))×") {
-          zoom = z
-          if ar {
-            ar = false
-            camera.use(ar: false)
-          }
-          camera.zoom(to: z)
-        }
-        .foregroundStyle(!ar && zoom == z ? .yellow : .primary)
-        .frame(width: 36, height: 36)
-      }
-      if Camera.arSupported {
-        Button("AR") {
-          ar.toggle()
-          camera.use(ar: ar)
-          if !ar { camera.zoom(to: zoom) }
-        }
-        .foregroundStyle(ar ? .yellow : .primary)
-        .frame(width: 36, height: 36)
-      }
-    }
-    .font(.caption.bold().monospacedDigit())
-    .padding(4)
-    .glassEffect()
-  }
-
-  /// Without a pose; with one, `World` tells the rack from the table.
-  @ViewBuilder var looking: some View {
-    if game.ar?.pose == nil {
-      Picker("Looking at", selection: Binding(get: { game.looking }, set: { game.pick($0) })) {
-        ForEach(Game.Looking.allCases, id: \.self) { Text($0.rawValue.capitalized) }
-      }
-      .pickerStyle(.segmented)
-    }
   }
 
   /// Pushes captures to the Mac; one already under way keeps the count.
@@ -265,14 +203,12 @@ struct ContentView: View {
     send()
   }
 
-  /// A capture, or in AR a recording started or stopped.
+  /// A recording started or stopped.
   func shoot() {
-    if ar && game.recording == nil {
+    if game.recording == nil {
       game.startRecording(camera: camera.settings)
-    } else if ar {
-      game.stopRecording()
     } else {
-      game.capture(camera: camera.settings)
+      game.stopRecording()
     }
     saved += 1
     justSaved = true
@@ -281,7 +217,6 @@ struct ContentView: View {
 
   var capture: some View {
     HStack {
-      looking.fixedSize()
       Menu {
         Picker("Layout", selection: $game.layout) {
           ForEach(Game.Layout.allCases, id: \.self) { Label($0.rawValue, systemImage: $0.icon) }
@@ -337,6 +272,11 @@ struct ContentView: View {
             Text("\(text)\(meld.offset == 0 ? "" : "  ·  ")\(numbers(meld.element))")
           }
           numbers(game.scene.rackTiles)
+          if game.loading {
+            Text("Loading models…").font(.callout).foregroundStyle(.secondary)
+          } else if game.ar?.pose.plane == nil {
+            Text("Finding the table…").font(.callout).foregroundStyle(.secondary)
+          }
           // The table keeps every tile it had, so it locks only once they've all been seen again.
           if !game.locked.contains(.table), !game.unseen.isEmpty {
             Text("Still to find: \(numbers(game.unseen))").font(.callout).foregroundStyle(.secondary)
@@ -542,7 +482,7 @@ struct Overlay: View {
 /// mask and reads, with the last photo the recording captured by then.
 enum Replay {
   static let name = "2026-11-12T14:17:55Z"
-  static let frames: [(time: Double, looking: Game.Looking, frame: Frame, read: [Detection])] = {
+  static let frames: [(time: Double, frame: Frame, read: [Detection])] = {
     let captures = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../Captures")
     guard let recording = try? Recording(contentsOf: captures.appending(path: name + ".jsonl")) else { return [] }
     let photos = [captures, captures.appending(path: "unlabeled")].flatMap { folder in
@@ -561,8 +501,7 @@ enum Replay {
     guard let first = photos.first else { return [] }
     return recording.frames.map { f in
       let image = photos.last { $0.time <= f.time + 1 }?.image ?? first.image
-      return (f.time, Game.Looking(rawValue: f.looking) ?? .table,
-        Frame(image: image, pose: f.pose, tracking: "normal", mask: f.mask), f.detections)
+      return (f.time, Frame(image: image, pose: f.pose, tracking: f.tracking, mask: f.mask), f.detections)
     }
   }()
 }

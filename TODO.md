@@ -13,8 +13,7 @@ when it follows the last known state (`Rules.swift`), and the table keeps only v
    odds alone, so a rack tile seen from above is dropped (07:43's r10) and a phantom can join the rack (06:57's b4).
 4. **No moves.** "No moves. Draw a tile." with a button to the rack scanner, which looks for exactly one new tile.
 5. **Steps on the Board only.** Drop the AR marks and the camera advancing steps; a tap moves to the next step.
-6. **A real game**, reporting (long press on the Board) whenever it goes wrong.
-7. Then drop the non-AR path and `Looking`.
+6. **A real game**, reporting (a long press in the Solver) whenever it goes wrong.
 
 ## Next
 
@@ -70,44 +69,16 @@ otherwise, won't help; only a tighter relaxation will, like cuts.
 
 - A flat diagram of the finished table for plays that rebuild most of it (see "Design" in `CLAUDE.md`).
 
-## ARKit throughout
+## World
 
-Today a frame is the unit: each one is found, read, voted over the last five, and drawn until the next. With ARKit
-the table is the unit: every tile has a place on it, frames add evidence to tiles, and drawing follows the camera at
-60 fps between reads. On 2026-11-11 the AR mode measured flat tiles on the table plane to a few mm (28–45 mm sides,
-large set), once ARKit had found the table. What it costs: no ultra wide (ARKit offers the wide lens only, so a whole
-table takes a pan), and more battery than a stopped camera. The Simulator has no ARKit, so it replays a recording
-(`Replay`). Each step ships on its own and keeps the non-AR path working until step 5.
+The app is AR only since 2026-11-13. What's left of making the table, not the frame, the unit:
 
-1. **Labels pinned to the table.** Done 2026-11-11 (`Pose.follow`): on the phone it feels much better than labels
-   that jump at each read.
-2. **Sequences for the Mac.** Built 2026-11-11: AR recordings log every frame read, for `swift run world`, so steps
-   3 and 4 can be tuned and tested off the phone. None recorded on the phone yet; the first should be a crowded
-   table, to check `World.melds`' bounds.
-3. **Rack or table, by geometry.** One frame's footprint doesn't separate them at the angles racks are shot (40–45°:
-   rack tiles measured 31×42–50 mm, the same as flat ones; only at 25–33° were they 60–80 deep). Nor, on 2026-11-11,
-   did two other single-tile tests beat Values' rack head, which keeps 135 of 140 rack tiles and lets 4 table tiles
-   through after `nearest`:
-   - *Parallax.* Over 9 frames and 10–20 cm of motion, rack tiles' tops wandered 14–33 mm on the table plane against
-     table tiles' 1–11, but the two nearest rack tiles only 7–18.
-   - *Taper* (`Standing`, in `ARCHIVE.md`): kept 116 of 135 with 6 let through.
-   What's left is *place*: the rack sits at the table's edge nearest the player and doesn't move during a game, and
-   its tiles' bottom edges held still on the table plane to 2–9 mm. Once Values has found it, any tile there is rack,
-   at any angle. That belongs to step 4's world table, and with it `Looking`, the tilt and the Table/Rack switch can
-   go.
-4. **A world table.** Started 2026-11-11: `World` replaces the five-frame vote in AR mode once ARKit has the table,
-   and tells the rack by Values' mean per place. Not yet tried on the phone. Still to do:
-   - Rack by place, not only Values' mean: the rack's line, once found, claims any tile on it. Rack places now
-     find their ledge's height (`settle`), which ended #327–331's doubles, but only when the camera moves
-     gradually: a jump from 45° to 27° in one frame still doubles a tile, in the test. Once it's by place, AR
-     captures' `part` per detection can label Values' rack head in `crops.py`, from every capture, not only those
-     marked rack; until then it's Values' own odds averaged, so training on it would learn its own mistakes.
-   - Lock per tile, not per part, and don't read again a tile already sure, which saves the reader most of its time.
-   - Plays on places: a step's ghost slot a point on the table, `stepsDone` seeing tiles move, `Scene.following`
-     gone, and the Board the table from above in table coordinates.
-5. **AR as the only camera.** Once 1–4 beat today's on the phone, drop the AVCaptureSession path, the lens buttons,
-   `Looking` and the tilt, the five-frame vote and `Game.onRack`, keeping a no-pose path for the Simulator and tests.
-   Captures always record the pose.
+- **Rack by place**, not only Values' mean and the rules: the rack's line, once found, claims any tile on it. One
+  frame's footprint, parallax and taper didn't separate them (2026-11-11); height from rays did in #372–390 but not
+  with little camera motion (2026-11-13). Once it's by place, AR captures' `part` per detection can label Values' rack
+  head in `crops.py`; until then it's Values' own odds averaged, so training on it would learn its own mistakes.
+- **Lock per tile**, not per part, and don't read again a tile already sure, which saves the reader most of its time.
+- **The Board in table coordinates**, from above.
 
 ## Models out of git
 

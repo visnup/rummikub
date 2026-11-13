@@ -2,7 +2,7 @@ app := DerivedData/Build/Products
 
 files := --device Yam --domain-type appDataContainer --domain-identifier com.visnup.Rummikub
 
-.PHONY: all sim test captures watch timing upload labels train finder keep-finder values looking check score
+.PHONY: all sim test captures watch timing upload labels train finder keep-finder values check score
 
 all:
 	xcodebuild -scheme Rummikub -destination generic/platform=iOS -derivedDataPath DerivedData \
@@ -82,13 +82,6 @@ values:
 	uv run Labeler/crops.py $(dir) $(dir)/.crops $(wildcard Outside/*-train Outside/*-values)
 	uv run Labeler/values.py $(dir)
 	rm -rf Rummikub/Values.mlpackage && cp -R $(dir)/Values.mlpackage Rummikub/
-
-# Trains Looking, which says whether a frame shows a rack or the table, on whole frames labeled in looking.txt, and
-# gives the app it.
-looking:
-	uv run Labeler/looking.py $(dir) $(dir)/.looking
-	cd RummikubKit && swift run -c release looking ../$(dir)/.looking ../$(dir)/Looking.mlmodel
-	cp $(dir)/Looking.mlmodel Rummikub/
 
 # Lists where the models disagree with the done captures' labels, for the labeler's Check section.
 check:

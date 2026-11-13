@@ -12,30 +12,6 @@ public struct Scene: Sendable {
 
   public var tableTiles: [[Tile]] { table.map { $0.map(\.tile) } }
   public var rackTiles: [Tile] { rack.map(\.tile) }
-
-  /// This scene's frames moved to where `detections`, a later frame, sees the same tiles, so marks planned on this
-  /// one follow the camera. It scales and shifts by the median over tiles that appear just once in both.
-  public func following(_ detections: [Detection]) -> Scene {
-    let old = table.joined() + rack
-    let pairs = detections.compactMap { now -> (CGRect, CGRect)? in
-      let then = old.filter { $0.tile == now.tile }
-      guard then.count == 1, detections.count(where: { $0.tile == now.tile }) == 1 else { return nil }
-      return (then[0].frame, now.frame)
-    }
-    guard !pairs.isEmpty else { return self }
-    func median(_ values: [CGFloat]) -> CGFloat { values.sorted()[values.count / 2] }
-    let scale = median(pairs.map { $1.height / $0.height })
-    let dx = median(pairs.map { $1.midX - $0.midX * scale }), dy = median(pairs.map { $1.midY - $0.midY * scale })
-    func move(_ detection: Detection) -> Detection {
-      let frame = detection.frame
-      return Detection(
-        tile: detection.tile,
-        frame: CGRect(
-          x: frame.minX * scale + dx, y: frame.minY * scale + dy, width: frame.width * scale,
-          height: frame.height * scale))
-    }
-    return Scene(table: table.map { $0.map(move) }, rack: rack.map(move))
-  }
 }
 
 /// One thing to draw over the camera image, in its pixels.

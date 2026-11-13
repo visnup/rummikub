@@ -26,7 +26,6 @@ import UniformTypeIdentifiers
     }
   }
 
-  var looking = Looking.table
   var layout = Layout.read
   /// What's around the tiles, like "lamp glare, wood", saved with each capture.
   /// Single-word tags, kept across launches, that `check` reports by.
@@ -46,7 +45,6 @@ import UniformTypeIdentifiers
   private var models: Models?
   private var finder: Finder? { models?.finder }
   private var values: Classifier? { models?.values }
-  private var lookingModel: Classifier? { models?.looking }
 
   var loading: Bool { models == nil }
   /// When the models started loading, and how long they took last launch, for the progress shown meanwhile.
@@ -57,9 +55,6 @@ import UniformTypeIdentifiers
     let finder: Finder?
     /// What reads the finder's boxes: each tile and its orientation.
     let values: Classifier?
-    /// Whether a frame shows a rack or the table, from the whole picture: tilt alone can't say, since racks were shot
-    /// at 24–48° and tables from 35° up. On held-out frames it got 21 of 24, two of them judgment calls.
-    let looking: Classifier?
   }
 
   init() {
@@ -72,8 +67,7 @@ import UniformTypeIdentifiers
         }
       }
       let values = Task.detached { Game.model("Values").flatMap { try? Classifier(model: $0) } }
-      let looking = Task.detached { Game.model("Looking").flatMap { try? Classifier(model: $0) } }
-      models = Models(finder: await finder.value, values: await values.value, looking: await looking.value)
+      models = Models(finder: await finder.value, values: await values.value)
       let time = Date.now.timeIntervalSince(loadStart)
       UserDefaults.standard.set(time, forKey: "loadTime")
       _ = try? timing?.seekToEnd()
@@ -91,26 +85,8 @@ import UniformTypeIdentifiers
       try? MLModel(contentsOf: $0, configuration: configuration)
     }
   }
-  /// How far the camera points below the horizon, in degrees. Looking down at the table it's steep; at the rack,
-  /// nearly level. Below 30° and above 55° it decides; between, the Looking model does, or without it a cutoff at
-  /// 45°. A pick by hand holds until that part locks.
-  var tilt: Double? {
-    didSet {
-      guard let tilt, picked == nil, ar?.pose == nil else { return }
-      if tilt > 55 {
-        looking = .table
-      } else if tilt < 30 || tilt < 45 && lookingModel == nil {
-        looking = .rack
-      }
-    }
-  }
-  /// What was picked by hand, until it locks.
-  private var picked: Looking?
-
-  func pick(_ looking: Looking) {
-    self.looking = looking
-    picked = looking
-  }
+  /// How far the camera points below the horizon, in degrees, written into captures.
+  var tilt: Double?
   /// The last frame read, and what was read in it.
   var frame: CGImage?
   var detections = [Detection]()
@@ -131,47 +107,36 @@ import UniformTypeIdentifiers
     let directory = URL.documentsDirectory.appending(path: "timing")
     let url = directory.appending(path: Date.now.formatted(.iso8601) + ".csv")
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    guard FileManager.default.createFile(atPath: url.path, contents: Data("time,looking,read_ms,find_ms,readings,boxes\n".utf8))
+    guard FileManager.default.createFile(atPath: url.path, contents: Data("time,part,read_ms,find_ms,readings,boxes\n".utf8))
     else { return nil }
     return try? FileHandle(forWritingTo: url)
   }()
 
   var play: Play? { plays.indices.contains(choice) ? plays[choice] : nil }
 
-  /// ARKit's frame, when it's running the camera, and each box's size on the table it found (`Pose.footprint`).
+  /// ARKit's last frame, and each box's size on the table it found (`Pose.footprint`).
   var ar: Frame?
   var footprints = [SIMD2<Float>?]()
 
   /// Reads a frame, or takes `read`, a recording's reads of it, as the simulator replays one.
-  func see(_ image: CGImage, ar: Frame? = nil, read: [Detection]? = nil) async {
+  func see(_ ar: Frame, read: [Detection]? = nil) async {
     guard models != nil else { return }
     // Once locked, frames only watch for changes, so a second apart is enough and the phone stays cooler; while
     // stepping through a play, every frame, to follow each move.
-    if ar?.pose?.plane != nil ? onBoard : locked.contains(looking), step == nil, Date.now.timeIntervalSince(lastSeen) < 1 { return }
+    if onBoard, step == nil, Date.now.timeIntervalSince(lastSeen) < 1 { return }
     lastSeen = .now
-    // Only where tilt can't say: below 30° it's always been a rack, above 55° a table.
-    if picked == nil, read == nil, ar?.pose == nil, let lookingModel, (30...55).contains(tilt ?? 40),
-      let (label, confidence) = await Task.detached(operation: { try? lookingModel.label(of: image) }).value,
-      confidence >= 0.8, let seen = Looking(rawValue: label)
-    {
-      looking = seen
-    }
-    // With a table plane, every read goes to the world table, which says what's on the rack by place.
-    let pose = ar?.pose.flatMap { $0.plane == nil ? nil : $0 }
-    if ar?.pose == nil { world = World() }
-    let finder = finder, classifier = values, rack = looking == .rack && pose == nil
+    // Every read goes to the world table, once ARKit has found one, which says what's on the rack by place.
+    let pose = ar.pose.plane == nil ? nil : ar.pose
+    let finder = finder, classifier = values, image = ar.image
     // The finder's boxes read by Values.
     let (found, boxes, confidences, findTime, time) = await Task.detached {
       if let read { return (read, Optional(read.map(\.frame)), [Float](), Duration.zero, Duration.zero) }
       let clock = ContinuousClock()
       var scored: [(box: CGRect, confidence: Float)]?
       let findTime = clock.measure { scored = try? finder?.scored(in: image).found }
-      if rack, let all = scored { let near = Finder.nearest(all.map(\.box)); scored = all.filter { near.contains($0.box) } }
       let boxes = scored?.map(\.box)
       var found = [Detection]()
       let time = clock.measure { found = boxes.flatMap { try? classifier?.tiles(in: image, boxes: $0) } ?? [] }
-      // At the rack, Values says which tiles lie on the table behind it, where `nearest` couldn't.
-      if rack { found = found.filter { ($0.rack ?? 1) >= 0.5 } }
       return (found, boxes, scored?.map(\.confidence) ?? [], findTime, time)
     }.value
     frame = image
@@ -180,23 +145,22 @@ import UniformTypeIdentifiers
     self.boxes = boxes ?? []
     self.confidences = confidences
     self.ar = ar
-    footprints = ar?.pose.map { pose in self.boxes.map(pose.footprint) } ?? []
+    footprints = self.boxes.map(ar.pose.footprint)
     detections = found
     parts = []
-    if ar == nil, recording != nil { stopRecording() }
     _ = try? timing?.seekToEnd()
     try? timing?.write(contentsOf: Data(
-      "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(found.count),\(boxes?.count ?? -1)\n".utf8))
+      "\(Date.now.timeIntervalSince1970),\(mostly),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(found.count),\(boxes?.count ?? -1)\n".utf8))
     // Touching tiles at the orientation they agree on; on the table, each meld then as the likeliest valid one, as
     // between turns they all are.
     let turned = Recognizer.turned(found)
-    if let ar { record(turned, ar) }
+    record(turned, ar)
     if let pose {
       // Each tile read is on the rack or the table by its place. A part with none in view only follows the camera;
       // a frame with no tiles is an empty tabletop.
       // While ARKit is still finding its feet, as when the camera restarts, the pose holds still and the plane wanders,
       // so reads then would start a second table.
-      let ids = ar?.tracking == "normal" ? world.add(turned, pose: pose, mask: ar?.mask) : turned.map { _ in nil }
+      let ids = ar.tracking == "normal" ? world.add(turned, pose: pose, mask: ar.mask) : turned.map { _ in nil }
       let racks = ids.map { id in world.places.first { $0.id == id }?.isRack }
       parts = racks
       detections = zip(turned, racks).map { d, rack in
@@ -214,11 +178,8 @@ import UniformTypeIdentifiers
         inView: racks.allSatisfy { $0 == nil } || racks.contains(false))
       await update(.rack, voted: known.rack, inView: !known.rack.isEmpty || racks.contains(true))
     } else {
+      // Until ARKit finds the table, there's nowhere to put what's read: the Solver waits for one.
       keyframe()
-      let part = looking
-      let seen = part == .rack ? onRack(turned) : Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self)
-      readings[part] = Array(((readings[part] ?? []) + [seen]).suffix(5))
-      await update(part, voted: vote(readings[part]!))
     }
   }
 
@@ -263,7 +224,6 @@ import UniformTypeIdentifiers
         part == .table || !voted.isEmpty
       {
         locked.insert(part)
-        if picked == part { picked = nil }
         await solve()
       }
     } else if locked.contains(part) {
@@ -285,8 +245,6 @@ import UniformTypeIdentifiers
   /// The table's tiles not read since it was last known, which it must still have.
   var unseen: [Tile] { Scene.missing(before.tableTiles.joined(), from: scene.tableTiles.joined()) }
 
-  /// Each part's last few frames' readings, newest last, without ARKit.
-  private var readings = [Looking: [[Detection]]]()
   /// With ARKit, every tile read, by place on the table (`World`).
   @ObservationIgnored private var world = World()
   /// When each part's reading last changed while scanning.
@@ -326,7 +284,6 @@ import UniformTypeIdentifiers
     step = nil
     opened = false
     locked = []
-    readings = [:]
     steadySince = [:]
     changedSince = [:]
     world = World()
@@ -345,41 +302,21 @@ import UniformTypeIdentifiers
     // never took the o4 back (2026-11-13).
     if part == .rack { before.rack = [] }
     locked.remove(part)
-    readings[part] = nil
     world.forget(rack: part == .rack)
     changedSince[part] = nil
     steadySince[part] = .now
   }
 
-  /// Readings by vote: each tile as many times as the median frame read it, since a frame often misses or misreads a
-  /// tile or two of 14, and two frames rarely agree exactly.
-  private func vote(_ readings: [[Detection]]) -> [Detection] {
-    Set(readings.joined().map(\.tile)).sorted { $0.description < $1.description }.flatMap { tile in
-      let counts = readings.map { $0.count { $0.tile == tile } }.sorted()
-      let copies = counts[counts.count / 2]
-      let seen = readings.last { $0.count { $0.tile == tile } >= copies } ?? []
-      return seen.filter { $0.tile == tile }.prefix(copies)
-    }
+  /// The part most of the last frame's tiles are on, for captures and logs.
+  private var mostly: Looking {
+    let placed = parts.compactMap(\.self)
+    return placed.count(where: \.self) * 2 > placed.count ? .rack : .table
   }
 
-  /// The rack's tiles. Tiles under a third of the tallest one's height are the table behind it: in rack captures those
-  /// were 18–37 px tall, and the rack's 52 and up, but for one mostly hidden behind another. And the rack's two rows
-  /// lie within a tile or so of its five tallest tiles, so anything farther above or below is something else.
-  private func onRack(_ found: [Detection]) -> [Detection] {
-    let tall = found.sorted { $0.frame.height > $1.frame.height }.prefix(5)
-    let tallest = tall.first?.frame.height ?? 0
-    let ys = tall.map(\.frame.midY).sorted()
-    let middle = ys.isEmpty ? 0 : ys[ys.count / 2]
-    return found.filter { $0.frame.height >= tallest / 3 && abs($0.frame.midY - middle) <= tallest * 1.5 }
-  }
-
-  /// What the last frame read that agrees with the settled table or rack, whichever is being looked at, so the
-  /// Solver labels only those.
+  /// What the last frame read that agrees with the table and rack as known, so the Solver labels only those.
   var settled: [Detection] {
-    let anchored = ar?.pose?.plane != nil
-    var left = anchored ? scene.tableTiles.flatMap { $0 } + scene.rackTiles
-      : looking == .table ? scene.tableTiles.flatMap { $0 } : scene.rackTiles
-    return (anchored || looking == .table ? detections : onRack(detections)).filter { detection in
+    var left = scene.tableTiles.flatMap { $0 } + scene.rackTiles
+    return detections.filter { detection in
       guard let i = left.firstIndex(of: detection.tile) else { return false }
       left.remove(at: i)
       return true
@@ -398,9 +335,7 @@ import UniformTypeIdentifiers
     CGImageDestinationFinalize(destination)
     let read = Recognizer.melds(detections).map { $0.map(\.tile.description).joined(separator: " ") }
     let tilt = tilt.map { " \(Int($0))°" } ?? ""
-    // With ARKit, nothing sets `looking`: the part most of the frame's tiles are on.
-    let placed = parts.compactMap(\.self)
-    let looking = placed.isEmpty ? looking : placed.count(where: \.self) * 2 > placed.count ? Looking.rack : .table
+    let looking = mostly
     try? (looking.rawValue + tilt + "\n" + (layout.melds ?? read).map { $0 + "\n" }.joined())
       .write(to: base.appendingPathExtension("txt"), atomically: true, encoding: .utf8)
     var info: [String: Any] = [
@@ -424,8 +359,8 @@ import UniformTypeIdentifiers
 
   /// An ARKit frame for a capture: matrices column by column, in metres; footprints a box at a time, each null where
   /// it never meets the table.
-  nonisolated static func info(_ ar: Frame, footprints: [SIMD2<Float>?]) -> [String: Any]? {
-    guard let pose = ar.pose else { return nil }
+  nonisolated static func info(_ ar: Frame, footprints: [SIMD2<Float>?]) -> [String: Any] {
+    let pose = ar.pose
     func columns(_ m: simd_float4x4) -> [Float] { [m.columns.0, m.columns.1, m.columns.2, m.columns.3].flatMap { [$0.x, $0.y, $0.z, $0.w] } }
     let k = pose.intrinsics
     return [
@@ -471,10 +406,10 @@ import UniformTypeIdentifiers
   /// A line of the recording: the pose and plane, where a person covered the frame (a quarter size), and every read
   /// with its odds, as the world table got them. And the frame itself every two seconds.
   private func record(_ read: [Detection], _ ar: Frame) {
-    guard var line = Self.info(ar, footprints: footprints) else { return }
+    var line = Self.info(ar, footprints: footprints)
     line.removeValue(forKey: "planes")
     line["time"] = Date.now.timeIntervalSince1970
-    line["looking"] = looking.rawValue
+    line["looking"] = mostly.rawValue
     // What the app showed going into this frame, to tell what went wrong from what the world table had.
     line["locked"] = locked.map(\.rawValue).sorted()
     line["shown"] = ["table": scene.tableTiles.map { $0.map(\.description).joined(separator: " ") },
@@ -525,33 +460,11 @@ import UniformTypeIdentifiers
     choice = max(0, plays.count - 1)
   }
 
-  /// What to draw for the current step. Without ARKit the rack is never in the same frame as the table, so a tile
-  /// from it can't be pointed at.
+  /// What to draw for the current step, on both parts at once, where the camera sees their tiles now.
   var marks: [Mark] {
     guard let play, let step, play.steps.indices.contains(step) else { return [] }
-    let group = play.group(at: step)
-    // With ARKit both parts' tiles are where the camera sees them now, in view or not.
-    if ar?.pose?.plane != nil {
-      let bounds = frame.map { CGRect(x: 0, y: 0, width: $0.width, height: $0.height) }
-      return group.flatMap { play.marks(in: scene, step: $0, within: bounds) }
-    }
-    if looking == .rack {
-      guard case .rack = play.steps[step].from else { return [] }
-      var left = detections
-      return group.compactMap { i in
-        left.firstIndex { $0.tile == play.steps[i].tile }.map { Mark.source(left.remove(at: $0).frame) }
-      }
-    }
     let bounds = frame.map { CGRect(x: 0, y: 0, width: $0.width, height: $0.height) }
-    let following = scene.following(detections)
-    let marks = group.flatMap { play.marks(in: following, step: $0, within: bounds) }
-    guard case .rack = play.steps[step].from else { return marks }
-    return marks.filter {
-      switch $0 {
-      case .source, .arrow: false
-      default: true
-      }
-    }
+    return play.group(at: step).flatMap { play.marks(in: scene, step: $0, within: bounds) }
   }
 }
 

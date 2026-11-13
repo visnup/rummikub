@@ -89,10 +89,6 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     (`.crops/outside.turns`), where it's .9 sure, but not their 6s and 9s. `Recognizer.turned` then reads each
     patch of touching tiles at the orientation they agree on, any direction, since a meld seen sideways runs down
     the photo. The feature-print classifiers it replaced are in `ARCHIVE.md`.
-    The `looking` tool trains `Looking`: logistic regression over Vision's feature print of each frame.
-  - `make looking` trains `Looking` on whole frames labeled in `Captures/looking.txt`: by eye between 30° and 55°,
-    else by tilt (two low ones were tables). Tilt alone can't say: racks were shot at 24–48°, tables from 35° up, and
-    box shape doesn't separate them either. 21 of 24 held-out frames right, two of the misses judgment calls.
 
 - `Labeler/`: pages for checking boxes and values by hand, served by Vite with `server.js` saving them to each
   `.tiles.json`, and the Python that trains on them. `held.py` is `Finder.isHeldOut` for the Python.
@@ -189,16 +185,17 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     arthurvanmeerbeeck), ferhatcelik/test (konstantin's), rummikub/rummikub-pvln1 (a suited tile design, numerals
     boxed), bluebox (NC-SA), Okey sets (another game's tiles).
 
-- `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone). `Camera` streams upright frames at most five
-  times a second, fewer when a frame takes longer to read; `Game` decides rack or table (`Looking`), finds the tiles (`Tiles`; at the rack, only those at least .4 as tall as the tallest,
-  `Finder.nearest`, to leave out the table behind it), reads each box
-  and its orientation (`Values`), keeps the table and rack, solves, and
-  tracks the step shown; `ContentView`
-  draws the step over the camera, each tile read in the last frame labeled with what it was read as, and the table
-  and rack as text once two frames agree. The table and rack are each voted over their last five frames (each tile as often as the median frame read it),
-  and lock once the vote holds for two seconds and follows what was known before the part was scanned again
+- `Rummikub/`: the iOS app (`Rummikub.xcodeproj`, iOS 27, iPhone), on ARKit alone since 2026-11-13: the AVFoundation
+  camera, its lenses, the `Looking` model and tilt that said rack or table, and the five-frame vote are gone, kept in
+  history. `Camera` streams ARKit's upright frames at most five times a second, fewer when a frame takes longer to
+  read; `Game` finds the tiles (`Tiles`), reads each box and its orientation (`Values`), adds them to `World`, keeps
+  the table and rack, solves, and tracks the step shown; `ContentView` draws each tile read in the last frame over the
+  camera, labeled with what it was read as, its border purple on the rack and white on the table. Until ARKit has
+  found the table, nothing read is kept, and the Solver says it's finding the table. A frame updates each part its
+  tiles' places in `World` belong to, the table when it reads none, and the other part only follows the camera. Each
+  part locks once it holds for two seconds and follows what was known before the part was scanned again
   (`Rules.swift`): the table only its valid melds, holding every tile it had, the rack as it was or one tile more, and
-  no tile more than twice; until then the Solver lists the table's tiles still to find. With ARKit the parts come from
+  no tile more than twice; until then the Solver lists the table's tiles still to find. The parts come from
   `World.parts`: with nothing known yet, as at a new game, 14 tiles in all are the dealt rack, wherever they lie; with
   the rack known, a tile in no valid meld is the rack's if the rack had it, and the rack keeps only the tiles it had.
   Scanning the rack again forgets what it had, since that says it was wrong.
@@ -207,12 +204,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   part that reads differently for three seconds shows "changed?"; its chip in the Solver panel scans it again. While a play is being shown, readings don't re-solve; they advance the step instead
   (`Play.stepsDone`). The simulator never uses a camera: it replays an AR recording in `Captures/` (`Replay`, #327–331's),
   straight off the Mac's disk, each frame's pose, person mask and reads through the AR path, with the last photo it
-  captured by then. It takes a few seconds to launch, reading every capture's notes for its photos. On the phone, Table/Rack follows `Looking` when it's .8 sure, or
-  without it the tilt from CoreMotion (`Game.tilt`), shown in degrees in the top pill and written into each capture.
-  A pick by hand holds until that part locks. With a table plane there's no Table/Rack: a frame updates each part
-  its tiles' places in `World` belong to, the table when it reads none, and the other part only follows the camera.
-  A step's marks are drawn on both parts at once, and each read's border is purple on the rack, white on the table. In the Simulator, Vision requests are pinned to the
-  CPU, else it can't create an inference context; the finder's boxes there still come out wrong, so check on the phone.
+  captured by then. It takes a few seconds to launch, reading every capture's notes for its photos. The tilt from
+  CoreMotion (`Game.tilt`) shows in degrees in the top pill and is written into each capture. In the Simulator,
+  Vision requests are pinned to the CPU, else it can't create an inference context; the finder's boxes there still
+  come out wrong, so check on the phone.
   - Two tabs. Capture's controls are one row in the tab bar's accessory (`tabViewBottomAccessory`), which the system
     places above the tab bar, or level with it on the iPhone Duo, whose tab bar is at the side; hand-placed panels
     were off on one device or the other. Notes are typed in an alert, since the accessory stays behind the keyboard.
@@ -226,21 +221,18 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     re-solves, with no rescan. Models load off the main thread, in parallel, about 7 s on a cold launch; frames wait for them, and the
     top pill shows progress against the last launch's load time.
     Once the part in view is locked, frames are read a second apart.
-  - A capture is a finger lifted off the camera (pressing hides everything drawn over it, to check the framing) or a
-    second tap on the Capture tab. The tab's icon is a checkmark for 1.5 s after, so a burst doesn't make duplicates.
-    In AR the same starts and stops a recording: every frame read goes to `<start>.jsonl`, a line each (pose, plane,
+  - A finger lifted off the camera (pressing hides everything drawn over it, to check the framing) or a second tap on
+    the Capture tab starts or stops a recording. The tab's icon is a checkmark for 1.5 s after, so a burst doesn't
+    make duplicates. Every frame read goes to `<start>.jsonl`, a line each (pose, plane,
     a quarter-size person mask, every read with its odds), and every 2 s the frame is captured too, with
     `recording` in its notes naming the log. The log is pushed with the captures once stopped. Games aren't recorded,
     so the app keeps the last two minutes of those lines anyway, and a long press in the Solver, on the Board or
     while scanning, saves them as a recording with the last frame captured (`Game.report`).
-  - AR, beside the lens buttons (which leave it), hands the camera to ARKit, an experiment (`Pose.swift`): it finds the table as a
-    plane and measures each box on it, in mm under the box, green when tile-sized, so lying on the table; a standing
-    rack tile reaches far behind it. Between reads the overlay redraws every display frame where the camera is now,
-    each box's bottom edge held to the table (`Pose.follow`). Once ARKit has the table, the table and rack come from
-    `World` instead of the five-frame vote, and the rack isn't filtered by `nearest` or Values first. Captures then record the pose, planes and footprints under `ar`. On the Duo
-    ARKit has no LiDAR and tracks only with the wide lens, at 1920×1080 here to match the models.
-  - The camera is the virtual multi-lens device, so .5× reaches the ultra wide; it starts at the widest, since a whole
-    table fits from closer. Captures record the zoom as labeled and the lens.
+  - ARKit (`Pose.swift`) finds the table as a plane and measures each box on it, in mm under the box, green when
+    tile-sized, so lying on the table; a standing rack tile reaches far behind it. Between reads the overlay redraws
+    every display frame where the camera is now, each box's bottom edge held to the table (`Pose.follow`). Captures
+    record the pose, planes and footprints under `ar`. On the Duo ARKit has no LiDAR and tracks only with the wide
+    lens, at 1920×1080 here to match the models.
   - Each frame's read and find times go to `Documents/timing/`, a file a launch, for `make timing`.
   `make` builds it and installs it on the phone (an iPhone named Yam); `make sim`
   builds the Simulator's; `make test` runs the package's tests.

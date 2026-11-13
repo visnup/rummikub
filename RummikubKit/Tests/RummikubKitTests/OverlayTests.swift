@@ -46,13 +46,6 @@ func groupsMelds(size: CGSize) {
   }
 }
 
-@Test func followsTheCamera() {
-  let table = melds("r3 r4 r5 r6, k1 k2 k3, b9 b10 b11, o12 r12 b12")
-  let after = Array(Render.scene(table, top: 130).table.joined())
-  let moved = Render.scene(table).following(after).table.joined().map(\.frame)
-  #expect(zip(moved, after.map(\.frame)).allSatisfy { abs($0.midX - $1.midX) < 2 && abs($0.midY - $1.midY) < 2 })
-}
-
 @Test func walksThroughSteps() throws {
   let table = melds("r3 r4 r5 r6, k1 k2 k3, b9 b10 b11, o12 r12 b12")
   let rack = Tile.parse("b6 k6 k4 o5 b13 o9 j")

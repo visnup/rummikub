@@ -502,7 +502,7 @@ import UniformTypeIdentifiers
   func report(camera: [String: Any]) {
     // Named when reported, not when it starts: a second report soon after started at the same line, and the labeler
     // kept the first one's log.
-    guard !recent.isEmpty else { return }
+    guard !recent.isEmpty else { return capture(camera: camera) }
     let now = Date.now, name = now.formatted(.iso8601) + ".jsonl"
     try? Data(recent.map { $0.line + Data("\n".utf8) }.joined()).write(to: URL.documentsDirectory.appending(path: name))
     capture(camera: camera, recording: now)

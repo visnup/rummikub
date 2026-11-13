@@ -89,17 +89,14 @@ struct ContentView: View {
                 game.rescan(part)
                 game.pick(part)
               } report: {
-                game.report(camera: camera.settings)
-                saved += 1
-                justSaved = true
-                send()
+                report()
               } controls: {
                 VStack(spacing: 12) { solver }
                   .padding()
                   .glassEffect(in: .rect(cornerRadius: 24))
               }
             } else {
-              panel(over: Color.clear) { solver }
+              panel(over: Color.clear.contentShape(.rect).onLongPressGesture { report() }) { solver }
             }
           }
           .safeAreaBar(edge: .top) {
@@ -257,6 +254,15 @@ struct ContentView: View {
   /// Pushes captures to the Mac; one already under way keeps the count.
   func send() {
     Task { if let left = await Sync.push() { unsent = left } }
+  }
+
+  /// The last two minutes and a capture, sent when the Solver has gone wrong: a long press while scanning or on the
+  /// Board.
+  func report() {
+    game.report(camera: camera.settings)
+    saved += 1
+    justSaved = true
+    send()
   }
 
   /// A capture, or in AR a recording started or stopped.

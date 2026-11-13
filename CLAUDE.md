@@ -231,8 +231,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     In AR the same starts and stops a recording: every frame read goes to `<start>.jsonl`, a line each (pose, plane,
     a quarter-size person mask, every read with its odds), and every 2 s the frame is captured too, with
     `recording` in its notes naming the log. The log is pushed with the captures once stopped. Games aren't recorded,
-    so the app keeps the last two minutes of those lines anyway, and a long press on the Board's table or rack saves
-    them as a recording with the last frame captured (`Game.report`).
+    so the app keeps the last two minutes of those lines anyway, and a long press in the Solver, on the Board or
+    while scanning, saves them as a recording with the last frame captured (`Game.report`).
   - AR, beside the lens buttons (which leave it), hands the camera to ARKit, an experiment (`Pose.swift`): it finds the table as a
     plane and measures each box on it, in mm under the box, green when tile-sized, so lying on the table; a standing
     rack tile reaches far behind it. Between reads the overlay redraws every display frame where the camera is now,

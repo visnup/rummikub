@@ -109,10 +109,13 @@ const sorts = {
 /** Indices in the order listed. */
 const order = () => [...captures.keys()].sort((i, j) => (sorts[sortBy] ?? sorts[""])[1](captures[i], captures[j]));
 
+let opening = 0;
 async function open(i, push = true) {
-  const c = captures[i];
+  const c = captures[i], mine = ++opening;
   // Its tiles first, so a save meanwhile can't write the last capture's tiles under this one's name.
   const loaded = await (await fetch(`/api/tiles/${encodeURIComponent(c.name)}`)).json();
+  // A later open, stepping on before these arrived, wins.
+  if (mine !== opening) return;
   current = i;
   tiles = loaded;
   if (location.pathname !== `/captures/${c.id}`) history[push ? "pushState" : "replaceState"](null, "", `/captures/${c.id}`);
@@ -126,9 +129,6 @@ async function open(i, push = true) {
     fit = true; draw();
     fit = false; scale *= 1.25; draw();
     view.scrollTo({ left: canvas.offsetLeft + (canvas.width - view.clientWidth) / 2, top: canvas.offsetTop + (canvas.height - view.clientHeight) / 2 });
-    // The next capture listed, so moving on doesn't wait for its photo.
-    const o = order();
-    fetch(photo(captures[o[(o.indexOf(i) + 1) % o.length]]));
   }, () => {});
   list();
   document.querySelector("nav tr.current")?.scrollIntoView({ block: "nearest" });

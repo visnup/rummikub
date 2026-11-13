@@ -57,14 +57,20 @@ public struct World: Sendable {
     }
   }
 
-  /// Sets a place's height and point from its rays: the height at which they meet closest, by least squares, and
-  /// their mean there. A tile on a rack stands on a ledge, so where its foot's ray meets the table moves as the camera
-  /// does: in #327–331, 26–56 mm away from the camera between the table and the rack. Little camera motion says little
-  /// about height, so it's pulled toward the table.
+  /// Sets a place's point from its rays on today's plane, which ARKit keeps refining: in a report from 2026-11-13 it
+  /// rose 2.8 mm a second for 10 s, which moved feet 2 cm, past matching, and started a second b13 r13 o13 beside the
+  /// first. A tile on a rack stands on a ledge, so where its foot's ray meets the table moves as the camera does: in
+  /// #327–331, 26–56 mm away from the camera between the table and the rack. So a rack tile's height is the one at
+  /// which they meet closest, by least squares, and its point their mean there. Little camera motion says little about
+  /// height, so it's pulled toward the table.
   static func settle(_ place: inout Place, on plane: simd_float4x4) {
-    guard place.isRack else { return }
     let meets = place.rays.map { $0.meets(plane) }, n = Float(meets.count)
     let point = meets.reduce(.zero) { $0 + $1.point } / n, rise = meets.reduce(.zero) { $0 + $1.rise } / n
+    guard place.isRack else {
+      place.height = 0
+      place.point = point
+      return
+    }
     let spread = meets.reduce(Float(0)) { $0 + dot($1.point - point, $1.rise - rise) }
     let motion = meets.reduce(Float(0)) { $0 + length_squared($1.rise - rise) }
     place.height = min(max(-spread / (motion + n * 0.01), 0), 0.08)

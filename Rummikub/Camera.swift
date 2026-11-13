@@ -203,16 +203,39 @@ struct ARPreview: UIViewRepresentable {
 
   private static var shared: ARSCNView?
 
-  func makeUIView(context: Context) -> ARSCNView {
-    if let view = Self.shared { return view }
-    let view = ARSCNView()
-    view.session = session
-    view.debugOptions = [.showFeaturePoints]
-    Self.shared = view
-    return view
+  func makeUIView(context: Context) -> Holder {
+    if Self.shared == nil {
+      let view = ARSCNView()
+      view.session = session
+      view.debugOptions = [.showFeaturePoints]
+      Self.shared = view
+    }
+    return Holder(Self.shared!)
   }
 
-  func updateUIView(_ view: ARSCNView, context: Context) {}
+  func updateUIView(_ view: Holder, context: Context) {}
+}
+
+/// Holds a view shared between the tabs, taking it back whenever it's on screen: SwiftUI removing the other tab's
+/// holder took the view with it, and the camera went black while ARKit and reading carried on.
+final class Holder: UIView {
+  let child: UIView
+
+  init(_ child: UIView) {
+    self.child = child
+    super.init(frame: .zero)
+    child.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    if window != nil, child.superview !== self {
+      child.frame = bounds
+      addSubview(child)
+    }
+  }
 }
 
 struct CameraPreview: UIViewRepresentable {
@@ -222,16 +245,17 @@ struct CameraPreview: UIViewRepresentable {
   /// app for a moment.
   private static var shared: PreviewView?
 
-  func makeUIView(context: Context) -> PreviewView {
-    if let view = Self.shared { return view }
-    let view = PreviewView()
-    view.preview.session = session
-    view.preview.videoGravity = .resizeAspectFill
-    Self.shared = view
-    return view
+  func makeUIView(context: Context) -> Holder {
+    if Self.shared == nil {
+      let view = PreviewView()
+      view.preview.session = session
+      view.preview.videoGravity = .resizeAspectFill
+      Self.shared = view
+    }
+    return Holder(Self.shared!)
   }
 
-  func updateUIView(_ view: PreviewView, context: Context) {}
+  func updateUIView(_ view: Holder, context: Context) {}
 
   final class PreviewView: UIView {
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }

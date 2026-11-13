@@ -40,6 +40,8 @@ import UniformTypeIdentifiers
   var findTime = Duration.zero
   /// The tiles the finder saw in the last frame.
   var boxes = [CGRect]()
+  /// The finder's confidence in each of `boxes`, empty in a replay.
+  var confidences = [Float]()
   /// Loaded off the main thread, since a cold launch takes seconds to load them. Frames before then are skipped.
   private var models: Models?
   private var finder: Finder? { models?.finder }
@@ -158,22 +160,24 @@ import UniformTypeIdentifiers
     if ar?.pose == nil { world = World() }
     let finder = finder, classifier = values, rack = looking == .rack && pose == nil
     // The finder's boxes read by Values.
-    let (found, boxes, findTime, time) = await Task.detached {
-      if let read { return (read, Optional(read.map(\.frame)), Duration.zero, Duration.zero) }
+    let (found, boxes, confidences, findTime, time) = await Task.detached {
+      if let read { return (read, Optional(read.map(\.frame)), [Float](), Duration.zero, Duration.zero) }
       let clock = ContinuousClock()
-      var boxes: [CGRect]?
-      let findTime = clock.measure { boxes = try? finder?.tiles(in: image) }
-      if rack { boxes = boxes.map(Finder.nearest) }
+      var scored: [(box: CGRect, confidence: Float)]?
+      let findTime = clock.measure { scored = try? finder?.scored(in: image).found }
+      if rack, let all = scored { let near = Finder.nearest(all.map(\.box)); scored = all.filter { near.contains($0.box) } }
+      let boxes = scored?.map(\.box)
       var found = [Detection]()
       let time = clock.measure { found = boxes.flatMap { try? classifier?.tiles(in: image, boxes: $0) } ?? [] }
       // At the rack, Values says which tiles lie on the table behind it, where `nearest` couldn't.
       if rack { found = found.filter { ($0.rack ?? 1) >= 0.5 } }
-      return (found, boxes, findTime, time)
+      return (found, boxes, scored?.map(\.confidence) ?? [], findTime, time)
     }.value
     frame = image
     readTime = time
     self.findTime = findTime
     self.boxes = boxes ?? []
+    self.confidences = confidences
     self.ar = ar
     footprints = ar?.pose.map { pose in self.boxes.map(pose.footprint) } ?? []
     detections = found
@@ -197,6 +201,7 @@ import UniformTypeIdentifiers
         if let rack { d.rack = rack ? 1 : 0 }
         return d
       }
+      keyframe()
       // Drawn and measured on the tabletop, not on whatever plane ARKit found; recorded as ARKit gave it.
       let leveled = world.level(pose)
       self.ar?.pose = leveled
@@ -207,6 +212,7 @@ import UniformTypeIdentifiers
         inView: racks.allSatisfy { $0 == nil } || racks.contains(false))
       await update(.rack, voted: placed.filter(\.place.isRack).map(\.detection), inView: racks.contains(true))
     } else {
+      keyframe()
       let part = looking
       let seen = part == .rack ? onRack(turned) : Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self)
       readings[part] = Array(((readings[part] ?? []) + [seen]).suffix(5))
@@ -370,6 +376,7 @@ import UniformTypeIdentifiers
         var detection: [String: Any] = [
           "tile": d.tile.description, "frame": [d.frame.minX, d.frame.minY, d.frame.width, d.frame.height]]
         if parts.indices.contains(i), let rack = parts[i] { detection["part"] = rack ? "rack" : "table" }
+        if let confidence = confidence(of: d) { detection["confidence"] = confidence }
         return detection
       },
     ]
@@ -438,16 +445,23 @@ import UniformTypeIdentifiers
     } ?? NSNull()
     line["detections"] = read.map {
       ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height],
-       "turns": $0.turns, "rack": $0.rack ?? NSNull(),
+       "turns": $0.turns, "rack": $0.rack ?? NSNull(), "confidence": confidence(of: $0) ?? NSNull(),
        "odds": Dictionary(uniqueKeysWithValues: $0.odds.map { ($0.key.description, $0.value) })] as [String: Any]
     }
     if let data = try? JSONSerialization.data(withJSONObject: finite(line), options: .sortedKeys) {
       try? log?.write(contentsOf: data + Data("\n".utf8))
     }
-    if Date.now.timeIntervalSince(lastKeyframe) >= 2 {
-      lastKeyframe = .now
-      capture(camera: recordingCamera)
-    }
+  }
+
+  /// While recording, captures the frame every 2 s, once its reads have their parts.
+  private func keyframe() {
+    guard recording != nil, Date.now.timeIntervalSince(lastKeyframe) >= 2 else { return }
+    lastKeyframe = .now
+    capture(camera: recordingCamera)
+  }
+
+  private func confidence(of d: Detection) -> Float? {
+    boxes.firstIndex(of: d.frame).flatMap { confidences.indices.contains($0) ? confidences[$0] : nil }
   }
 
   func solve() async {

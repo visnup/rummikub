@@ -34,6 +34,12 @@ public struct Finder: @unchecked Sendable {
 
   /// The boxes, and how many regions it took to find them.
   public func find(in image: CGImage) throws -> (boxes: [CGRect], regions: Int) {
+    let (found, regions) = try scored(in: image)
+    return (found.map(\.box), regions)
+  }
+
+  /// The boxes with their confidences, and how many regions it took to find them.
+  public func scored(in image: CGImage) throws -> (found: [(box: CGRect, confidence: Float)], regions: Int) {
     let (w, h) = (image.width, image.height)
     let whole = CGRect(x: 0, y: 0, width: w, height: h)
     let handler = VNImageRequestHandler(cgImage: image)
@@ -63,7 +69,7 @@ public struct Finder: @unchecked Sendable {
     where !kept.contains(where: { Self.overlap($0.box, f.box) > 0.3 }) {
       kept.append(f)
     }
-    return (kept.map(\.box), regions)
+    return (kept, regions)
   }
 
   /// The last request's boxes in the image's top-left-origin pixels.

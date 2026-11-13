@@ -218,8 +218,16 @@ async function api(req, res, path, query) {
     const name = rest("/api/capture/");
     if (!/^(unlabeled\/)?\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(name)) return fail(res, 400);
     const time = basename(name), dir = dirname(join(captures, name));
+    const recording = readJSON(join(dir, `${time}.json`), {}).recording;
     for (const f of readdirSync(dir).filter(f => f.startsWith(time + "."))) renameSync(join(dir, f), join(homedir(), ".Trash", f));
     appendFileSync(removed, lines(["png", "txt", "json"].map(ext => `${time}.${ext}`)));
+    // A recording's log goes with the last of its captures.
+    const log = `${recording}.jsonl`;
+    if (recording && existsSync(join(captures, log)) &&
+        ![captures, join(captures, "unlabeled")].some(d => readdirSync(d).some(f => f.endsWith("Z.json") && readJSON(join(d, f), {}).recording === recording))) {
+      renameSync(join(captures, log), join(homedir(), ".Trash", log));
+      appendFileSync(removed, lines([log]));
+    }
     for (const file of [boxed, checked]) {
       const all = names(file);
       all.delete(name);

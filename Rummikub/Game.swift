@@ -58,6 +58,12 @@ import UniformTypeIdentifiers
   }
 
   init() {
+    if let (scene, locked) = Self.restored() {
+      self.scene = scene
+      before = scene
+      self.locked = locked
+      Task { await solve() }
+    }
     Task {
       let finder = Task.detached {
         Game.model("Tiles").flatMap { try? Finder(model: $0) }.map {
@@ -205,6 +211,7 @@ import UniformTypeIdentifiers
       {
         locked.insert(part)
         if part == .rack { rackScan = .known }
+        save()
         await solve()
       }
     } else if locked.contains(part) {
@@ -253,7 +260,36 @@ import UniformTypeIdentifiers
     scene = play.finished(scene, within: tableBounds)
     step = nil
     opened = true
+    save()
     await solve()
+  }
+
+  /// Keeps the table and rack as locked across launches, as a game outlasts one: an install mid-game had the rack
+  /// read afresh, with nothing known, and it locked at 11 of 23 (2026-11-13).
+  private func save() {
+    func encode(_ d: Detection) -> [String: Any] {
+      ["tile": d.tile.description, "frame": d.frame.isNull ? NSNull() : d.frame.xywh, "along": d.along ?? NSNull()]
+    }
+    let state: [String: Any] = [
+      "table": scene.table.map { $0.map(encode) }, "rack": scene.rack.map(encode), "locked": locked.map(\.rawValue),
+    ]
+    UserDefaults.standard.set(try? JSONSerialization.data(withJSONObject: finite(state)), forKey: "game")
+  }
+
+  /// What `save` kept, if anything.
+  private static func restored() -> (scene: Scene, locked: Set<Area>)? {
+    guard let data = UserDefaults.standard.data(forKey: "game"),
+      let state = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return nil }
+    func decode(_ d: [String: Any]) -> Detection? {
+      guard let tile = (d["tile"] as? String).flatMap(Tile.init) else { return nil }
+      var detection = Detection(tile: tile, frame: (d["frame"] as? [Double]).map { CGRect(xywh: $0) } ?? .null)
+      detection.along = (d["along"] as? Double).map(Float.init)
+      return detection
+    }
+    let table = (state["table"] as? [[[String: Any]]] ?? []).map { $0.compactMap(decode) }
+    let rack = (state["rack"] as? [[String: Any]] ?? []).compactMap(decode)
+    return (Scene(table: table, rack: rack), Set((state["locked"] as? [String] ?? []).compactMap(Area.init)))
   }
 
   /// Forgets the table and rack, and that 30 was laid down.
@@ -269,6 +305,7 @@ import UniformTypeIdentifiers
     changedSince = [:]
     rackScan = .known
     world = World()
+    save()
   }
 
   /// Whether a locked part has read differently for three seconds, as after someone's turn.

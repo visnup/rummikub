@@ -37,10 +37,10 @@ public struct World: Sendable {
     }
     /// Values' mean odds that it stands on a rack, or nil when no read said.
     public var onRack: Float? { racked > 0 ? rack / Float(racked) : nil }
-    /// On the rack by Values' mean: in the first AR captures (#319–326) rack tiles' were .90 and up, and the table's
-    /// .55 and under, nearest the rack. In #372–390 and the next recording, rack tiles at the rack's ends fell to .68–.74,
-    /// with the table's under .45.
-    public var isRack: Bool { (onRack ?? 0) >= 0.6 }
+    /// On the rack by Values' mean. On 516 places marked by hand in 15 recordings (`places`, 2026-11-13), table
+    /// tiles' came to .40 at most, and .41 kept 331 of 344 rack tiles with none of the table's, where .6 kept 299:
+    /// large tiles on a light mat read rack odds down to .2.
+    public var isRack: Bool { (onRack ?? 0) >= 0.41 }
     /// Seen in two frames, so a one-frame phantom box isn't a tile.
     public var sure: Bool { seen >= 2 }
   }
@@ -64,17 +64,29 @@ public struct World: Sendable {
   /// which they meet closest, by least squares, and its point their mean there. Little camera motion says little about
   /// height, so it's pulled toward the table.
   static func settle(_ place: inout Place, on plane: simd_float4x4) {
+    let m = meeting(place, on: plane)
+    place.height = place.isRack ? m.height : 0
+    place.point = m.point + place.height * m.rise
+  }
+
+  /// Where a place's rays meet `plane` on average, how that moves per metre up, the height at which they meet
+  /// closest, and how much the camera moved across them, which says how much that height can be trusted.
+  static func meeting(_ place: Place, on plane: simd_float4x4)
+    -> (point: SIMD3<Float>, rise: SIMD3<Float>, height: Float, motion: Float)
+  {
     let meets = place.rays.map { $0.meets(plane) }, n = Float(meets.count)
     let point = meets.reduce(.zero) { $0 + $1.point } / n, rise = meets.reduce(.zero) { $0 + $1.rise } / n
-    guard place.isRack else {
-      place.height = 0
-      place.point = point
-      return
-    }
     let spread = meets.reduce(Float(0)) { $0 + dot($1.point - point, $1.rise - rise) }
     let motion = meets.reduce(Float(0)) { $0 + length_squared($1.rise - rise) }
-    place.height = min(max(-spread / (motion + n * 0.01), 0), 0.08)
-    place.point = point + place.height * rise
+    return (point, rise, min(max(-spread / (motion + n * 0.01), 0), 0.08), (motion / n).squareRoot())
+  }
+
+  /// A place's height above the table from its rays, whether or not it's taken as the rack's, and the camera's
+  /// motion across them: for telling rack from table by more than Values' odds.
+  public func rise(of place: Place, from pose: Pose) -> (height: Float, motion: Float)? {
+    guard let plane = level(pose).plane else { return nil }
+    let m = Self.meeting(place, on: plane)
+    return (m.height, m.motion)
   }
 
   public private(set) var places = [Place]()

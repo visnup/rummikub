@@ -40,7 +40,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `World.swift`: the table as places, with ARKit: each read joins the place within half a tile of where its box's
     bottom edge meets the table (¾ for the same tile), or starts one, and each place votes on its own tile. A place
     the finder should have seen three frames running and didn't is dropped, unless a person (ARKit's segmentation,
-    `World.Mask`) or another box covers it. On the rack by Values' mean (.6). A rack tile's foot stands on a ledge
+    `World.Mask`) or another box covers it. On the rack by Values' mean (.41). A rack tile's foot stands on a ledge
     above the table, so where it meets the table moves as the camera does; each rack place keeps every sighting's
     ray and finds the height where they meet (`settle`), 25–67 mm in #327–331, and matches new reads at that height.
     Without it, coming back to the rack from the table doubled 5 of its 12 tiles. `World.melds` joins the table's places
@@ -54,8 +54,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     Values says lie on the table measure 36 mm along their bottom edge (35–37 in #325 and #326), the running median
     over 30 frames, only when they measure over 1.5 times that: always lifting pinned the AR labels to a plane below
     the table, and they swam as the camera moved. That read #327–331's table and rack exactly; #319–326 read as
-    before.
-  - `Render.swift`: table images and where their tiles lie, for tests, and drawing overlays onto images.
+    before. `swift run -c release places ../Captures` replays every recording whose captures have boxes marked by
+    hand (`x` for rack) and scores rack or table against them, by Values' mean and by the rules; each marked place's
+    features (height and camera motion from its rays, distance, viewing angle, box shape) go to
+    `Captures/.places.tsv`. On 2026-11-13, of 516 places, no feature but Values' mean came near separating them.  - `Render.swift`: table images and where their tiles lie, for tests, and drawing overlays onto images.
   - `score` (`make score`) runs the finder on the held-out done captures, through `Finder`: tiles found (a box
     overlapping a true one by half), then those boxes read by `Values.mlpackage` when it's beside the captures, as
     the app reads them. It takes `Captures/Tiles.mlpackage`, and counts each error by name: a tile **missed**, a
@@ -207,6 +209,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     places above the tab bar, or level with it on the iPhone Duo, whose tab bar is at the side; hand-placed panels
     were off on one device or the other. Notes are typed in an alert, since the accessory stays behind the keyboard.
     Solver keeps a two-row panel.
+  - The game is kept across launches (`Game.save`): the table and rack as locked, with where they lay.
   - Once table and rack are both locked, the Solver shows the Board (`Board.swift`) and the camera stops, to save
     battery. Run again, ARKit relocalizes (`sessionShouldAttemptRelocalization`): if it matches what it sees to
     what it saw, its coordinates and `World`'s places line up as before. After 8 s relocalizing it gives up and starts

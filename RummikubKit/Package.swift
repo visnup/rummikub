@@ -13,6 +13,7 @@ let package = Package(
     .executableTarget(name: "bench", dependencies: ["RummikubKit"]),
     .executableTarget(name: "check", dependencies: ["RummikubKit"]),
     .executableTarget(name: "fill", dependencies: ["RummikubKit"]),
+    .executableTarget(name: "places", dependencies: ["RummikubKit"]),
     .executableTarget(name: "score", dependencies: ["RummikubKit"]),
     .executableTarget(name: "words"),
     .executableTarget(name: "world", dependencies: ["RummikubKit"]),

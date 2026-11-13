@@ -8,6 +8,8 @@ struct ContentView: View {
   @State private var live = false
   @State private var saved = 0
   @State private var justSaved = false
+  /// The tab the recording under way was started from.
+  @State private var recordedFrom: Int?
   @State private var tab = 0
   @State private var pressing = false
   @State private var topInset: CGFloat = 0
@@ -108,10 +110,13 @@ struct ContentView: View {
     }
     // The system's place for a row of controls: above the tab bar, or level with it where the tab bar is at the side.
     .tabViewBottomAccessory(isEnabled: tab == 0 && !pressing) { capture }
-    .sensoryFeedback(trigger: game.recording) { _, now in now == nil ? .stop : .start }
+    // Not `.start` and `.stop`, which play only on the watch.
+    .sensoryFeedback(trigger: game.recording) { _, now in now == nil ? .success : .impact(weight: .heavy) }
     .onChange(of: scenePhase) { if scenePhase == .active { send() } }
     // A recording made while scanning ends, and is sent, once the scan locks and the Board comes back.
     .onChange(of: game.onBoard) { if game.onBoard, tab == 1, game.recording != nil { shoot() } }
+    // And one begun on the Capture tab ends on leaving it for the Solver.
+    .onChange(of: tab) { old, new in if old == 0, new == 1, recordedFrom == 0, game.recording != nil { shoot() } }
     // The camera runs only while something needs it: the Capture tab, or a part of the Solver's being scanned.
     .onChange(of: tab == 0 || !game.onBoard) {
       guard live else { return }
@@ -167,13 +172,14 @@ struct ContentView: View {
           TimelineView(.periodic(from: start, by: 1)) { context in
             Label(Duration.seconds(context.date.timeIntervalSince(start)).formatted(.time(pattern: .minuteSecond)),
               systemImage: "record.circle.fill")
-              .font(.headline.monospacedDigit()).foregroundStyle(.white)
-              .padding(.horizontal, 12).padding(.vertical, 6)
+              .font(.caption.monospacedDigit()).foregroundStyle(.white)
+              .padding(.horizontal, 10).padding(.vertical, 4)
               .background(.red, in: .capsule)
           }
-          // Below the top bar, which the camera runs under.
-          .padding(.top, 100)
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+          // Level with the Capture tab's top pill, in the far corner.
+          .padding(.top, topInset == 0 ? 8 : topInset)
+          .padding(.trailing, 16)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
           .allowsHitTesting(false)
         }
         if let frame = game.frame, !pressing {
@@ -204,6 +210,7 @@ struct ContentView: View {
   func shoot() {
     if game.recording == nil {
       game.startRecording()
+      recordedFrom = tab
     } else {
       game.stopRecording()
     }

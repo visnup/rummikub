@@ -9,7 +9,7 @@ for path in CommandLine.arguments.dropFirst() {
   let history = try Recording(contentsOf: URL(filePath: path)).frames
   guard let first = history.first else { continue }
   print(URL(filePath: path).lastPathComponent)
-  var world = World(), last: Pose?, previous = first.time, before = Scene()
+  var world = World(), last: Pose?, previous = first.time, before = first.shown ?? Scene()
   for frame in history {
     // The camera restarted, knowing what the app showed; if ARKit started a new world, the app forgets every place.
     if frame.time - previous > 2, frame.tracking != "normal" {
@@ -31,8 +31,10 @@ for path in CommandLine.arguments.dropFirst() {
   let rack = seen.filter(\.place.isRack).map(\.detection), table = seen.filter { !$0.place.isRack }
   func line(_ ds: [Detection]) -> String { ds.map(\.tile.description).joined(separator: " ") }
   print("  rack:  " + line(Recognizer.melds(rack).flatMap(\.self)))
-  // The rack as the Board lays it out, a slot a tile wide.
-  let laid = Scene.laid(rack), unit: CGFloat = (laid.map(\.frame.height).max() ?? 1) * 0.78
+  // What the app takes from that, by the game's rules (`World.parts`).
+  let parts = world.parts(from: last, knowing: before)
+  // Its rack as the Board lays it out, a slot a tile wide.
+  let laid = Scene.laid(parts.rack), unit: CGFloat = (laid.map(\.frame.height).max() ?? 1) * 0.78
   for row in Dictionary(grouping: laid, by: \.frame.minY).sorted(by: { $0.key < $1.key }).map(\.value) {
     var line = "         "
     for d in row.sorted(by: { $0.frame.minX < $1.frame.minX }) {
@@ -43,8 +45,6 @@ for path in CommandLine.arguments.dropFirst() {
     print(line)
   }
   print("  table: " + Recognizer.valid(World.melds(table)).map(line).joined(separator: ", "))
-  // What the app takes from that, by the game's rules (`World.parts`).
-  let parts = world.parts(from: last, knowing: before)
   print("  parts: table " + parts.table.map(line).joined(separator: ", ") + " | rack " + line(parts.rack))
   for (place, _) in seen.sorted(by: { $0.place.seen > $1.place.seen }) {
     let reads = place.reads.sorted { $0.value > $1.value }.map { String(format: "%@ %.1f", $0.key.description, $0.value) }

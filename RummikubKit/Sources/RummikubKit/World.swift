@@ -313,7 +313,9 @@ public struct World: Sendable {
       box(place, from: pose).map { frame in
         let turns = place.turns.indices.max { place.turns[$0] < place.turns[$1] }!
         var detection = Detection(tile: place.tile, frame: frame, turns: turns, odds: place.odds, rack: place.onRack)
-        if onRack(place), length(axis) > 0 { detection.along = dot(place.point, normalize(axis)) }
+        // Every place, not only the rack's by Values: the rules move tiles it doubted onto the rack, and without a
+        // place along it they went to the ends of their rows.
+        if length(axis) > 0 { detection.along = dot(place.point, normalize(axis)) }
         return (place, detection)
       }
     }

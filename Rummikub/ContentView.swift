@@ -313,7 +313,7 @@ struct ContentView: View {
   }
 
   /// A part's state: scanning, locked, or locked but reading differently; tapping scans it again.
-  func chip(_ part: Game.Looking, count: Int) -> some View {
+  func chip(_ part: Game.Area, count: Int) -> some View {
     Button {
       game.rescan(part)
     } label: {

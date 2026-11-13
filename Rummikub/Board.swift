@@ -5,7 +5,7 @@ import SwiftUI
 /// and the controls between them. The table pans and zooms. Tapping either scans it again.
 struct Board<Controls: View>: View {
   let game: Game
-  let scan: (Game.Looking) -> Void
+  let scan: (Game.Area) -> Void
   /// A long press on either part, for when it's gone wrong.
   let report: () -> Void
   @ViewBuilder let controls: Controls
@@ -74,7 +74,7 @@ struct Board<Controls: View>: View {
     return true
   }
 
-  func part(_ part: Game.Looking, tiles: [Detection], marks: [Mark], zoom: CGFloat = 1, pan: CGSize = .zero)
+  func part(_ part: Game.Area, tiles: [Detection], marks: [Mark], zoom: CGFloat = 1, pan: CGSize = .zero)
     -> some View
   {
     Canvas { context, size in

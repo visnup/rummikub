@@ -9,7 +9,8 @@ import UniformTypeIdentifiers
 
 /// What the camera has read of the table and rack, the plays for them, and the step being shown.
 @Observable final class Game {
-  enum Looking: String, CaseIterable {
+  /// Where a tile is: on the table, or on my rack.
+  enum Area: String, CaseIterable {
     case table, rack
   }
 
@@ -185,7 +186,7 @@ import UniformTypeIdentifiers
 
   /// Takes a part's latest reading: follows the play's steps on the table, else settles, locks, or notes a change.
   /// Out of view, it only moves the part's tiles to where the camera now sees them.
-  private func update(_ part: Looking, voted: [Detection], melds: [[Detection]]? = nil, inView: Bool = true) async {
+  private func update(_ part: Area, voted: [Detection], melds: [[Detection]]? = nil, inView: Bool = true) async {
     var next = scene
     if part == .table {
       next.table = melds ?? Recognizer.melds(voted)
@@ -238,7 +239,7 @@ import UniformTypeIdentifiers
   private var before = Scene(table: [], rack: [])
 
   /// Whether a part as read now can follow what was known of it.
-  private func follows(_ part: Looking) -> Bool {
+  private func follows(_ part: Area) -> Bool {
     scene.possible && (part == .table ? scene.tableFollows(before) : scene.rackFollows(before))
   }
 
@@ -248,15 +249,15 @@ import UniformTypeIdentifiers
   /// With ARKit, every tile read, by place on the table (`World`).
   @ObservationIgnored private var world = World()
   /// When each part's reading last changed while scanning.
-  private var steadySince = [Looking: Date]()
+  private var steadySince = [Area: Date]()
   /// When a locked part's reading started disagreeing with it.
-  private var changedSince = [Looking: Date]()
+  private var changedSince = [Area: Date]()
   /// The parts whose reading has held for two seconds; frames no longer change them, until `rescan`.
-  var locked = Set<Looking>()
+  var locked = Set<Area>()
   private var lastSeen = Date.distantPast
 
   /// Both parts read and held, so the Solver draws them instead of showing the camera, which stops.
-  var onBoard: Bool { locked.count == Looking.allCases.count }
+  var onBoard: Bool { locked.count == Area.allCases.count }
 
   /// The table as read, with room around it for new melds.
   var tableBounds: CGRect? {
@@ -290,13 +291,13 @@ import UniformTypeIdentifiers
   }
 
   /// Whether a locked part has read differently for three seconds, as after someone's turn.
-  func changed(_ part: Looking) -> Bool { changedSince[part].map { Date.now.timeIntervalSince($0) >= 3 } ?? false }
+  func changed(_ part: Area) -> Bool { changedSince[part].map { Date.now.timeIntervalSince($0) >= 3 } ?? false }
 
   /// Forgets where every tile was, as ARKit starts over: the parts keep their tiles, not their places.
   func restart() { world = World() }
 
   /// Scans a part again, from scratch.
-  func rescan(_ part: Looking) {
+  func rescan(_ part: Area) {
     if locked.contains(part) { before = scene }
     // Scanning the rack again says it's wrong, so it's read afresh: held to what it had, a 13-tile rack missing o4
     // never took the o4 back (2026-11-13).
@@ -308,7 +309,7 @@ import UniformTypeIdentifiers
   }
 
   /// The part most of the last frame's tiles are on, for captures and logs.
-  private var mostly: Looking {
+  private var mostly: Area {
     let placed = parts.compactMap(\.self)
     return placed.count(where: \.self) * 2 > placed.count ? .rack : .table
   }
@@ -484,7 +485,7 @@ extension Scene {
   func reads(like other: Scene) -> Bool { tableTiles == other.tableTiles && rackTiles == other.rackTiles }
 
   /// A part's tiles in no order.
-  func tiles(_ part: Game.Looking) -> [String] {
+  func tiles(_ part: Game.Area) -> [String] {
     (part == .table ? tableTiles.flatMap { $0 } : rackTiles).map(\.description).sorted()
   }
 }

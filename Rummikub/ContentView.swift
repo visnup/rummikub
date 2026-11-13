@@ -108,8 +108,10 @@ struct ContentView: View {
     }
     // The system's place for a row of controls: above the tab bar, or level with it where the tab bar is at the side.
     .tabViewBottomAccessory(isEnabled: tab == 0 && !pressing) { capture }
-    .sensoryFeedback(.success, trigger: saved)
+    .sensoryFeedback(trigger: game.recording) { _, now in now == nil ? .stop : .start }
     .onChange(of: scenePhase) { if scenePhase == .active { send() } }
+    // A recording made while scanning ends, and is sent, once the scan locks and the Board comes back.
+    .onChange(of: game.onBoard) { if game.onBoard, tab == 1, game.recording != nil { shoot() } }
     // The camera runs only while something needs it: the Capture tab, or a part of the Solver's being scanned.
     .onChange(of: tab == 0 || !game.onBoard) {
       guard live else { return }
@@ -159,6 +161,20 @@ struct ContentView: View {
             .scaledToFill()
             .frame(width: size.width, height: size.height)
             .clipped()
+        }
+        if let start = game.recording {
+          // On the camera itself, in either tab: the tab bar's icon alone went unnoticed from the Solver.
+          TimelineView(.periodic(from: start, by: 1)) { context in
+            Label(Duration.seconds(context.date.timeIntervalSince(start)).formatted(.time(pattern: .minuteSecond)),
+              systemImage: "record.circle.fill")
+              .font(.headline.monospacedDigit()).foregroundStyle(.white)
+              .padding(.horizontal, 12).padding(.vertical, 6)
+              .background(.red, in: .capsule)
+          }
+          // Below the top bar, which the camera runs under.
+          .padding(.top, 100)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+          .allowsHitTesting(false)
         }
         if let frame = game.frame, !pressing {
           let fit = Fit(image: CGSize(width: frame.width, height: frame.height), view: size)

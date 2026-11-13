@@ -219,7 +219,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     Once the part in view is locked, frames are read a second apart.
   - A finger lifted off the camera, in Capture (pressing hides everything drawn over it, to check the framing) or
     the Solver while scanning, or a second tap on the Capture tab, starts a recording, and the same again stops and
-    sends it, with a haptic either way. The tab's icon is filled red while recording, from either tab, and a
+    sends it, with a haptic either way; one started while the Solver scans also stops once the Board comes back. The tab's icon is filled red while recording, from either tab, and a
     checkmark for 1.5 s after, so a burst doesn't make duplicates. Every frame read goes to `<start>.jsonl`, a line
     each (pose, plane, a quarter-size person mask, every read with its odds, what the app showed), and every 2 s the
     frame is captured too, with `recording` in its notes naming the log. The log is pushed with the captures once

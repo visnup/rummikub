@@ -319,7 +319,7 @@ Moves are counted in `plan`: old and new melds pair up greedily by overlap, and 
 other than its old meld's partner has moved. "Kept" only steers toward the same thing, so `solve` re-filters the
 front by real moves.
 
-Before a player has laid down 30 points (`opened: false`: from "New game", in the Solver's
-⋯ menu, until an opening is finished; kept across launches), `opening` picks melds from the rack alone worth 30 or more, placing the most tiles, by a smaller integer program
+Before a player has laid down 30 points (`opened: false`: from "New game", the Solver's
+title bar button, until an opening is finished; kept across launches), `opening` picks melds from the rack alone worth 30 or more, placing the most tiles, by a smaller integer program
 over the templates in the rack. A joker counts as the tile it stands for, its meld laid out for the most points
 (`worth`). The table stays as it is.

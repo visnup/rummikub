@@ -82,25 +82,26 @@ struct ContentView: View {
           }
       }
       Tab("Solver", systemImage: "square.grid.3x3.fill", value: 1) {
-        Group {
-          if game.onBoard {
-            Board(game: game) { part in
-              game.rescan(part)
-              game.pick(part)
-            } report: {
-              game.report(camera: camera.settings)
-              saved += 1
-              justSaved = true
-              send()
-            } controls: {
-              VStack(spacing: 12) { solver }
-                .padding()
-                .glassEffect(in: .rect(cornerRadius: 24))
+        NavigationStack {
+          Group {
+            if game.onBoard {
+              Board(game: game) { part in
+                game.rescan(part)
+                game.pick(part)
+              } report: {
+                game.report(camera: camera.settings)
+                saved += 1
+                justSaved = true
+                send()
+              } controls: {
+                VStack(spacing: 12) { solver }
+                  .padding()
+                  .glassEffect(in: .rect(cornerRadius: 24))
+              }
+            } else {
+              panel(over: Color.clear) { solver }
             }
-          } else {
-            panel(over: Color.clear) { solver }
           }
-        }
           .safeAreaBar(edge: .top) {
             if !game.onBoard {
               HStack {
@@ -111,6 +112,17 @@ struct ContentView: View {
             }
           }
           .background { if tab == 1 && !game.onBoard { preview } }
+          .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+              // A menu, so starting over takes a second tap to confirm.
+              Menu("New game", systemImage: "arrow.counterclockwise") {
+                Button("Forget this table and rack", systemImage: "arrow.counterclockwise", role: .destructive) {
+                  game.newGame()
+                }
+              }
+            }
+          }
+        }
       }
     }
     // The system's place for a row of controls: above the tab bar, or level with it where the tab bar is at the side.
@@ -331,14 +343,9 @@ struct ContentView: View {
         Text("\(melds) isn't a meld. Tap the table to scan it again.").font(.callout)
           .frame(maxWidth: .infinity, alignment: .leading)
       }
-      HStack {
-        if !game.opened { Text("Lay down 30 to open").font(.callout).foregroundStyle(.secondary) }
-        Spacer()
-        Menu {
-          Button("New game", systemImage: "arrow.counterclockwise", role: .destructive) { game.newGame() }
-        } label: {
-          Image(systemName: "ellipsis.circle").frame(minWidth: 44, minHeight: 32)
-        }
+      if !game.opened {
+        Text("Lay down 30 to open").font(.callout).foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
       }
       ForEach(Array(game.plays.enumerated()), id: \.offset) { i, play in
         Button {

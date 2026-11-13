@@ -72,7 +72,9 @@ table takes a pan), and more battery than a stopped camera. The Simulator has no
    and tells the rack by Values' mean per place. Not yet tried on the phone. Still to do:
    - Rack by place, not only Values' mean: the rack's line, once found, claims any tile on it. Rack places now
      find their ledge's height (`settle`), which ended #327–331's doubles, but only when the camera moves
-     gradually: a jump from 45° to 27° in one frame still doubles a tile, in the test.
+     gradually: a jump from 45° to 27° in one frame still doubles a tile, in the test. Once it's by place, AR
+     captures' `part` per detection can label Values' rack head in `crops.py`, from every capture, not only those
+     marked rack; until then it's Values' own odds averaged, so training on it would learn its own mistakes.
    - Lock per tile, not per part, and don't read again a tile already sure, which saves the reader most of its time.
    - Plays on places: a step's ghost slot a point on the table, `stepsDone` seeing tiles move, `Scene.following`
      gone, and the Board the table from above in table coordinates.

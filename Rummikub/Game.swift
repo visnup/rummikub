@@ -112,6 +112,8 @@ import UniformTypeIdentifiers
   /// The last frame read, and what was read in it.
   var frame: CGImage?
   var detections = [Detection]()
+  /// With ARKit, whether each detection's place in `World` is on the rack, nil where it has none.
+  private var parts = [Bool?]()
   var scene = Scene(table: [], rack: [])
   var plays = [Play]()
   var choice = 0
@@ -175,6 +177,7 @@ import UniformTypeIdentifiers
     self.ar = ar
     footprints = ar?.pose.map { pose in self.boxes.map(pose.footprint) } ?? []
     detections = found
+    parts = []
     if ar == nil, recording != nil { stopRecording() }
     _ = try? timing?.seekToEnd()
     try? timing?.write(contentsOf: Data(
@@ -188,6 +191,7 @@ import UniformTypeIdentifiers
       // a frame with no tiles is an empty tabletop.
       let ids = world.add(turned, pose: pose, mask: ar?.mask)
       let racks = ids.map { id in world.places.first { $0.id == id }?.isRack }
+      parts = racks
       detections = zip(turned, racks).map { d, rack in
         var d = d
         if let rack { d.rack = rack ? 1 : 0 }
@@ -352,6 +356,9 @@ import UniformTypeIdentifiers
     CGImageDestinationFinalize(destination)
     let read = Recognizer.melds(detections).map { $0.map(\.tile.description).joined(separator: " ") }
     let tilt = tilt.map { " \(Int($0))°" } ?? ""
+    // With ARKit, nothing sets `looking`: the part most of the frame's tiles are on.
+    let placed = parts.compactMap(\.self)
+    let looking = placed.isEmpty ? looking : placed.count(where: \.self) * 2 > placed.count ? Looking.rack : .table
     try? (looking.rawValue + tilt + "\n" + (layout.melds ?? read).map { $0 + "\n" }.joined())
       .write(to: base.appendingPathExtension("txt"), atomically: true, encoding: .utf8)
     var info: [String: Any] = [
@@ -359,8 +366,11 @@ import UniformTypeIdentifiers
       "gravity": gravity ?? [], "readMilliseconds": readTime / .milliseconds(1),
       "findMilliseconds": findTime / .milliseconds(1), "camera": camera, "read": read,
       "boxes": boxes.map { [$0.minX, $0.minY, $0.width, $0.height] },
-      "detections": detections.map {
-        ["tile": $0.tile.description, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]]
+      "detections": detections.enumerated().map { i, d in
+        var detection: [String: Any] = [
+          "tile": d.tile.description, "frame": [d.frame.minX, d.frame.minY, d.frame.width, d.frame.height]]
+        if parts.indices.contains(i), let rack = parts[i] { detection["part"] = rack ? "rack" : "table" }
+        return detection
       },
     ]
     if let ar { info["ar"] = Self.info(ar, footprints: footprints) }

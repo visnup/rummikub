@@ -253,7 +253,8 @@ rearrangements. What we settled on:
     Mac.
   - `<ISO time>.txt`: what it was looking at and the tilt, then the truth, one meld per line. The truth is what was
     read, unless the Layout picker names a known layout.
-  - `<ISO time>.json`: the layout, notes, gravity, camera settings, read time and every detection's box. Notes are
+  - `<ISO time>.json`: the layout, notes, gravity, camera settings, read time and every detection's box, with ARKit
+    its `part`, rack or table, by its place in `World`. Notes are
     single-word tags separated by spaces, which `check` totals by, and the app keeps the last ones typed. Each
     capture is tagged with its tile set: `pouch`, `large` (#202–285) or `curved` (#80–89); No tiles ones have none.
 

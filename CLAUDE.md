@@ -73,7 +73,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     don't. For captures with rack tiles marked, it also counts the rack's tiles `Finder.nearest` keeps and the
     table's it lets through, then Values' rack odds: on 2026-11-12, 2309 tiles, 9 missed, 22 phantom; of 2297
     confirmed, 2252 read correctly, 17 misread, 19 unread, 17 phantom reads; of 258 rack tiles, `nearest` kept 249
-    with 38 of the table's, and Values kept all 249 and dropped those 38.
+    with 38 of the table's, and Values kept all 249 and dropped those 38. Retrained once table captures' racks were
+    marked: 2265 read correctly, 8 misread, 15 unread, but 238 of 256 rack tiles kept with 1 of the table's, 10 of
+    the 11 lost in #114's two racks far off.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks
     alike: `crops.py` crops confirmed tiles upright, and `Labeler/values.py` trains MobileNetV3 (ImageNet) at 128 px

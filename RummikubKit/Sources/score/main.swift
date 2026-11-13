@@ -156,12 +156,10 @@
     }
     let reads = try classifier?.tiles(in: image, boxes: boxes)
     // At the rack the app keeps only `Finder.nearest`'s boxes, then the reads Values says are on a rack: how many of the
-    // rack's tiles survive each, and how many of those marked background, the table behind it, do too. Only rack
-    // captures with background marked, since unmarked ones may not have been looked at.
-    let background = Set(labels.indices.filter { labels[$0]["background"] as? Bool == true })
-    if lines.first?.hasPrefix("rack") == true, !background.isEmpty {
+    // rack's tiles survive each, and how many of the table's do too. Only captures with a rack tile marked.
+    let rack = Set(labels.indices.filter { labels[$0]["rack"] as? Bool == true })
+    if !rack.isEmpty {
       var left = Set(truth.indices)
-      let rack = Set(truth.indices).subtracting(background)
       var n = Rack(tiles: rack.count)
       // The camera from the capture's notes: ARKit's intrinsics, else the lens's field of view at its zoom.
       let notes = try JSONSerialization.jsonObject(with: Data(contentsOf: url.deletingPathExtension().appendingPathExtension("json")))
@@ -218,9 +216,10 @@
             Int(frame.height), t["turns"] as? Int ?? 0, read.turns, separator: "\t")
         }
       }
-      let table = lines.first?.hasPrefix("table") ?? false
+      // As the app does with ARKit: the tiles Values says lie on the table as valid melds, the rack's as read.
       let turned = Recognizer.turned(classified)
-      score(table ? Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self) : turned)
+      let onRack = { (d: Detection) in (d.rack ?? 0) >= 0.5 }
+      score(Recognizer.valid(Recognizer.melds(turned.filter { !onRack($0) })).flatMap(\.self) + turned.filter(onRack))
     }
     print(([name] + s.columns.map(String.init)).joined(separator: "\t"))
     total += s

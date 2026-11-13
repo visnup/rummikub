@@ -31,31 +31,22 @@ def save(image, kind, tile, name):
     image.resize((224, 224), Image.Resampling.BILINEAR).save(out / kind / tile / f"{name}.jpg", quality=90)
 
 
-def looking(name):
-    txt = captures / f"{name}.txt"
-    words = txt.read_text().split() if txt.exists() else []
-    return words[0] if words else None
-
-
 for kind in ("upright", "outside"):
     shutil.rmtree(out / kind, ignore_errors=True)
-# In rack captures, whether each crop is on the rack or, marked background, the table behind it. Only rack captures,
-# since that's where the app asks: table captures' tiles outnumbered the rack's 17 to 1 and taught it flat tiles.
+# Whether each crop stands on a rack or lies on the table, as marked in every capture.
 stands = []
 for name in (captures / "boxed.txt").read_text().split():
     if held(name):
         continue
     tiles = [t for t in json.loads((captures / f"{name}.tiles.json").read_text()) if t.get("confirmed") and t.get("tile", "?") != "?"]
     image = Image.open(captures / f"{name}.png").convert("RGB") if tiles else None
-    seen = looking(name)
     for i, t in enumerate(tiles):
         upright = crop(image, t["frame"]).rotate(-90 * t.get("turns", 0), expand=True)
         if min(upright.size) < 20:
             continue
         key = f"{name.replace('/', '-')}-{i}"
         save(upright, "upright", t["tile"], key)
-        if seen == "rack":
-            stands.append(f"{t['tile']}/{key}.jpg\t{'table' if t.get('background') else 'rack'}\n")
+        stands.append(f"{t['tile']}/{key}.jpg\t{'rack' if t.get('rack') else 'table'}\n")
 (out / "stands.tsv").write_text("".join(stands))
 for folder in outside:
     for labels in sorted(folder.glob("*.tiles.json")):

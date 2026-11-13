@@ -79,12 +79,10 @@ def held_out():
         labels = [t for t in json.loads((captures / f"{name}.tiles.json").read_text())
                   if t.get("confirmed") and t.get("tile") in index]
         image = Image.open(captures / f"{name}.png").convert("RGB") if labels else None
-        txt = captures / f"{name}.txt"
-        seen = (txt.read_text().split() or [None])[0] if txt.exists() else None
         for t in labels:
             x, y, w, h = t["frame"]
             c = image.crop((max(0, round(x)), max(0, round(y)), min(image.width, round(x + w)), min(image.height, round(y + h))))
-            stand = int(not t.get("background")) if seen == "rack" else -1
+            stand = int(bool(t.get("rack")))
             if min(c.size) >= 8:
                 test.append((to_tensor(c), index[t["tile"]], t.get("turns", 0), stand))
     return test
@@ -127,6 +125,10 @@ if __name__ == "__main__":
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
     loader = torch.utils.data.DataLoader(Train(), batch_size=128, shuffle=True, num_workers=8, persistent_workers=True)
     loss = torch.nn.CrossEntropyLoss(label_smoothing=0.05, ignore_index=-1)
+    # Table tiles outnumber the rack's several to one, and alone taught it that every tile lies flat.
+    counts = [max(1, sum(s == k for *_, s in train)) for k in (0, 1)]
+    stood = torch.nn.CrossEntropyLoss(weight=torch.tensor([1 / c for c in counts]).to(device) * sum(counts) / 2,
+                                      label_smoothing=0.05, ignore_index=-1)
     start, total, epoch = time.time(), float(os.environ.get("MINUTES", 5)) * 60, 0
     while time.time() - start < total:
         for x, tile, turn, stand in loader:
@@ -135,7 +137,7 @@ if __name__ == "__main__":
             t, k, s = model(x.to(device))
             l = loss(t, tile.to(device)) + loss(k, turn.to(device))
             if (stand >= 0).any():
-                l = l + loss(s, stand.to(device))
+                l = l + stood(s, stand.to(device))
             optimizer.zero_grad()
             l.backward()
             optimizer.step()

@@ -69,13 +69,18 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     `check` scopes them, 11 missed and 19 phantom where the old count said 28: #156's six were loose boxes on far
     tiles. #114's are two empty rack slots and a thing on the stove. Each value's confirmed tiles missed, misread (and as
     what) and unread go to `Captures/.score.json` for the values page, unless `TILES` or `BOXES` names another
-    model. For rack captures with boxes marked background (`x` in the labeler),
-    it also counts the rack's tiles `Finder.nearest` keeps and the background ones it lets through.
+    model. As the app does in AR, reads Values says are on the table go through the valid-meld pass and the rack's
+    don't. For captures with rack tiles marked, it also counts the rack's tiles `Finder.nearest` keeps and the
+    table's it lets through, then Values' rack odds: on 2026-11-12, 2309 tiles, 9 missed, 22 phantom; of 2297
+    confirmed, 2252 read correctly, 17 misread, 19 unread, 17 phantom reads; of 258 rack tiles, `nearest` kept 249
+    with 38 of the table's, and Values kept all 249 and dropped those 38.
   - `Classifier.swift` reads the finder's boxes with an image classifier whose classes are tiles at an orientation
     ("k6@2", the quarter turns clockwise that make it upright). `make values` builds `Values`, for tables and racks
     alike: `crops.py` crops confirmed tiles upright, and `Labeler/values.py` trains MobileNetV3 (ImageNet) at 128 px
-    with a head for the tile and one for the orientation, on those crops at random orientations, for 5 minutes on
-    the Mac's GPU, then converts it with each class p(tile)·p(orientation). It's 6.8 MB, and reads about 1.2 ms a
+    with a head (the last layer, one per question) for the tile, its orientation, and rack or table, on those crops
+    at random orientations, for 5 minutes on the Mac's GPU, then converts it with each class
+    p(tile)·p(orientation)·p(rack) ("k6@2@rack"). The rack head learns from every capture's boxes, each marked rack
+    or table in the labeler, with the table's several-to-one majority weighted down. It's 6.8 MB, and reads about 1.2 ms a
     tile on the phone (72 in 84 ms). Read at the labeled boxes, it got 2261 of 2308 held-out confirmed tiles and their orientations right on 2026-11-12; it levels off after about 3
     minutes. Orientation matters because our 6 and 9 differ only in the logo under the numeral. The outside sets'
     orientations aren't written down, so they join at the orientation the last `Values` gives them
@@ -135,9 +140,12 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     orientation, so a wrong orientation or value stands out; "Least sure" lists the unconfirmed ones `Values` is least
     sure of. Its list gives each value's boxes and, from `make score`, its held-out tiles missed, misread and unread. The `fill` tool (`swift run -c release fill ../Captures`) writes what `Values` reads, with its odds,
     into every unconfirmed box; on 2026-11-09 that was 2905. `make watch` runs `fill --new` after `prelabel.py`, so
-    a new capture's boxes arrive with values too. In a rack capture, a box it fills first is marked background where
-    Values' rack odds are under .5. On 2026-11-12 that matched 1313 of 1317 hand-marked boxes, mostly ones it trained
-    on; held out, it read 120 of 136 rack tiles as rack.
+    a new capture's boxes arrive with values too. A box it fills first is marked rack where Values' rack odds are .5
+    or more.
+  - Each box is on the table or a rack, not each capture: `x` toggles it on either page, and a rack box is dashed
+    violet. On 2026-11-12 the old per-capture Rack and the background marks (`x` then) became 1301 rack boxes: a
+    rack capture's boxes on the rack unless marked background, a table capture's on the table, though some of
+    those hold racks still to be marked.
   - For a full set, a box count other than 106 means a miss or an extra. Drawing the boxes numbered and looking
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones

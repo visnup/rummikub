@@ -43,9 +43,6 @@ const stem = png => basename(png, ".png");
 const nameOf = png => without(relative(captures, png), ".png");
 const info = png => readJSON(without(png, ".png") + ".json", {});
 
-/** "rack" or "table", the first word of the .txt. */
-const looking = png => (read(without(png, ".png") + ".txt") ?? "").split(/\s+/).find(Boolean) ?? null;
-
 /** The true tiles, or null when they're unknown: an "As read" capture in unlabeled/, or with none written. */
 function truth(png) {
   const txt = read(without(png, ".png") + ".txt");
@@ -69,7 +66,7 @@ function ids(photos) {
 function summary(png, number, check, done, looked) {
   const name = nameOf(png), tiles = readJSON(without(png, ".png") + ".tiles.json", []), notes = info(png);
   return {
-    id: number, name, truth: truth(png), layout: notes.layout ?? null, looking: looking(png),
+    id: number, name, truth: truth(png), layout: notes.layout ?? null,
     tags: (notes.notes || "").split(/\s+/).filter(Boolean), boxes: tiles.length, boxed: done.has(name),
     check: check[name] ?? null, checked: looked.has(name), modified: statSync(png).mtimeMs / 1000,
   };
@@ -82,7 +79,7 @@ function values() {
     const name = nameOf(png);
     return readJSON(without(png, ".png") + ".tiles.json", []).filter(t => (t.tile ?? "?") !== "?").map(t => ({
       name, id: number[stem(png)] ?? null, frame: t.frame, tile: t.tile, turns: t.turns ?? 0,
-      confirmed: !!t.confirmed, odds: t.odds ?? null, background: !!t.background,
+      confirmed: !!t.confirmed, odds: t.odds ?? null, rack: !!t.rack,
     }));
   });
 }
@@ -122,7 +119,7 @@ function apply(changes) {
       if (!tile) continue;
       Object.assign(tile, f, { source: "hand" });
       delete tile.odds;
-      if (tile.background === false) delete tile.background;
+      if (tile.rack === false) delete tile.rack;
       changed++;
     }
     writeJSON(path, tiles);
@@ -205,17 +202,6 @@ async function api(req, res, path, query) {
     writeJSON(base + ".json", { ...info(png), layout });
     writeFileSync(base + ".txt", lines([(read(base + ".txt") ?? "").split("\n")[0], ...melds[layout] ?? []]));
     return json(res, { layout, truth: truth(png) });
-  }
-  // Rack or table: the first word of the .txt, before the tilt, and "looking" in the .json.
-  if (method === "POST" && path.startsWith("/api/looking/")) {
-    const png = inside(rest("/api/looking/"), ".png"), now = JSON.parse(await body(req));
-    if (!png || !existsSync(png) || !["rack", "table"].includes(now)) return fail(res, 400);
-    const base = without(png, ".png"), txt = (read(base + ".txt") ?? "").split("\n");
-    if (txt.at(-1) === "") txt.pop();
-    txt[0] = [now, ...(txt[0] ?? "").split(/\s+/).filter(Boolean).slice(1)].join(" ");
-    writeFileSync(base + ".txt", lines(txt));
-    writeJSON(base + ".json", { ...info(png), looking: now });
-    return json(res, { looking: now });
   }
   // Marks a capture's boxes done, or looked over where the models disagree, or not (?done=0).
   const listed = { "/api/boxed/": boxed, "/api/checked/": checked };

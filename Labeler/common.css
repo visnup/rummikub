@@ -1,4 +1,4 @@
-:root { --bg: #fff; --fg: #111; --muted: #666; --line: #ddd; --pick: #e0e7ff; --unconfirmed: #fc0; --confirmed: #2c2; --selected: #f0f; --dispute: #d33; --extra: #0cf; }
+:root { --bg: #fff; --fg: #111; --muted: #666; --line: #ddd; --pick: #e0e7ff; --unconfirmed: #fc0; --confirmed: #2c2; --selected: #f0f; --dispute: #d33; --extra: #0cf; --rack: #84f; }
 @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #eee; --muted: #999; --line: #333; --pick: #2a2f4a; } }
 body { margin: 0; display: flex; height: 100vh; font: 13px/1.4 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--fg); }
 nav, #keys { width: 300px; }

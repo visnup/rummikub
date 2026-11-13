@@ -9,7 +9,7 @@
   .cell { width: 96px; border: 3px solid var(--unconfirmed); border-radius: 4px; cursor: pointer; user-select: none; }
   .cell.confirmed { border-color: var(--confirmed); }
   .cell.selected { border-color: var(--selected); }
-  .cell.background img { opacity: 0.35; }
+  .cell.rack div { outline: 3px dashed var(--rack); outline-offset: -3px; }
   .cell div { width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .cell img { max-width: 96px; max-height: 96px; }
   .cell p { margin: 0; padding: 1px 4px; font: bold 12px ui-monospace, monospace; display: flex; justify-content: space-between; }
@@ -27,8 +27,8 @@
   unconfirmed, least sure first, and green confirmed. Click a tile to select it, shift-click to select a run,
   cmd-click to add or remove one, or <kbd>a</kbd> to select every unconfirmed one. Type a tile (<kbd>r6</kbd>,
   <kbd>j</kbd>) and <kbd>Enter</kbd> to set and confirm the selected ones, <kbd>?</kbd> for ones you can't read, or just <kbd>Enter</kbd> to confirm what
-  they show. <kbd>←</kbd><kbd>→</kbd> turn their orientation, <kbd>x</kbd> marks them background (dimmed: the table
-  behind a rack), <kbd>Esc</kbd> selects none. Double-click opens the
+  they show. <kbd>←</kbd><kbd>→</kbd> turn their orientation, <kbd>x</kbd> toggles them between the table and a rack
+  (dashed violet), <kbd>Esc</kbd> selects none. Double-click opens the
   capture. Changes save as you make them.
 </div></details>
 <script type="module">
@@ -125,7 +125,7 @@ function cell(t, i) {
 function refresh() {
   [...document.getElementById("grid").children].forEach((c, i) => {
     const t = shown[i];
-    c.className = "cell" + (t.confirmed ? " confirmed" : "") + (selected.has(t) ? " selected" : "") + (t.background ? " background" : "");
+    c.className = "cell" + (t.confirmed ? " confirmed" : "") + (selected.has(t) ? " selected" : "") + (t.rack ? " rack" : "");
     c.querySelector("img").style.transform = `rotate(${(t.turns || 0) * 90}deg)`;
     c.querySelector("p").innerHTML = `<span style="color:${hue(t.tile)}">${label(t)}</span><small>#${t.id}${t.odds != null && !t.confirmed ? ` ${t.odds.toFixed(2)}` : ""}</small>`;
   });
@@ -159,8 +159,8 @@ window.onkeydown = e => {
     change(t => ({ turns: turn(t.turns, e.key) }));
   } else if (e.key === "x" && !typed) {
     if (!selected.size) return flash();
-    const on = ![...selected].every(t => t.background);
-    change({ background: on });
+    const on = ![...selected].every(t => t.rack);
+    change({ rack: on });
   } else return;
   refresh();
   nav();

@@ -11,7 +11,7 @@ for path in CommandLine.arguments.dropFirst() {
   print(URL(filePath: path).lastPathComponent)
   var world = World(), last: Pose?
   for frame in history {
-    let ids = world.add(frame.detections, pose: frame.pose, mask: frame.mask)
+    let ids = frame.tracking == "normal" ? world.add(frame.detections, pose: frame.pose, mask: frame.mask) : []
     if frame.pose.plane != nil { last = frame.pose }
     let covered = frame.mask.map { m in String(format: "  person %2.0f%%", 100 * Double(m.bytes.count { $0 > 0 }) / Double(m.bytes.count)) } ?? ""
     print(String(format: "  %5.1f s  %-5@ %2d read, %2d placed, %2d places, %2d sure%@",

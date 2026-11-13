@@ -193,7 +193,9 @@ import UniformTypeIdentifiers
     if let pose {
       // Each tile read is on the rack or the table by its place. A part with none in view only follows the camera;
       // a frame with no tiles is an empty tabletop.
-      let ids = world.add(turned, pose: pose, mask: ar?.mask)
+      // While ARKit is still finding its feet, as when the camera restarts, the pose holds still and the plane wanders,
+      // so reads then would start a second table.
+      let ids = ar?.tracking == "normal" ? world.add(turned, pose: pose, mask: ar?.mask) : turned.map { _ in nil }
       let racks = ids.map { id in world.places.first { $0.id == id }?.isRack }
       parts = racks
       detections = zip(turned, racks).map { d, rack in
@@ -457,13 +459,15 @@ import UniformTypeIdentifiers
   /// The last two minutes of lines, recording or not, for `report`.
   @ObservationIgnored private var recent = [(time: Date, line: Data)]()
 
-  /// Saves the last two minutes as a recording, `<start>.jsonl`, with the last frame captured, for when the app has
+  /// Saves the last two minutes as a recording, `<time>.jsonl`, with the last frame captured, for when the app has
   /// gone wrong in a game nobody was recording.
   func report(camera: [String: Any]) {
-    guard let start = recent.first?.time else { return }
-    let name = start.formatted(.iso8601) + ".jsonl"
+    // Named when reported, not when it starts: a second report soon after started at the same line, and the labeler
+    // kept the first one's log.
+    guard !recent.isEmpty else { return }
+    let now = Date.now, name = now.formatted(.iso8601) + ".jsonl"
     try? Data(recent.map { $0.line + Data("\n".utf8) }.joined()).write(to: URL.documentsDirectory.appending(path: name))
-    capture(camera: camera, recording: start)
+    capture(camera: camera, recording: now)
   }
 
   /// While recording, captures the frame every 2 s, once its reads have their parts.

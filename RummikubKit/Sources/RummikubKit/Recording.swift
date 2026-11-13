@@ -10,6 +10,8 @@ public struct Recording: Sendable {
     public let time: Double
     /// "table" or "rack".
     public let looking: String
+    /// ARKit's tracking state, "normal" or why it's limited.
+    public let tracking: String
     public let pose: Pose
     public let mask: World.Mask?
     public let detections: [Detection]
@@ -47,7 +49,8 @@ public struct Recording: Sendable {
         World.Mask(width: $0["width"] as! Int, height: $0["height"] as! Int,
           bytes: [UInt8](Data(base64Encoded: $0["bytes"] as! String)!))
       }
-      return Frame(time: frame["time"] as! Double, looking: frame["looking"] as? String ?? "", pose: pose, mask: mask,
+      return Frame(time: frame["time"] as! Double, looking: frame["looking"] as? String ?? "",
+        tracking: frame["tracking"] as? String ?? "normal", pose: pose, mask: mask,
         detections: detections)
     }
   }

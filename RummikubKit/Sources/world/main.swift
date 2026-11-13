@@ -9,8 +9,14 @@ for path in CommandLine.arguments.dropFirst() {
   let history = try Recording(contentsOf: URL(filePath: path)).frames
   guard let first = history.first else { continue }
   print(URL(filePath: path).lastPathComponent)
-  var world = World(), last: Pose?
+  var world = World(), last: Pose?, previous = first.time
   for frame in history {
+    // The camera restarted, and the app with it forgets every place.
+    if frame.time - previous > 2, frame.tracking != "normal" {
+      world = World()
+      print("  restarted")
+    }
+    previous = frame.time
     let ids = frame.tracking == "normal" ? world.add(frame.detections, pose: frame.pose, mask: frame.mask) : []
     if frame.pose.plane != nil { last = frame.pose }
     let covered = frame.mask.map { m in String(format: "  person %2.0f%%", 100 * Double(m.bytes.count { $0 > 0 }) / Double(m.bytes.count)) } ?? ""
@@ -39,7 +45,11 @@ for path in CommandLine.arguments.dropFirst() {
     let reads = place.reads.sorted { $0.value > $1.value }.map { String(format: "%@ %.1f", $0.key.description, $0.value) }
       .joined(separator: " ")
     let nearest = world.places.filter { $0.id != place.id }.map { distance($0.point, place.point) }.min() ?? 0
-    print(String(format: "    #%-3d seen %2d  rack %.2f  width %2.0f mm, %2.0f mm from the next, %2.0f mm up  %@", place.id, place.seen,
-      place.onRack ?? -1, place.width * 1000, nearest * 1000, place.height * 1000, String(reads.prefix(30))))
+    // Height over width as the tile reads, upright.
+    let turned = place.turns.indices.max { place.turns[$0] < place.turns[$1] }! % 2 == 1
+    let upright = turned ? 1 / place.aspect : place.aspect
+    print(String(format: "    #%-3d seen %2d  rack %.2f  tall %.2f  width %2.0f mm, %2.0f mm from the next, %2.0f mm up  %@",
+      place.id, place.seen, place.onRack ?? -1, upright, place.width * 1000, nearest * 1000, place.height * 1000,
+      String(reads.prefix(30))))
   }
 }

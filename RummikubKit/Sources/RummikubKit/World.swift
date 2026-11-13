@@ -38,8 +38,9 @@ public struct World: Sendable {
     /// Values' mean odds that it stands on a rack, or nil when no read said.
     public var onRack: Float? { racked > 0 ? rack / Float(racked) : nil }
     /// On the rack by Values' mean: in the first AR captures (#319–326) rack tiles' were .90 and up, and the table's
-    /// .55 and under, nearest the rack.
-    public var isRack: Bool { (onRack ?? 0) >= 0.75 }
+    /// .55 and under, nearest the rack. In #372–390 and the next recording, rack tiles at the rack's ends fell to .68–.74,
+    /// with the table's under .45.
+    public var isRack: Bool { (onRack ?? 0) >= 0.6 }
     /// Seen in two frames, so a one-frame phantom box isn't a tile.
     public var sure: Bool { seen >= 2 }
   }

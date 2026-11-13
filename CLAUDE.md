@@ -41,7 +41,7 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   - `World.swift`: the table as places, with ARKit: each read joins the place within half a tile of where its box's
     bottom edge meets the table (¾ for the same tile), or starts one, and each place votes on its own tile. A place
     the finder should have seen three frames running and didn't is dropped, unless a person (ARKit's segmentation,
-    `World.Mask`) or another box covers it. On the rack by Values' mean (.75). A rack tile's foot stands on a ledge
+    `World.Mask`) or another box covers it. On the rack by Values' mean (.6). A rack tile's foot stands on a ledge
     above the table, so where it meets the table moves as the camera does; each rack place keeps every sighting's
     ray and finds the height where they meet (`settle`), 25–67 mm in #327–331, and matches new reads at that height.
     Without it, coming back to the rack from the table doubled 5 of its 12 tiles. `World.melds` joins the table's places

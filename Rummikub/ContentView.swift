@@ -223,11 +223,14 @@ struct ContentView: View {
     .glassEffect()
   }
 
-  var looking: some View {
-    Picker("Looking at", selection: Binding(get: { game.looking }, set: { game.pick($0) })) {
-      ForEach(Game.Looking.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+  /// Without a pose; with one, `World` tells the rack from the table.
+  @ViewBuilder var looking: some View {
+    if game.ar?.pose == nil {
+      Picker("Looking at", selection: Binding(get: { game.looking }, set: { game.pick($0) })) {
+        ForEach(Game.Looking.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+      }
+      .pickerStyle(.segmented)
     }
-    .pickerStyle(.segmented)
   }
 
   /// Pushes captures to the Mac; one already under way keeps the count.

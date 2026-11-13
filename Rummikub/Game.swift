@@ -94,7 +94,7 @@ import UniformTypeIdentifiers
   /// 45°. A pick by hand holds until that part locks.
   var tilt: Double? {
     didSet {
-      guard let tilt, picked == nil else { return }
+      guard let tilt, picked == nil, ar?.pose == nil else { return }
       if tilt > 55 {
         looking = .table
       } else if tilt < 30 || tilt < 45 && lookingModel == nil {
@@ -145,7 +145,7 @@ import UniformTypeIdentifiers
     if locked.contains(looking), step == nil, Date.now.timeIntervalSince(lastSeen) < 1 { return }
     lastSeen = .now
     // Only where tilt can't say: below 30° it's always been a rack, above 55° a table.
-    if picked == nil, read == nil, let lookingModel, (30...55).contains(tilt ?? 40),
+    if picked == nil, read == nil, ar?.pose == nil, let lookingModel, (30...55).contains(tilt ?? 40),
       let (label, confidence) = await Task.detached(operation: { try? lookingModel.label(of: image) }).value,
       confidence >= 0.8, let seen = Looking(rawValue: label)
     {
@@ -179,27 +179,36 @@ import UniformTypeIdentifiers
     _ = try? timing?.seekToEnd()
     try? timing?.write(contentsOf: Data(
       "\(Date.now.timeIntervalSince1970),\(looking),\(Int(time / .milliseconds(1))),\(Int(findTime / .milliseconds(1))),\(found.count),\(boxes?.count ?? -1)\n".utf8))
-    let part = looking
     // Touching tiles at the orientation they agree on; on the table, each meld then as the likeliest valid one, as
     // between turns they all are.
     let turned = Recognizer.turned(found)
     if let ar, recording != nil { record(turned, ar) }
-    let voted: [Detection]
-    var melds: [[Detection]]?
     if let pose {
-      world.add(turned, pose: pose, mask: ar?.mask)
+      // Each part this frame's tiles landed in, by place, is updated; a frame with none is an empty tabletop.
+      let ids = world.add(turned, pose: pose, mask: ar?.mask)
+      let racks = ids.compactMap { id in world.places.first { $0.id == id }?.isRack }
+      let inView = Set(racks.map { $0 ? Looking.rack : .table })
+      if !racks.isEmpty { looking = racks.count(where: \.self) * 2 > racks.count ? .rack : .table }
       // Drawn and measured on the tabletop, not on whatever plane ARKit found; recorded as ARKit gave it.
       let leveled = world.level(pose)
       self.ar?.pose = leveled
       footprints = self.boxes.map(leveled.footprint)
-      let placed = world.detections(from: pose).filter { $0.place.isRack == (part == .rack) }
-      if part == .table { melds = Recognizer.valid(World.melds(placed)) }
-      voted = melds?.flatMap(\.self) ?? placed.map(\.detection)
+      let placed = world.detections(from: pose)
+      if racks.isEmpty || inView.contains(.table) {
+        let melds = Recognizer.valid(World.melds(placed.filter { !$0.place.isRack }))
+        await update(.table, voted: melds.flatMap(\.self), melds: melds)
+      }
+      if inView.contains(.rack) { await update(.rack, voted: placed.filter(\.place.isRack).map(\.detection)) }
     } else {
+      let part = looking
       let seen = part == .rack ? onRack(turned) : Recognizer.valid(Recognizer.melds(turned)).flatMap(\.self)
       readings[part] = Array(((readings[part] ?? []) + [seen]).suffix(5))
-      voted = vote(readings[part]!)
+      await update(part, voted: vote(readings[part]!))
     }
+  }
+
+  /// Takes a part's latest reading: follows the play's steps on the table, else settles, locks, or notes a change.
+  private func update(_ part: Looking, voted: [Detection], melds: [[Detection]]? = nil) async {
     var next = scene
     if part == .table {
       next.table = melds ?? Recognizer.melds(voted)

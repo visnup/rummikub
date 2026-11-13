@@ -26,6 +26,25 @@ app pushes each one to `Captures/`.
 - **Light**: warm overhead, dim evening, a lamp making glare, daylight and lamp mixed; racks too.
 - **Surfaces**: a white table, a patterned cloth, and each surface from above with no tiles.
 
+## Labeler on a phone
+
+At 600 px or narrower the capture page already shows the list alone at `/captures` and a capture alone once picked,
+with ‹ back. What's left is everything the keys do. Buttons can send the same keydown events the keys do, so nothing
+is written twice.
+
+- **A toolbar under the photo.**
+  - With a box selected: ✓ confirm (Enter), ↺ ↻ orientation (← →), table or rack (`x`), delete (⌫), snap to the
+    finder (`f`), next unconfirmed (Tab).
+  - With none: done (Enter), next and previous mark (`n` `N`), previous and next capture (`[` `]`). A swipe on the
+    header could do `[` `]` too.
+  - About 40 lines.
+- **Values by tapping the crop grid.** It's already a 4 × 13 table of values with a joker row: tapping a cell or
+  empty slot with a box selected sets that box to that value and confirms it. That replaces typing `r12` Enter.
+  Part of the toolbar's 40 lines.
+- **Pinch to zoom, one finger to pan**, replacing `+` `−` `0`. A tap selects a box or adds one; drawing a box
+  becomes a long press then a drag, since a plain drag now pans. About 40 more lines, and the fiddlier half.
+- **Left to the keyboard:** `a`, `u`, `D` and shift-drag selection.
+
 ## Solver speed
 
 The integer program solves the benchmark boards in 5–27 ms, and 800 random boards of up to 16 melds average 2–4 ms.

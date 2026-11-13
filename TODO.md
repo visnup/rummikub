@@ -8,9 +8,9 @@ The flow in "Design" in `CLAUDE.md`, in order. Each step ships on its own.
    replays of the 2026-11-13 reports the table came out exact, and the rack 13 of 14 where `World` never had the
    second o10. Left: a first scan mid-game, with nothing known and more than 14 tiles, still splits by Values' rack
    odds alone, so a rack tile seen from above is dropped (07:43's r10) and a phantom can join the rack (06:57's b4).
-2. **No moves.** "No moves. Draw a tile." with a button to the rack scanner, which looks for exactly one new tile.
+2. **No moves.** Built 2026-11-13, not yet tried on the phone.
 3. **Steps on the Board only.** Drop the AR marks and the camera advancing steps; a tap moves to the next step.
-4. **A real game**, reporting (a long press in the Solver) whenever it goes wrong.
+4. **A real game**, recording (a tap on the camera) whenever it goes wrong.
 
 ## Next
 

@@ -123,6 +123,9 @@ import UniformTypeIdentifiers
     // stepping through a play, every frame, to follow each move.
     if onBoard, step == nil, Date.now.timeIntervalSince(lastSeen) < 1 { return }
     lastSeen = .now
+    // ARKit started a new world rather than relocalizing in the old one, so the places are gone: the parts keep their
+    // tiles, not where they were. Relocalized, the old places line up again and are kept.
+    if ar.tracking.contains("initializing"), !world.places.isEmpty { world = World() }
     // Every read goes to the world table, once ARKit has found one, which says what's on the rack by place.
     let pose = ar.pose.plane == nil ? nil : ar.pose
     let finder = finder, classifier = values, image = ar.image
@@ -151,13 +154,13 @@ import UniformTypeIdentifiers
     // Touching tiles at the orientation they agree on; on the table, each meld then as the likeliest valid one, as
     // between turns they all are.
     let turned = Recognizer.turned(found)
-    record(turned, ar)
+    if recording != nil { record(turned, ar) }
     // Until ARKit finds the table, there's nowhere to put what's read: the Solver waits for one.
     guard let pose else { return keyframe() }
     // Each tile read is on the rack or the table by its place. A part with none in view only follows the camera;
     // a frame with no tiles is an empty tabletop.
-    // While ARKit is still finding its feet, as when the camera restarts, the pose holds still and the plane wanders,
-    // so reads then would start a second table.
+    // While ARKit is still finding its feet, initializing or relocalizing, the pose holds still and the plane
+    // wanders, so reads then would start a second table.
     let ids = ar.tracking == "normal" ? world.add(turned, pose: pose, mask: ar.mask) : turned.map { _ in nil }
     let racks = ids.map { id in world.places.first { $0.id == id }?.isRack }
     parts = racks
@@ -171,7 +174,7 @@ import UniformTypeIdentifiers
     let leveled = world.level(pose)
     self.ar?.pose = leveled
     footprints = self.boxes.map(leveled.footprint)
-    let known = world.parts(from: pose, knowing: before)
+    let known = world.parts(from: pose, knowing: before, scan: rackScan)
     await update(.table, to: known, inView: racks.allSatisfy { $0 == nil } || racks.contains(false))
     await update(.rack, to: known, inView: !known.rack.isEmpty || racks.contains(true))
   }
@@ -217,6 +220,7 @@ import UniformTypeIdentifiers
         part == .table || !known.rack.isEmpty
       {
         locked.insert(part)
+        if part == .rack { rackScan = .known }
         await solve()
       }
     } else if locked.contains(part) {
@@ -232,7 +236,7 @@ import UniformTypeIdentifiers
 
   /// Whether a part as read now can follow what was known of it.
   private func follows(_ part: Area) -> Bool {
-    scene.possible && (part == .table ? scene.tableFollows(before) : scene.rackFollows(before))
+    scene.possible && (part == .table ? scene.tableFollows(before) : scene.rackFollows(before, scan: rackScan))
   }
 
   /// The table's tiles not read since it was last known, which it must still have.
@@ -279,21 +283,33 @@ import UniformTypeIdentifiers
     locked = []
     steadySince = [:]
     changedSince = [:]
+    rackScan = .known
     world = World()
   }
 
   /// Whether a locked part has read differently for three seconds, as after someone's turn.
   func changed(_ part: Area) -> Bool { changedSince[part].map { Date.now.timeIntervalSince($0) >= 3 } ?? false }
 
-  /// Forgets where every tile was, as ARKit starts over: the parts keep their tiles, not their places.
-  func restart() { world = World() }
-
   /// Scans a part again, from scratch.
   func rescan(_ part: Area) {
+    // Scanning the rack again says it's wrong, so it's read afresh, held only to its size: held to what it had, a
+    // 13-tile rack missing o4 never took the o4 back; held to nothing, a 14-tile rack locked at the 11 in view
+    // (2026-11-13).
+    if part == .rack { rackScan = .again }
+    scan(part)
+  }
+
+  /// Scans the rack for the one tile drawn, keeping every tile it had, seen or hidden behind another.
+  func draw() {
+    rackScan = .drawing
+    scan(.rack)
+  }
+
+  /// How the rack scanning now reads what it had.
+  private(set) var rackScan = World.RackScan.known
+
+  private func scan(_ part: Area) {
     if locked.contains(part) { before = scene }
-    // Scanning the rack again says it's wrong, so it's read afresh: held to what it had, a 13-tile rack missing o4
-    // never took the o4 back (2026-11-13).
-    if part == .rack { before.rack = [] }
     locked.remove(part)
     world.forget(rack: part == .rack)
     changedSince[part] = nil
@@ -312,7 +328,7 @@ import UniformTypeIdentifiers
   /// Saves the last frame to Documents as `<time>.png`, its truth as `<time>.txt` (the part most of its tiles are on,
   /// then a meld a line), and everything else known about it as `<time>.json`, to become test fixtures. PNG, so the
   /// fixture is the same pixels the phone read.
-  func capture(recording: Date? = nil) {
+  private func capture() {
     guard let frame else { return }
     let base = URL.documentsDirectory.appending(path: Date.now.formatted(.iso8601))
     let destination = CGImageDestinationCreateWithURL(
@@ -337,7 +353,7 @@ import UniformTypeIdentifiers
       },
     ]
     if let ar { info["ar"] = Self.info(ar, footprints: footprints) }
-    if let recording = recording ?? self.recording { info["recording"] = recording.formatted(.iso8601) }
+    if let recording { info["recording"] = recording.formatted(.iso8601) }
     try? JSONSerialization.data(withJSONObject: finite(info), options: [.prettyPrinted, .sortedKeys])
       .write(to: base.appendingPathExtension("json"))
   }
@@ -408,22 +424,6 @@ import UniformTypeIdentifiers
     }
     guard let data = try? JSONSerialization.data(withJSONObject: finite(line), options: .sortedKeys) else { return }
     try? log?.write(contentsOf: data + Data("\n".utf8))
-    recent.append((.now, data))
-    recent.removeFirst(recent.prefix { Date.now.timeIntervalSince($0.time) > 120 }.count)
-  }
-
-  /// The last two minutes of lines, recording or not, for `report`.
-  @ObservationIgnored private var recent = [(time: Date, line: Data)]()
-
-  /// Saves the last two minutes as a recording, `<time>.jsonl`, with the last frame captured, for when the app has
-  /// gone wrong in a game nobody was recording.
-  func report() {
-    // Named when reported, not when it starts: a second report soon after started at the same line, and the labeler
-    // kept the first one's log.
-    guard !recent.isEmpty else { return }
-    let now = Date.now, name = now.formatted(.iso8601) + ".jsonl"
-    try? Data(recent.map { $0.line + Data("\n".utf8) }.joined()).write(to: URL.documentsDirectory.appending(path: name))
-    capture(recording: now)
   }
 
   /// While recording, captures the frame every 2 s, once its reads have their parts.

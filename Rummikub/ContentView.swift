@@ -20,7 +20,7 @@ struct ContentView: View {
     // shows in one preview layer at a time.
     // Tapping Capture again starts or stops a recording, where the thumb already is.
     TabView(selection: Binding(get: { tab }, set: { if $0 == 0 && tab == 0 && live && !justSaved { shoot() }; tab = $0 })) {
-      Tab("Capture", systemImage: game.recording != nil ? "stop.circle" : justSaved ? "checkmark" : "record.circle", value: 0) {
+      Tab(value: 0) {
         // Holding a finger on the camera hides everything drawn over it to check the framing; lifting it starts or
         // stops a recording.
         Color.clear
@@ -70,20 +70,26 @@ struct ContentView: View {
             .opacity(pressing ? 0 : 1)
           }
           .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { topInset = $0 }
+      } label: {
+        // Filled red while recording, from either tab.
+        if game.recording != nil {
+          Label("Recording", systemImage: "record.circle.fill").symbolRenderingMode(.multicolor)
+        } else {
+          Label("Capture", systemImage: justSaved ? "checkmark" : "record.circle")
+        }
       }
       Tab("Solver", systemImage: "square.grid.3x3.fill", value: 1) {
         NavigationStack {
           Group {
             if game.onBoard {
               Board(game: game) {
-                report()
-              } controls: {
                 VStack(spacing: 12) { solver }
                   .padding()
                   .glassEffect(in: .rect(cornerRadius: 24))
               }
             } else {
-              panel(over: Color.clear.contentShape(.rect).onLongPressGesture { report() }) { solver }
+              // A tap on the camera starts or stops a recording, as on the Capture tab.
+              panel(over: Color.clear.contentShape(.rect).onTapGesture { if live && !justSaved { shoot() } }) { solver }
             }
           }
           .background { if tab == 1 && !game.onBoard { preview } }
@@ -107,7 +113,6 @@ struct ContentView: View {
     // The camera runs only while something needs it: the Capture tab, or a part of the Solver's being scanned.
     .onChange(of: tab == 0 || !game.onBoard) {
       guard live else { return }
-      if tab == 0 || !game.onBoard { game.restart() }
       camera.run(tab == 0 || !game.onBoard)
     }
     .task(id: saved) {
@@ -179,16 +184,7 @@ struct ContentView: View {
     Task { if let left = await Sync.push() { unsent = left } }
   }
 
-  /// The last two minutes and a capture, sent when the Solver has gone wrong: a long press while scanning or on the
-  /// Board.
-  func report() {
-    game.report()
-    saved += 1
-    justSaved = true
-    send()
-  }
-
-  /// A recording started or stopped.
+  /// A recording started, or stopped and sent.
   func shoot() {
     if game.recording == nil {
       game.startRecording()
@@ -266,6 +262,9 @@ struct ContentView: View {
           if !game.locked.contains(.table), !game.unseen.isEmpty {
             Text("Still to find: \(numbers(game.unseen))").font(.callout).foregroundStyle(.secondary)
           }
+          if game.rackScan == .drawing, !game.locked.contains(.rack) {
+            Text("Show the tile you drew.").font(.callout).foregroundStyle(.secondary)
+          }
         }
         .font(.callout.bold().monospacedDigit())
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -274,16 +273,23 @@ struct ContentView: View {
         Text("Lay down 30 to open").font(.callout).foregroundStyle(.secondary)
           .frame(maxWidth: .infinity, alignment: .leading)
       }
+      if !game.plays.isEmpty, game.plays.allSatisfy({ $0.placed == 0 }) {
+        Text("No moves.").font(.callout).frame(maxWidth: .infinity, alignment: .leading)
+      }
       ForEach(Array(game.plays.enumerated()), id: \.offset) { i, play in
-        Button {
-          game.choice = i
-          game.step = play.steps.isEmpty ? nil : 0
-        } label: {
-          Text(play.placed == 0 ? "Draw a tile" : "Place \(play.placed), move \(play.moved)")
-            .frame(maxWidth: .infinity)
+        if play.placed == 0 {
+          // Placing nothing means drawing, and the rack scanner then looks for the one tile drawn.
+          Button { game.draw() } label: { Text("Draw a tile").frame(maxWidth: .infinity) }
+            .buttonStyle(.bordered)
+        } else {
+          Button {
+            game.choice = i
+            game.step = play.steps.isEmpty ? nil : 0
+          } label: {
+            Text("Place \(play.placed), move \(play.moved)").frame(maxWidth: .infinity)
+          }
+          .buttonStyle(.borderedProminent)
         }
-        .buttonStyle(.borderedProminent)
-        .disabled(play.placed == 0)
       }
     }
   }

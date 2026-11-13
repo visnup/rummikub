@@ -11,12 +11,13 @@ for path in CommandLine.arguments.dropFirst() {
   print(URL(filePath: path).lastPathComponent)
   var world = World(), last: Pose?, previous = first.time, before = Scene()
   for frame in history {
-    // The camera restarted, and the app with it forgets every place, but knows what it showed.
+    // The camera restarted, knowing what the app showed; if ARKit started a new world, the app forgets every place.
     if frame.time - previous > 2, frame.tracking != "normal" {
-      world = World()
       before = frame.shown ?? before
-      print("  restarted, knowing \(before.rack.count) on the rack and \(before.table.joined().count) on the table")
+      print("  restarted, \(frame.tracking.contains("relocalizing") ? "relocalizing" : "initializing"), knowing",
+        "\(before.rack.count) on the rack and \(before.table.joined().count) on the table")
     }
+    if frame.tracking.contains("initializing"), !world.places.isEmpty { world = World() }
     previous = frame.time
     let ids = frame.tracking == "normal" ? world.add(frame.detections, pose: frame.pose, mask: frame.mask) : []
     if frame.pose.plane != nil { last = frame.pose }

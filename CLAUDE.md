@@ -193,7 +193,9 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   no tile more than twice; until then the Solver lists the table's tiles still to find. The parts come from
   `World.parts`: with nothing known yet, as at a new game, 14 tiles in all are the dealt rack, wherever they lie; with
   the rack known, a tile in no valid meld is the rack's if the rack had it, and the rack keeps only the tiles it had.
-  Scanning the rack again forgets what it had, since that says it was wrong. Once locked, frames stop changing a
+  Scanning the rack again reads it afresh, every tile in no valid meld, held only to its size, the same or one
+  more. "Draw a tile", the play that places nothing ("No moves." when it's the only one), scans the rack keeping
+  every tile it had, hidden or not, and locks once it has one more (`World.RackScan`). Once locked, frames stop changing a
   part and the plays are solved once. A locked
   part that reads differently for three seconds shows "changed?"; its chip in the Solver panel scans it again. While a play is being shown, readings don't re-solve; they advance the step instead
   (`Play.stepsDone`). The simulator never uses a camera: it replays an AR recording in `Captures/` (`Replay`, #327–331's),
@@ -206,21 +208,22 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     were off on one device or the other. Notes are typed in an alert, since the accessory stays behind the keyboard.
     Solver keeps a two-row panel.
   - Once table and rack are both locked, the Solver shows the Board (`Board.swift`) and the camera stops, to save
-    battery. ARKit starts over when it runs again, and `World` with it: its places wouldn't line up, so the parts
-    keep their tiles but not where they were. The table on top as it sat in its frame, pinch-zoomed and panned, then the controls, then the rack in up
+    battery. Run again, ARKit relocalizes (`sessionShouldAttemptRelocalization`): if it matches what it sees to
+    what it saw, its coordinates and `World`'s places line up as before. After 8 s relocalizing it gives up and starts
+    over, initializing, and then `World` does too: the parts keep their tiles but not where they were. The table on top as it sat in its frame, pinch-zoomed and panned, then the controls, then the rack in up
     to three rows, each tile where `World` measured it along the rack (`Scene.laid`), each with the step shown drawn on it. Tapping a part
     scans it again.
     Finish on a play's last step takes its melds as the table (`Play.finished`, in the slots the steps put them) and
     re-solves, with no rescan. Models load off the main thread, in parallel, about 7 s on a cold launch; frames wait for them, and the
     top pill shows progress against the last launch's load time.
     Once the part in view is locked, frames are read a second apart.
-  - A finger lifted off the camera (pressing hides everything drawn over it, to check the framing) or a second tap on
-    the Capture tab starts or stops a recording. The tab's icon is a checkmark for 1.5 s after, so a burst doesn't
-    make duplicates. Every frame read goes to `<start>.jsonl`, a line each (pose, plane,
-    a quarter-size person mask, every read with its odds), and every 2 s the frame is captured too, with
-    `recording` in its notes naming the log. The log is pushed with the captures once stopped. Games aren't recorded,
-    so the app keeps the last two minutes of those lines anyway, and a long press in the Solver, on the Board or
-    while scanning, saves them as a recording with the last frame captured (`Game.report`).
+  - A finger lifted off the camera, in Capture (pressing hides everything drawn over it, to check the framing) or
+    the Solver while scanning, or a second tap on the Capture tab, starts a recording, and the same again stops and
+    sends it, with a haptic either way. The tab's icon is filled red while recording, from either tab, and a
+    checkmark for 1.5 s after, so a burst doesn't make duplicates. Every frame read goes to `<start>.jsonl`, a line
+    each (pose, plane, a quarter-size person mask, every read with its odds, what the app showed), and every 2 s the
+    frame is captured too, with `recording` in its notes naming the log. The log is pushed with the captures once
+    stopped; one cut off by an install or crash stays in the app's `Documents/recording/`.
   - ARKit (`Pose.swift`) finds the table as a plane and measures each box on it, in mm under the box, green when
     tile-sized, so lying on the table; a standing rack tile reaches far behind it. Between reads the overlay redraws
     every display frame where the camera is now, each box's bottom edge held to the table (`Pose.follow`). Captures

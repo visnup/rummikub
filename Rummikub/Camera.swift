@@ -78,10 +78,28 @@ nonisolated final class Camera: NSObject, ARSessionDelegate, @unchecked Sendable
     #endif
   }
 
-  /// Starts or stops the camera. ARKit keeps its planes across a pause: reset, it had no table for a while, and
-  /// nothing was read. `World` starts over instead (`Game.restart`).
+  /// Starts or stops the camera. Run again after a pause, ARKit relocalizes: it matches what it sees to what it saw,
+  /// and if it can, its coordinates, and `World`'s places in them, line up as before. Reset, it had no table for a
+  /// while, and nothing was read.
   func run(_ on: Bool) {
     on ? session.run(configuration) : session.pause()
+  }
+
+  func sessionShouldAttemptRelocalization(_ session: ARSession) -> Bool { true }
+
+  /// When relocalizing began, to give up on it: Apple says it may never succeed away from where it was. Only touched
+  /// on ARKit's delegate queue.
+  private var relocalizing: Date?
+
+  /// Starts over once relocalizing has gone on 8 s; it then initializes, which `Game` takes as a new world.
+  private func giveUpRelocalizing(_ camera: ARCamera) {
+    guard case .limited(.relocalizing) = camera.trackingState else { return relocalizing = nil }
+    let since = relocalizing ?? .now
+    relocalizing = since
+    if Date.now.timeIntervalSince(since) > 8 {
+      relocalizing = nil
+      session.run(configuration, options: .resetTracking)
+    }
   }
 
   /// Where the camera is now, for drawing between reads; no plane, since only the read frame's is used.
@@ -92,6 +110,7 @@ nonisolated final class Camera: NSObject, ARSessionDelegate, @unchecked Sendable
 
   /// Copies what's needed out of each frame, since holding an ARFrame stalls the session.
   func session(_ session: ARSession, didUpdate frame: ARFrame) {
+    giveUpRelocalizing(frame.camera)
     guard Date().timeIntervalSince(last) > 0.2 else { return }
     let image = CIImage(cvPixelBuffer: frame.capturedImage).oriented(.right)
     guard let upright = context.createCGImage(image, from: image.extent) else { return }

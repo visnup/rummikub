@@ -119,9 +119,10 @@ import UniformTypeIdentifiers
   var scene = Scene(table: [], rack: [])
   var plays = [Play]()
   var choice = 0
-  /// Whether the player has laid down their first 30 points, after which they may play on the table.
-  var opened = true {
-    didSet { if opened != oldValue, !locked.isEmpty { Task { await solve() } } }
+  /// Whether I've laid down my first 30 points, after which I may play on the table: off at a new game, on once an
+  /// opening is finished. Kept across launches, as a game outlasts one.
+  var opened = UserDefaults.standard.bool(forKey: "opened") {
+    didSet { UserDefaults.standard.set(opened, forKey: "opened") }
   }
   /// The step shown, or nil before starting a play. While stepping, new readings don't re-solve.
   var step: Int?
@@ -305,13 +306,27 @@ import UniformTypeIdentifiers
     await solve()
   }
 
+  /// Forgets the table and rack, and that 30 was laid down.
+  func newGame() {
+    scene = Scene(table: [], rack: [])
+    plays = []
+    choice = 0
+    step = nil
+    opened = false
+    locked = []
+    readings = [:]
+    steadySince = [:]
+    changedSince = [:]
+    world = World()
+  }
+
   /// Whether a locked part has read differently for three seconds, as after someone's turn.
   func changed(_ part: Looking) -> Bool { changedSince[part].map { Date.now.timeIntervalSince($0) >= 3 } ?? false }
 
-  /// Scans a part again, from scratch.
   /// Forgets where every tile was, as ARKit starts over: the parts keep their tiles, not their places.
   func restart() { world = World() }
 
+  /// Scans a part again, from scratch.
   func rescan(_ part: Looking) {
     locked.remove(part)
     readings[part] = nil
@@ -444,6 +459,10 @@ import UniformTypeIdentifiers
     line.removeValue(forKey: "planes")
     line["time"] = Date.now.timeIntervalSince1970
     line["looking"] = looking.rawValue
+    // What the app showed going into this frame, to tell what went wrong from what the world table had.
+    line["locked"] = locked.map(\.rawValue).sorted()
+    line["shown"] = ["table": scene.tableTiles.map { $0.map(\.description).joined(separator: " ") },
+                     "rack": scene.rackTiles.map(\.description)]
     line["mask"] = ar.mask.map { mask in
       let small = mask.shrunk(by: 4)
       return ["width": small.width, "height": small.height, "bytes": Data(small.bytes).base64EncodedString()] as [String: Any]

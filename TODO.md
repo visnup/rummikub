@@ -1,10 +1,25 @@
 # TODO
 
+## The game as designed
+
+The flow in "Design" in `CLAUDE.md`, in order. Each step ships on its own.
+
+Done: whether 30 is laid down follows the game, and "New game" is in a menu (2026-11-13).
+
+2. **A scan proposes, the state decides.** A scan's table and rack are taken only when consistent with the last
+   state: the table all valid melds, holding every tile it had; at most two of a tile in all; the rack as it was, or
+   with the one tile drawn. Tiles that break this are dropped (phantoms, a rack tile seen as the table's). Once a
+   consistent state holds steady, back to the Solver on its own.
+3. **Table and rack in one view.** With the rules above, a tile in no valid meld and in my rack is the rack's;
+   positions and Values' rack odds decide the rest. Replay the 2026-11-13 reports (`Captures/unlabeled/*.jsonl`)
+   with `swift run world` to check.
+4. **No moves.** "No moves. Draw a tile." with a button to the rack scanner, which looks for exactly one new tile.
+5. **Steps on the Board only.** Drop the AR marks and the camera advancing steps; a tap moves to the next step.
+6. **A real game**, reporting (long press on the Board) whenever it goes wrong.
+7. Then drop the non-AR path and `Looking`.
+
 ## Next
 
-- **A real game on the phone**: scan the table and rack, let both lock, step through a play and Finish, once without
-  AR and once with it, recording. Nothing has tested the whole loop on the 2026-11-12 models, the "Laid down 30"
-  switch, or `World.melds` outside a replay.
 - **Speed.** A frame took about 150 ms to find and 20–90 ms to read on the phone (2026-11-09). Since then a frame's
   boxes go to Values in one call, and the app skips the squares when the whole frame finds only tiles 80 px or more
   (a fifth fewer regions in `score`). Time both with `make timing`.
@@ -55,12 +70,7 @@ otherwise, won't help; only a tighter relaxation will, like cuts.
 
 ## App
 
-- Rack steps show only the target while looking at the table, and only the tile to pick up while looking at the
-  rack.
-- A flat diagram of the finished table for plays that rebuild most of it (see "Design" in `CLAUDE.md`). Comes free
-  with step 4 below.
-- "Laid down 30" starts on at every launch, so a new game means switching it off by hand. It could be part of a
-  "New game" button that also clears the table.
+- A flat diagram of the finished table for plays that rebuild most of it (see "Design" in `CLAUDE.md`).
 
 ## ARKit throughout
 

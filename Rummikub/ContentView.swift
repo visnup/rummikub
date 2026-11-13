@@ -331,7 +331,15 @@ struct ContentView: View {
         Text("\(melds) isn't a meld. Tap the table to scan it again.").font(.callout)
           .frame(maxWidth: .infinity, alignment: .leading)
       }
-      Toggle("Laid down 30", isOn: $game.opened).font(.callout)
+      HStack {
+        if !game.opened { Text("Lay down 30 to open").font(.callout).foregroundStyle(.secondary) }
+        Spacer()
+        Menu {
+          Button("New game", systemImage: "arrow.counterclockwise", role: .destructive) { game.newGame() }
+        } label: {
+          Image(systemName: "ellipsis.circle").frame(minWidth: 44, minHeight: 32)
+        }
+      }
       ForEach(Array(game.plays.enumerated()), id: \.offset) { i, play in
         Button {
           game.choice = i

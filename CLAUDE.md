@@ -247,10 +247,24 @@ rearrangements. What we settled on:
 - Disruption is part of the solver's objective, not an afterthought: among plays that place as many tiles, prefer
   the one that moves the fewest table tiles.
 - Offer the trade-off, not one answer: "Place 3, move 0" … "Place 7, move 4". Turns are often timed.
-- A play is a numbered list of steps ("Step 2 of 5"), shown one at a time over the camera: the tile to pick up, an
-  arrow, and a ghost where it goes. The camera advances them as it sees each done, and can catch a wrong move.
+- A play is a numbered list of steps ("Step 2 of 5"), shown one at a time on the Board, not over the camera: the
+  tile to pick up, an arrow, and a ghost where it goes. Finish takes the play's result as the table and the placed
+  tiles off the rack, with no rescan.
 - Not built yet: for a rebuild of most of the table, a flat diagram of the finished table, each meld marked kept,
-  changed or new, may beat step-by-step AR.
+  changed or new, may beat step-by-step.
+
+How a game goes, as settled on 2026-11-13 (`TODO.md` has what's built of it):
+
+- The app tracks the table and my rack, not the other players' racks. The table changes as they lay down.
+- A game starts needing 30 laid down, so the first plays offered are openings; once one is finished, the app knows.
+  No switch on screen. "New game" resets that and forgets the table and rack, a tap or two away, since it's rare.
+- The camera is input only. Whenever it's up, ARKit takes in everything in view, the table and my rack at once, told
+  apart by where they are and what the game allows. Once it holds a whole, consistent state it goes back to the
+  Solver and stays there.
+- The game rules out what vision gets wrong: between turns the table is only valid melds; there are two of each
+  tile and two jokers; my rack changes only by what I play or draw; and other players only add to the table, so it
+  never loses a tile between my turns. A read that breaks these is a phantom, a misread or a tile on the wrong part.
+- With no play: "No moves. Draw a tile." and a button that opens the rack scanner to find the one new tile.
 
 ## Testing
 
@@ -305,7 +319,7 @@ Moves are counted in `plan`: old and new melds pair up greedily by overlap, and 
 other than its old meld's partner has moved. "Kept" only steers toward the same thing, so `solve` re-filters the
 front by real moves.
 
-Before a player has laid down 30 points (`opened: false`, the Solver's "Laid down 30" switch, which Finish turns
-on), `opening` picks melds from the rack alone worth 30 or more, placing the most tiles, by a smaller integer program
+Before a player has laid down 30 points (`opened: false`: from "New game", in the Solver's
+⋯ menu, until an opening is finished; kept across launches), `opening` picks melds from the rack alone worth 30 or more, placing the most tiles, by a smaller integer program
 over the templates in the rack. A joker counts as the tile it stands for, its meld laid out for the most points
 (`worth`). The table stays as it is.

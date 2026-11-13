@@ -136,8 +136,8 @@ struct ContentView: View {
         for await frame in camera.frames { await game.see(frame.image, ar: frame.pose == nil ? nil : frame) }
       } else {
         // No camera, as in the simulator: replay an AR recording at its pace, over and over.
-        while !Task.isCancelled {
-          for (f, next) in zip(Replay.frames, Replay.frames.dropFirst() + [Replay.frames[0]]) where !Task.isCancelled {
+        while !Task.isCancelled, let first = Replay.frames.first {
+          for (f, next) in zip(Replay.frames, Replay.frames.dropFirst() + [first]) where !Task.isCancelled {
             if tab == 0 || !game.onBoard {
               game.looking = f.looking
               await game.see(f.frame.image, ar: f.frame, read: f.read)

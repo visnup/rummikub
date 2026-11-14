@@ -358,10 +358,10 @@ function crops() {
 function crop(t, i) {
   const c = document.createElement("canvas"), g = c.getContext("2d"), [x, y, w, h] = t.frame, turns = t.turns || 0;
   c.width = 60; c.height = 80;
-  const k = Math.min(c.width / (turns % 2 ? h : w), c.height / (turns % 2 ? w : h));
+  const [dw, dh] = turns % 2 ? [c.height, c.width] : [c.width, c.height];
   g.translate(c.width / 2, c.height / 2);
   g.rotate(turns * Math.PI / 2);
-  g.drawImage(image, x, y, w, h, -w * k / 2, -h * k / 2, w * k, h * k);
+  g.drawImage(image, x, y, w, h, -dw / 2, -dh / 2, dw, dh);
   c.className = (t.confirmed ? "confirmed" : "") + (i === selected ? " selected" : "") + (t.rack ? " rack" : "");
   c.title = label(t);
   c.onclick = () => { selected = i; many.clear(); typed = ""; zoomTo(t.frame); };

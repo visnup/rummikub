@@ -49,7 +49,7 @@
         misread: a.misread + b.misread, unread: a.unread + b.unread, phantomRead: a.phantomRead + b.phantomRead)
     }
   }
-  var total = Score()
+  var total = Score(), byKind = [String: Score]()
   /// Each value's confirmed tiles in scope, and how many the finder missed, Values misread (and as what) or left
   /// unread, for the labeler's values page.
   struct PerTile: Encodable {
@@ -61,7 +61,7 @@
   /// Of the captures with rack tiles marked, the rack's tiles, those Values says are on a rack, and the table's it
   /// says are too.
   var rackTiles = 0, rackKept = 0, tableKept = 0
-  for name in done.filter { Finder.isHeldOut($0, in: captures) }.sorted() {
+  for name in done.filter({ Finder.isHeldOut($0, in: captures) }).sorted() {
     let labels = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
       as! [[String: Any]]
     let truth = labels.map { CGRect(xywh: $0["frame"] as! [Double]) }
@@ -155,8 +155,14 @@
     }
     print(([name] + s.columns.map(String.init)).joined(separator: "\t"))
     total += s
+    byKind[Finder.recording(name, in: captures) == nil ? "single" : "recording", default: Score()] += s
   }
   print((["total"] + total.columns.map(String.init)).joined(separator: "\t"))
+  // Training draws a recording's many frames of one table, so a model fitting those tables reads recordings better
+  // than single captures here.
+  for (kind, s) in byKind.sorted(by: { $0.key < $1.key }) {
+    print(([kind] + s.columns.map(String.init)).joined(separator: "\t"))
+  }
   print("regions", regions, "in", frames, "frames")
   if rackTiles > 0 { print("rack tiles", "\(rackKept)/\(rackTiles) on a rack, +\(tableKept) table", separator: "\t") }
   // Only for the models the app has, not one being compared.

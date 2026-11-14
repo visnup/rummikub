@@ -131,7 +131,7 @@ if __name__ == "__main__":
     counts = [max(1, sum(s == k for *_, s in train)) for k in (0, 1)]
     stood = torch.nn.CrossEntropyLoss(weight=torch.tensor([1 / c for c in counts]).to(device) * sum(counts) / 2,
                                       label_smoothing=0.05, ignore_index=-1)
-    start, total, epoch = time.time(), float(os.environ.get("MINUTES", 5)) * 60, 0
+    start, total, epoch, best = time.time(), float(os.environ.get("MINUTES", 5)) * 60, 0, (0, 0)
     while time.time() - start < total:
         for x, tile, turn, stand in loader:
             for g in optimizer.param_groups:
@@ -153,6 +153,10 @@ if __name__ == "__main__":
         racks = [a for a, d in known if d == 1]
         print(f"epoch {epoch} {time.time() - start:.0f}s: held out, {right} of {len(test)} tiles right, {turned} orientations, "
               f"{sum(a == d for a, d in known)} of {len(known)} rack or table ({sum(racks)} of {len(racks)} rack)", flush=True)
+        best = max(best, (right, epoch))
+    # Held out falling from its peak is overfitting.
+    if best[0] > right:
+        print(f"overfitting? held out peaked at {best[0]} in epoch {best[1]}, ended at {right}")
 
     outside = sorted((crops / "outside").glob("*/*.jpg"))
     _, k, _ = predict(model, [to_tensor(Image.open(p).convert("RGB")) for p in outside], device)

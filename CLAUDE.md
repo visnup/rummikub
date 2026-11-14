@@ -147,7 +147,11 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     row by row finds them faster than the page does: 13 such captures were fixed that way on 2026-11-07.
   - `make check` runs the `check` tool, which writes `Captures/.check.json`: for every done capture, training ones
     too, the boxes the finder misses, the boxes it finds that have none, and confirmed values `Values` reads as another
-    tile at least .8 sure. It takes 22 s for 194 captures, four at a time; one at a time took 31 s. `make train` reruns it, and `make watch` runs `check --new`
+    tile at least .8 sure. It takes 22 s for 194 captures, four at a time; one at a time took 31 s. It ends with the
+    overfitting checks: each rate for training and held-out, recordings and single captures. On 2026-11-14 the finder
+    missed 0.27–0.37% everywhere, and `Values` flagged 0.04% and 0.12% of training values against 0.35% and 0.58%
+    held out, single and recordings. `score` splits its totals the same way, and `values.py` says if held out fell
+    from its peak by the last epoch. `make train` reruns it, and `make watch` runs `check --new`
     on captures newly done (those not in `.check.done`). Clicking the boxes header steps to "to check first", which lists those captures fewest first (the
     other headers sort by their column), and
     marks each spot, which `n` zooms to in turn; Enter there records the capture in `Captures/checked.txt`. On 2026-11-08 it flagged 120 of

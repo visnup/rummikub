@@ -33,6 +33,7 @@
   nonisolated(unsafe) var out =
     new ? (try? JSONSerialization.jsonObject(with: Data(contentsOf: outURL))) as? [String: Any] ?? [:] : [:]
   nonisolated(unsafe) var n = 0
+  nonisolated(unsafe) var sizes = [String: (boxes: Int, confirmed: Int)]()
   let lock = NSLock()
   print("checked", "#", "missed", "extra", "values", separator: "\t")
   // Each worker its own models, since a Vision request isn't safe to share.
@@ -80,6 +81,7 @@
       out[name] = !left.isEmpty || !extra.isEmpty || !misread.isEmpty
         ? ["missed": left.map { array(truth[$0]) }, "extra": extra, "values": misread] : nil
       n += 1
+      sizes[name] = (truth.count { Finder.inScope($0, width: image.width, height: image.height) }, confirmed.count)
       let id = ids[String(name.split(separator: "/").last!)].map { "#\($0)" } ?? name
       print("\(n)/\(todo.count)", id, left.count, extra.count, misread.count, separator: "\t")
     }
@@ -95,6 +97,24 @@
     let flags = names.compactMap { out[$0] as? [String: [Any]] }
     let sum = { (key: String) in flags.reduce(0) { $0 + $1[key]!.count } }
     print(tag, names.count, flags.count, sum("missed"), sum("extra"), sum("values"), separator: "\t")
+  }
+  // Overfitting shows as training captures flagged far less than held-out ones, and recordings, many frames of one
+  // table, less than single captures. Values learns most training labels, so its gap is expected.
+  if !new {
+    print("\nsplit", "captures", "boxes", "missed %", "extra %", "confirmed", "values %", separator: "\t")
+    let split = Dictionary(grouping: done) { name in
+      (Finder.isHeldOut(name, in: captures) ? "held out " : "training ")
+        + (Finder.recording(name, in: captures) == nil ? "single" : "recording")
+    }
+    for (kind, names) in split.sorted(by: { $0.key < $1.key }) {
+      let flags = names.compactMap { out[$0] as? [String: [Any]] }
+      let sum = { (key: String) in Double(flags.reduce(0) { $0 + $1[key]!.count }) }
+      let boxes = Double(names.reduce(0) { $0 + sizes[$1]!.boxes })
+      let confirmed = Double(names.reduce(0) { $0 + sizes[$1]!.confirmed })
+      print(kind, names.count, Int(boxes), String(format: "%.2f", 100 * sum("missed") / boxes),
+        String(format: "%.2f", 100 * sum("extra") / boxes), Int(confirmed),
+        String(format: "%.2f", 100 * sum("values") / confirmed), separator: "\t")
+    }
   }
   try JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys]).write(to: outURL)
   try (checked.union(todo).sorted().joined(separator: "\n") + "\n").write(to: checkedURL, atomically: true, encoding: .utf8)

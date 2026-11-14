@@ -40,12 +40,8 @@ watch:
 	  RummikubKit/.build/release/fill --new $(dir); \
 	  RummikubKit/.build/release/check --new $(dir) > /dev/null; RummikubKit/.build/release/words $(dir); sleep 30; done
 
-# Copies the app's per-frame timing logs, one a launch, every time, since they grow, then sums them up.
+# Sums up the app's per-frame timing logs, one a launch, which it pushes to the labeler with its captures.
 timing:
-	mkdir -p Timing
-	xcrun devicectl device info files $(files) --json-output Timing/.files.json > /dev/null
-	jq -r '.result.files[].relativePath | select(startswith("Documents/timing/") and endswith(".csv"))' Timing/.files.json | \
-	  while read f; do xcrun devicectl device copy from $(files) --source "$$f" --destination "Timing/$${f##*/}" > /dev/null; done
 	tail -qn +2 Timing/*.csv | awk -F, '{ r += $$3; f += $$4; n++; if ($$3 > rm) rm = $$3; if ($$4 > fm) fm = $$4 } \
 	  END { printf "%d frames: read %.0f ms (max %d), find %.0f ms (max %d)\n", n, r / n, rm, f / n, fm }'
 

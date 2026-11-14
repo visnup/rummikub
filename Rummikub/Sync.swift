@@ -23,6 +23,7 @@ enum Sync {
     for stray in Set(all).subtracting(files).subtracting(["timing", "recording"]) {
       try? FileManager.default.removeItem(at: documents.appending(path: stray))
     }
+    await timing()
     var left = files.filter { $0.hasSuffix(".png") }.count
     for file in files {
       let url = documents.appending(path: file)
@@ -38,5 +39,21 @@ enum Sync {
       if file.hasSuffix(".png") { left -= 1 }
     }
     return 0
+  }
+
+  /// Sends every launch's timing log for `make timing`, and deletes all but this launch's, which is still growing
+  /// and goes again whole next time.
+  private static func timing() async {
+    let directory = URL.documentsDirectory.appending(path: "timing")
+    let files = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).sorted()
+    for file in files {
+      var request = URLRequest(url: labeler.deletingLastPathComponent().appending(path: "timing/\(file)"), timeoutInterval: 60)
+      request.httpMethod = "PUT"
+      guard let data = try? Data(contentsOf: directory.appending(path: file)),
+        let (_, response) = try? await URLSession.shared.upload(for: request, from: data),
+        (response as? HTTPURLResponse)?.statusCode == 200
+      else { return }
+      if file != files.last { try? FileManager.default.removeItem(at: directory.appending(path: file)) }
+    }
   }
 }

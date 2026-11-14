@@ -235,7 +235,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     every display frame where the camera is now, each box's bottom edge held to the table (`Pose.follow`). Captures
     record the pose, planes and footprints under `ar`. On the Duo ARKit has no LiDAR and tracks only with the wide
     lens, at 1920×1080 here to match the models.
-  - Each frame's read and find times go to `Documents/timing/`, a file a launch, for `make timing`.
+  - Each frame's read and find times go to `Documents/timing/`, a file a launch, pushed whole with the captures to
+    `Timing/` on the Mac, for `make timing`.
   `make` builds it and installs it on the phone (an iPhone named Yam); `make sim`
   builds the Simulator's; `make test` runs the package's tests.
 
@@ -287,7 +288,7 @@ How a game goes, as settled on 2026-11-13 (`TODO.md` has what's built of it):
 
   They land in `Captures/`, which git ignores since they're hundreds of MB. By cable, `make captures` copies them
   one file at a time, since `devicectl device copy from` with `--source Documents` copies nothing, and skips the
-  per-frame timing logs, which `make timing` pulls into `Timing/`. Captures whose truth isn't written yet go in
+  per-frame timing logs. Captures whose truth isn't written yet go in
   `Captures/unlabeled/`; both paths move new "As read" ones there. `make upload` sends them to the Hugging Face dataset
   `visnup/rummikub-captures`, private for now and meant to go public. So before uploading, drop any capture that
   shows readable personal text, like messages on a screen; a screen in frame is fine otherwise.

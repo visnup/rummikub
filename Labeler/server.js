@@ -235,6 +235,14 @@ async function api(req, res, path, query) {
     }
     return json(res, { deleted: name });
   }
+  // A launch's timing log, pushed whole each time while it grows, for `make timing`.
+  if (method === "PUT" && path.startsWith("/api/timing/")) {
+    const name = rest("/api/timing/");
+    if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\.csv$/.test(name)) return fail(res, 400);
+    mkdirSync(join(captures, "../Timing"), { recursive: true });
+    writeFileSync(join(captures, "../Timing", name), await body(req));
+    return json(res, { saved: name });
+  }
   // A capture file pushed from the app, or a recording's log (.jsonl). One already here is kept. Once a capture's photo arrives, after its notes, an
   // "As read" one goes to unlabeled/ until its truth is written.
   if (method === "PUT" && path.startsWith("/api/capture/")) {

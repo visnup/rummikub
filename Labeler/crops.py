@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from held import held
+from held import held, weights
 
 captures, out = Path(sys.argv[1]), Path(sys.argv[2])
 outside = [Path(p) for p in sys.argv[3:]]
@@ -33,11 +33,11 @@ def save(image, kind, tile, name):
 
 for kind in ("upright", "outside"):
     shutil.rmtree(out / kind, ignore_errors=True)
-# Whether each crop stands on a rack or lies on the table, as marked in every capture.
+# Whether each crop stands on a rack or lies on the table, as marked in every capture, and how often to draw it.
 stands = []
-for name in (captures / "boxed.txt").read_text().split():
-    if held(name):
-        continue
+names = [n for n in (captures / "boxed.txt").read_text().split() if not held(captures, n)]
+weight = weights(captures, names)
+for name in names:
     tiles = [t for t in json.loads((captures / f"{name}.tiles.json").read_text()) if t.get("confirmed") and t.get("tile", "?") != "?"]
     image = Image.open(captures / f"{name}.png").convert("RGB") if tiles else None
     for i, t in enumerate(tiles):
@@ -46,7 +46,7 @@ for name in (captures / "boxed.txt").read_text().split():
             continue
         key = f"{name.replace('/', '-')}-{i}"
         save(upright, "upright", t["tile"], key)
-        stands.append(f"{t['tile']}/{key}.jpg\t{'rack' if t.get('rack') else 'table'}\n")
+        stands.append(f"{t['tile']}/{key}.jpg\t{'rack' if t.get('rack') else 'table'}\t{weight[name]:.4f}\n")
 (out / "stands.tsv").write_text("".join(stands))
 for folder in outside:
     for labels in sorted(folder.glob("*.tiles.json")):

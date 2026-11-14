@@ -55,7 +55,7 @@
 <details id="keys"><summary>Keys</summary><div>
   Every tile needs a box and nothing else does. Click empty space to add a box the size of those nearby, or drag to
   draw one; drag a box to move it, its corner to resize. Click a box to select it, shift-drag around several to select
-  them, cmd-click to add or remove one, or <kbd>a</kbd> to select every unconfirmed one. Type a tile (<kbd>r12</kbd>, <kbd>j</kbd>) and
+  them, cmd-click to add or remove one, or <kbd>a</kbd> to select every unconfirmed one, or every one once all are confirmed. Type a tile (<kbd>r12</kbd>, <kbd>j</kbd>) and
   <kbd>Enter</kbd> to set and confirm it, <kbd>?</kbd> for one you can't read, or just <kbd>Enter</kbd> to confirm what it shows; one box then goes on to
   the next unconfirmed, unless it's <kbd>⇧Enter</kbd>. <kbd>←</kbd><kbd>→</kbd> turn its orientation, <kbd>x</kbd> toggles it between the table and a rack (dashed violet), <kbd>⌫</kbd> deletes it, <kbd>Esc</kbd>
   selects none. With nothing selected, <kbd>Enter</kbd> marks the capture done and opens the next, <kbd>u</kbd>
@@ -133,6 +133,7 @@ const sorts = {
   missed: ["most missed", most("missed")],
   extra: ["most extra", most("extra")],
   values: ["most values read otherwise", most("values")],
+  racks: ["most rack boxes", (a, b) => b.racks - a.racks],
 };
 /** Indices in the order listed. */
 const order = () => [...captures.keys()].sort((i, j) => (sorts[sortBy] ?? sorts[""])[1](captures[i], captures[j]));
@@ -169,7 +170,7 @@ let listed = "";
  * 40 ms draw, on every mouse move of a drag. */
 function list() {
   const c = captures[current];
-  const key = JSON.stringify([current, sortBy, captures.length, c.boxes, c.boxed, c.checked, c.truth?.length]);
+  const key = JSON.stringify([current, sortBy, captures.length, c.boxes, c.racks, c.confirmed, c.boxed, c.checked, c.truth?.length]);
   if (key === listed) return;
   listed = key;
   const row = i => {
@@ -179,14 +180,14 @@ function list() {
     const k = kind => `<td class="n k ${c.checked ? "" : "dispute"}">${c.boxed && c.check ? c.check[kind].length || "" : ""}</td>`;
     tr.innerHTML = `<td class="n">${c.id}</td><td title="${c.tags.join(" ")}"><small>${c.tags.map(t => t[0]).join("")}</small></td>` +
       `<td class="n"><small>${at}</small></td>${k("missed")}${k("extra")}${k("values")}` +
-      `<td class="n ${c.boxed ? "done" : ""}">${c.boxed ? "✓ " : ""}${c.boxes}/${c.truth ? c.truth.length : "?"}</td>`;
+      `<td class="n" title="${c.confirmed} of ${c.boxes} boxes confirmed${c.truth ? `, ${c.truth.length} tiles in the truth` : ""}${c.boxed ? ", capture done" : ""}">${c.boxed ? `<span class="done">✓</span> ` : ""}${c.confirmed}/${c.boxes}</td><td class="n">${c.racks || ""}</td>`;
     tr.onclick = () => open(i);
     return tr;
   };
   const days = indices => indices.flatMap((i, n) => {
     if (n > 0 && day(captures[indices[n - 1]]) === day(captures[i])) return [row(i)];
     const h = document.createElement("tr");
-    h.innerHTML = `<th colspan="7">${day(captures[i])}</th>`;
+    h.innerHTML = `<th colspan="8">${day(captures[i])}</th>`;
     return [h, row(i)];
   });
   const table = document.createElement("table");
@@ -207,7 +208,8 @@ function list() {
   head.append(header("#", [""]), header("", [""]), header("", [""]),
     header("miss", ["missed", ""], "boxes the finder misses"), header("extra", ["extra", ""], "boxes the finder finds that have none"),
     header("val", ["values", ""], "values read otherwise"),
-    header("boxes", ["pending", "check", "done", ""], `${stages[0]} pending, ${stages[1]} to check, ${stages[2]} done`));
+    header("boxes", ["pending", "check", "done", ""], `${stages[0]} pending, ${stages[1]} to check, ${stages[2]} done`),
+    header("rack", ["racks", ""], "boxes on a rack"));
   table.createTHead().append(head);
   const o = order();
   const body = document.createElement("tbody");
@@ -219,6 +221,8 @@ function list() {
 function summary() {
   const c = captures[current];
   c.boxes = tiles.length;
+  c.racks = tiles.filter(t => t.rack).length;
+  c.confirmed = tiles.filter(t => t.confirmed).length;
   document.getElementById("name").innerHTML = `#${c.id} · ${day(c)} ${time(c)} <small>${c.name}</small>`;
   layoutEl.value = c.layout ?? "As read";
   document.getElementById("count").textContent = `${tiles.length} boxes${c.truth ? ` for ${c.truth.length} tiles` : ""}${c.boxed ? ", done" : ""}`;
@@ -537,7 +541,9 @@ window.onkeydown = e => {
     for (const t of marked) on ? t.rack = true : delete t.rack;
     save();
   } else if (e.key === "a" && !typed) {
-    selected = null; many = new Set(tiles.flatMap((t, i) => t.confirmed ? [] : [i]));
+    // Every unconfirmed box, or every box once all are confirmed, as on a done capture.
+    const open = tiles.flatMap((t, i) => t.confirmed ? [] : [i]);
+    selected = null; many = new Set(open.length ? open : tiles.keys());
   } else if (e.key === "Tab") selectNext(e.shiftKey ? -1 : 1);
   else if ((e.key === "n" || e.key === "N") && !typed) return nextMark(e.key === "n" ? 1 : -1);
   else if (e.key === "u" && !typed) return unmark();

@@ -61,7 +61,7 @@
   /// Of the captures with rack tiles marked, the rack's tiles, those Values says are on a rack, and the table's it
   /// says are too.
   var rackTiles = 0, rackKept = 0, tableKept = 0
-  for name in done.filter(Finder.isHeldOut).sorted() {
+  for name in done.filter { Finder.isHeldOut($0, in: captures) }.sorted() {
     let labels = try JSONSerialization.jsonObject(with: Data(contentsOf: captures.appending(path: name + ".tiles.json")))
       as! [[String: Any]]
     let truth = labels.map { CGRect(xywh: $0["frame"] as! [Double]) }

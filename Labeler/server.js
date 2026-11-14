@@ -67,7 +67,7 @@ function summary(png, number, check, done, looked) {
   const name = nameOf(png), tiles = readJSON(without(png, ".png") + ".tiles.json", []), notes = info(png);
   return {
     id: number, name, truth: truth(png), layout: notes.layout ?? null,
-    tags: (notes.notes || "").split(/\s+/).filter(Boolean), boxes: tiles.length, boxed: done.has(name),
+    tags: (notes.notes || "").split(/\s+/).filter(Boolean), boxes: tiles.length, racks: tiles.filter(t => t.rack).length, confirmed: tiles.filter(t => t.confirmed).length, boxed: done.has(name),
     check: check[name] ?? null, checked: looked.has(name), modified: statSync(png).mtimeMs / 1000,
   };
 }

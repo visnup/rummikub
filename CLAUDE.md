@@ -94,8 +94,10 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
   `.tiles.json`, and the Python that trains on them. `held.py` is `Finder.isHeldOut` for the Python.
   - `finder.py` trains the finder: D-FINE small (Apache 2.0) from COCO, one "tile" class at 640 px, on random
     squares of the done captures (listed in `Captures/boxed.txt`) and the outside sets, at random quarter turns. It
-    never trains on held-out captures (`Finder.isHeldOut`, a fifth of them by a hash of the name, so finishing more
-    never moves one in or out). It runs `MINUTES` (60) on the Mac's GPU, then converts to
+    never trains on held-out captures (`Finder.isHeldOut`, a fifth of them by a hash of the name of the recording
+    they were taken during, else their own, so finishing more never moves one in or out, and a recording's frames,
+    the same tiles 2 s apart, never land on both sides; since 2026-11-14, so scores before then don't compare). A
+    recording's n frames are each drawn 1/√n as often, here and in `Values`, so its 33 count as about 6. It runs `MINUTES` (60) on the Mac's GPU, then converts to
     `Captures/Tiles-new.mlpackage`, swapping out three parts coremltools 9.0 can't convert. `make finder` runs it
     and scores it beside the kept `Tiles.mlpackage`, which the app, prelabeling, `check` and `score` go on using
     until `make keep-finder` swaps it in and copies it to `Rummikub/`, since most runs don't beat the last; `make

@@ -30,9 +30,11 @@ SIZE = 128
 tiles = sorted(p.name for p in (crops / "upright").iterdir())
 index = {t: i for i, t in enumerate(tiles)}
 # 1 stands on a rack, 0 lies on the table, -1 unknown and left out of that loss.
-stands = dict(line.split("\t") for line in (crops / "stands.tsv").read_text().splitlines()) if (crops / "stands.tsv").exists() else {}
-train = [(p, index[p.parent.name], {"rack": 1, "table": 0}.get(stands.get(f"{p.parent.name}/{p.name}"), -1))
+# Outside crops have no line, and are drawn as often as one capture's.
+stands = {path: (stand, float(w)) for path, stand, w in (line.split("\t") for line in (crops / "stands.tsv").read_text().splitlines())}
+train = [(p, index[p.parent.name], {"rack": 1, "table": 0}.get(stands.get(f"{p.parent.name}/{p.name}", ("",))[0], -1))
          for p in (crops / "upright").glob("*/*.jpg")]
+drawn = [stands.get(f"{p.parent.name}/{p.name}", (None, 1.0))[1] for p, *_ in train]
 jitter = v2.Compose([
     v2.RandomResizedCrop(SIZE, scale=(0.8, 1), ratio=(0.8, 1.25)),
     v2.ColorJitter(0.3, 0.3, 0.3, 0.03),
@@ -74,7 +76,7 @@ class Values(torch.nn.Module):
 def held_out():
     test = []
     for name in (captures / "boxed.txt").read_text().split():
-        if not held(name):
+        if not held(captures, name):
             continue
         labels = [t for t in json.loads((captures / f"{name}.tiles.json").read_text())
                   if t.get("confirmed") and t.get("tile") in index]
@@ -123,7 +125,7 @@ if __name__ == "__main__":
     test = held_out()
     model = Values(weights="IMAGENET1K_V2").to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
-    loader = torch.utils.data.DataLoader(Train(), batch_size=128, shuffle=True, num_workers=8, persistent_workers=True)
+    loader = torch.utils.data.DataLoader(Train(), batch_size=128, sampler=torch.utils.data.WeightedRandomSampler(drawn, len(train)), num_workers=8, persistent_workers=True)
     loss = torch.nn.CrossEntropyLoss(label_smoothing=0.05, ignore_index=-1)
     # Table tiles outnumber the rack's several to one, and alone taught it that every tile lies flat.
     counts = [max(1, sum(s == k for *_, s in train)) for k in (0, 1)]

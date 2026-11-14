@@ -27,7 +27,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 import torch
 
-from held import held
+from held import held, weights
 from PIL import Image
 from torchvision.transforms.functional import pil_to_tensor
 
@@ -38,12 +38,14 @@ def frames(labels: Path) -> list[list[float]]:
     return [t["frame"] for t in json.loads(labels.read_text())]
 
 
-def examples(captures: Path, folders: list[Path]) -> list[tuple[Path, list[list[float]]]]:
+def examples(captures: Path, folders: list[Path]) -> list[tuple[Path, list[list[float]], float]]:
+    """Each image, its boxes, and how often to draw it."""
     done = (captures / "boxed.txt").read_text().split()
     quarters = int(os.environ.get("QUARTERS", 4))
-    names = [n for i, n in enumerate(sorted(n for n in done if not held(n))) if i % 4 < quarters]
-    ours = [(captures / f"{n}.png", frames(captures / f"{n}.tiles.json")) for n in names]
-    outside = [(jpg, frames(jpg.with_suffix(".tiles.json"))) for f in folders for jpg in sorted(f.glob("*.jpg"))]
+    names = [n for i, n in enumerate(sorted(n for n in done if not held(captures, n))) if i % 4 < quarters]
+    weight = weights(captures, names)
+    ours = [(captures / f"{n}.png", frames(captures / f"{n}.tiles.json"), weight[n]) for n in names]
+    outside = [(jpg, frames(jpg.with_suffix(".tiles.json")), 1.0) for f in folders for jpg in sorted(f.glob("*.jpg"))]
     return [e for e in ours + outside if e[1]]
 
 
@@ -54,11 +56,12 @@ class Squares(torch.utils.data.IterableDataset):
 
     def __init__(self, items):
         self.items = items
+        self.weights = [w for *_, w in items]
 
     def __iter__(self):
         rng = random.Random()
         while True:
-            path, boxes = rng.choice(self.items)
+            path, boxes, _ = rng.choices(self.items, self.weights)[0]
             try:
                 image = Image.open(path).convert("RGB")
             except FileNotFoundError:  # deleted in the labeler while training
@@ -92,7 +95,7 @@ def collate(batch):
 def train(items, checkpoint: Path, minutes: float):
     from transformers import DFineForObjectDetection
 
-    print(len(items), "images,", sum(len(b) for _, b in items), "tiles", flush=True)
+    print(len(items), "images,", sum(len(b) for _, b, _ in items), "tiles", flush=True)
     model = DFineForObjectDetection.from_pretrained(
         f"ustc-community/dfine-{os.environ.get('SIZE', 'small')}-{os.environ.get('PRETRAINED', 'coco')}", num_labels=1, id2label={0: "tile"},
         label2id={"tile": 0}, ignore_mismatched_sizes=True,

@@ -95,10 +95,14 @@ public struct Finder: @unchecked Sendable {
     return starts(height).flatMap { y in starts(width).map { x in CGRect(x: x, y: y, width: s, height: s) } }
   }
 
-  /// Whether a capture is kept out of training to score on: a fifth of them, by a hash of its name, so finishing
-  /// more captures never moves one in or out.
-  public static func isHeldOut(_ name: String) -> Bool {
-    name.utf8.reduce(14_695_981_039_346_656_037 as UInt64) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 } % 5 == 0
+  /// Whether a capture is kept out of training to score on: a fifth of them, by a hash of the name of the recording
+  /// it was taken during, else its own, so a recording's frames go together and finishing more captures never moves
+  /// one in or out.
+  public static func isHeldOut(_ name: String, in captures: URL) -> Bool {
+    let notes = (try? Data(contentsOf: captures.appending(path: name + ".json")))
+      .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+    let group = notes?["recording"] as? String ?? name
+    return group.utf8.reduce(14_695_981_039_346_656_037 as UInt64) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 } % 5 == 0
   }
 
   /// Whether a tile's box is big enough to be in scope, in an image this size.

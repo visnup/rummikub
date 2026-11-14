@@ -98,6 +98,10 @@ What was tried and dropped, so nobody repeats it.
   where tilt couldn't say (racks shot at 24–48°, tables from 35° up), and each part was voted over its last five
   frames. At the rack, boxes under .4 of the tallest (`Finder.nearest`) were the table behind it: it dropped 5 of 300
   rack tiles and kept 49 of 307 table ones. `World` and the game's rules replaced all of it.
+- **The viewing angle as an input to Values' rack head** (2026-11-14): the sine of how far below level the camera
+  looks at each box's center, from CoreMotion's gravity or ARKit's pose and the box's pixel ray, beside the image's
+  pooled features. Of 2538 held-out tiles at .41, it kept 316 of 323 rack tiles and let 50 table tiles through; the
+  same model with the angle zeroed kept 316 with 51. The image already says what the angle would.
 - **Create ML's own pre-labels**: `train` used to draw its boxes on unchecked captures. On the same held-out captures
   it found 199 of 263 tiles with 110 extras; OWLv2 with a probe found 248 with 14.
 - **OWLv2 with a linear probe as the pre-labeler** (`prelabel.py`, replaced 2026-11-08 by the finder). Frozen OWLv2 on

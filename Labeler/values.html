@@ -35,6 +35,11 @@
 import { flash, ink, label, pages, turn, typedFields } from "./common.js";
 const kinds = [..."kbor"].flatMap(c => Array.from({ length: 13 }, (_, i) => `${c}${i + 1}`)).concat("j");
 let all = [], shown = [], selected = new Set(), last = null, typed = "";
+/** The list's columns, and the one it's sorted by with its direction, 1 up or -1 down. */
+const columns = [["", "the set's order"], ["boxes", "unconfirmed of all"], ["rack", "boxes on a rack"],
+  ["held", "confirmed held-out tiles score read"], ["miss", "missed by the finder"], ["wrong", "misread by Values"],
+  ["unsure", "unread: Values not sure enough"], ["err", "missed, misread or unread, of held"]];
+let sortBy = null;
 /** A tile's ink on the page, black as the text color so it shows in dark mode. */
 const hue = tile => tile[0] === "k" ? "var(--fg)" : ink[tile[0]] ?? "inherit";
 
@@ -76,21 +81,36 @@ function nav() {
     return tr;
   };
   const table = document.createElement("table");
-  table.innerHTML = `<thead><tr><th></th><th class="n" title="unconfirmed of all">boxes</th>` +
-    `<th class="n" title="confirmed held-out tiles score read">held</th><th class="n" title="missed by the finder">miss</th>` +
-    `<th class="n" title="misread by Values">wrong</th><th class="n" title="unread: Values not sure enough">unsure</th>` +
-    `<th class="n" title="missed, misread or unread, of held">err</th></tr></thead>`;
+  const head = table.createTHead().insertRow();
+  head.append(...columns.map(([name, title], i) => {
+    const th = document.createElement("th");
+    th.textContent = name + (sortBy?.[0] === i ? (sortBy[1] > 0 ? " ▴" : " ▾") : "");
+    th.title = `${title}; click to sort`;
+    if (i) th.className = "n";
+    th.style.cursor = "pointer";
+    // Fewest first, then most, then the set's order.
+    th.onclick = () => { sortBy = sortBy?.[0] !== i ? [i, 1] : sortBy[1] > 0 ? [i, -1] : null; nav(); };
+    return th;
+  }));
   const body = table.createTBody();
   const open = unsure().length;
-  body.append(row("unsure", "Least sure", `<td class="n"><small>${open}</small></td><td colspan="5"></td>`));
+  body.append(row("unsure", "Least sure", `<td class="n"><small>${open}</small></td><td colspan="6"></td>`));
   const percent = s => {
     const wrong = s ? s.missed + s.misread + s.unread : 0;
     return wrong ? `<td class="n k dispute">${(100 * wrong / s.tiles).toFixed(1)}%</td>` : `<td class="n k"></td>`;
   };
-  for (const k of kinds) {
+  const stats = Object.fromEntries(kinds.map(k => {
+    const of = all.filter(t => t.tile === k), s = score[k];
+    return [k, [kinds.indexOf(k), of.length, of.filter(t => t.rack).length, s?.tiles ?? 0, s?.missed ?? 0,
+      s?.misread ?? 0, s?.unread ?? 0, s?.tiles ? (s.missed + s.misread + s.unread) / s.tiles : 0]];
+  }));
+  const order = sortBy ? [...kinds].sort((a, b) => sortBy[1] * (stats[a][sortBy[0]] - stats[b][sortBy[0]])) : kinds;
+  for (const k of order) {
     const of = all.filter(t => t.tile === k), left = of.filter(t => !t.confirmed).length, s = score[k];
+    const racks = of.filter(t => t.rack).length;
     const as = Object.entries(s?.readAs ?? {}).map(([t, c]) => `${t} ×${c}`).join(", ");
     body.append(row(k, k, `<td class="n"><small>${left ? `${left}/` : ""}${of.length}</small></td>` +
+      `<td class="n"><small>${racks || ""}</small></td>` +
       `<td class="n"><small>${s?.tiles ?? ""}</small></td>${n(s?.missed)}${n(s?.misread)}${n(s?.unread)}${percent(s)}`,
       as && `read as ${as}`));
   }

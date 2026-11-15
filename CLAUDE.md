@@ -84,7 +84,11 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     p(tile)·p(orientation)·p(rack) ("k6@2@rack"). The rack head learns from every capture's boxes, each marked rack
     or table in the labeler, with the table's several-to-one majority weighted down. It's 6.8 MB, and reads about 1.2 ms a
     tile on the phone (72 in 84 ms). Read at the labeled boxes, it got 2261 of 2308 held-out confirmed tiles and their orientations right on 2026-11-12; it levels off after about 3
-    minutes. Orientation matters because our 6 and 9 differ only in the logo under the numeral. The outside sets'
+    minutes. Orientation matters because our 6 and 9 differ only in the logo under the numeral. A second head reads
+    the numeral as it looks, upright or on its side, and a rack's classes take it with the orientation, since rack
+    tiles stand upright: the tile head alone read black 6s on a rack as 9s (73 rack 9s to 1 rack 6), and the numeral
+    alone, on the table too, misread 44 held-out tiles to 19. With both, on 2026-11-15, 2686 read correctly, 20
+    misread, 17 unread, and 580 of 589 rack tiles kept with 4 of the table's. The outside sets'
     orientations aren't written down, so they join at the orientation the last `Values` gives them
     (`.crops/outside.turns`), where it's .9 sure, but not their 6s and 9s. `Recognizer.turned` then reads each
     patch of touching tiles at the orientation they agree on, any direction, since a meld seen sideways runs down

@@ -6,7 +6,8 @@
 whether it stands on a rack or lies on the table: MobileNetV3 (ImageNet) at 128 px with a head for each, on
 `.crops/upright` at random orientations, for MINUTES (5) on the Mac's GPU. Prints, each epoch, the held-out confirmed
 tiles read right at their labeled boxes. Converts to `Values.mlpackage`, an image classifier whose classes are tiles
-at an orientation, on the table or a rack ("k6@2", "k6@2@rack"), each p(tile)·p(orientation)·p(rack), and
+at an orientation, on the table or a rack ("k6@2", "k6@2@rack"), each p(tile)·p(orientation)·p(table) on the table
+and p(numeral)·p(orientation)·p(rack) on a rack, and
 writes `.crops/outside.turns`, the orientation it gives each outside crop, for `crops.py`'s next run.
 uv run Labeler/values.py <captures>"""
 
@@ -29,6 +30,15 @@ crops = captures / ".crops"
 SIZE = 128
 tiles = sorted(p.name for p in (crops / "upright").iterdir())
 index = {t: i for i, t in enumerate(tiles)}
+# Our 6 is our 9 upside down but for the logo. A tile head alone read an upright black 6 on a rack as the black 9s it
+# had seen there upside down, 73 to 1, so a numeral head learns the numeral as it looks upright or on its side
+# (orientation 0 or 1), and on a rack, where tiles stand upright, the orientation says which it is. On the table the
+# numeral head misread 44 held-out tiles to the tile head's 19, mostly 6 for 9 at the wrong orientation.
+flip = [index.get(t[0] + {"6": "9", "9": "6"}.get(t[1:], t[1:]), i) for i, t in enumerate(tiles)]
+
+
+def seen(tile, turn):
+    return flip[tile] if turn >= 2 else tile
 # 1 stands on a rack, 0 lies on the table, -1 unknown and left out of that loss.
 # Outside crops have no line, and are drawn as often as one capture's.
 stands = {path: (stand, float(w)) for path, stand, w in (line.split("\t") for line in (crops / "stands.tsv").read_text().splitlines())}
@@ -52,25 +62,26 @@ class Train(torch.utils.data.Dataset):
         path, tile, stand = train[i]
         turn = random.randrange(4)
         # rotate(90·k) is counterclockwise, so k clockwise quarter turns make it upright again.
-        return to_tensor(jitter(Image.open(path).convert("RGB").rotate(90 * turn))), tile, turn, stand
+        return to_tensor(jitter(Image.open(path).convert("RGB").rotate(90 * turn))), tile, seen(tile, turn), turn, stand
 
 
 class Values(torch.nn.Module):
-    """Normalizes, as Core ML gets pixels in 0…1, and returns the tile, orientation, and table-or-rack logits."""
+    """Normalizes, as Core ML gets pixels in 0…1, and returns the tile, numeral, orientation, and table-or-rack
+    logits."""
 
     def __init__(self, weights=None):
         super().__init__()
         self.net = torchvision.models.mobilenet_v3_large(weights=weights)
         self.net.classifier = torch.nn.Sequential(
             torch.nn.Linear(self.net.classifier[0].in_features, 512), torch.nn.Hardswish(), torch.nn.Dropout(0.2),
-            torch.nn.Linear(512, len(tiles) + 4 + 2))
+            torch.nn.Linear(512, 2 * len(tiles) + 4 + 2))
         self.register_buffer("mean", mean)
         self.register_buffer("std", std)
 
     def forward(self, x):
         out = self.net((x - self.mean) / self.std)
         n = len(tiles)
-        return out[:, :n], out[:, n:n + 4], out[:, n + 4:]
+        return out[:, :n], out[:, n:2 * n], out[:, 2 * n:2 * n + 4], out[:, 2 * n + 4:]
 
 
 def held_out():
@@ -95,7 +106,7 @@ def predict(model, images, device):
     model.eval()
     out = [model(torch.stack(images[i:i + 256]).to(device)) for i in range(0, len(images), 256)]
     model.train()
-    return tuple(torch.cat([o[j] for o in out]).cpu() for j in range(3))
+    return tuple(torch.cat([o[j] for o in out]).cpu() for j in range(4))
 
 
 def convert(model):
@@ -107,8 +118,11 @@ def convert(model):
             self.model = model
 
         def forward(self, x):
-            tile, turn, stand = self.model(x)
-            joint = tile.softmax(1)[:, :, None, None] * turn.softmax(1)[:, None, :, None] * stand.softmax(1)[:, None, None, :]
+            tile, numeral, turn, stand = self.model(x)
+            p, q = tile.softmax(1), numeral.softmax(1)
+            table = p[:, :, None].expand(-1, -1, 4)
+            rack = torch.stack([q, q, q[:, flip], q[:, flip]], 2)
+            joint = torch.stack([table, rack], 3) * turn.softmax(1)[:, None, :, None] * stand.softmax(1)[:, None, None, :]
             return joint.reshape(1, -1)
 
     traced = torch.jit.trace(Joint().cpu().eval(), torch.rand(1, 3, SIZE, SIZE))
@@ -133,11 +147,11 @@ if __name__ == "__main__":
                                       label_smoothing=0.05, ignore_index=-1)
     start, total, epoch, best = time.time(), float(os.environ.get("MINUTES", 5)) * 60, 0, (0, 0)
     while time.time() - start < total:
-        for x, tile, turn, stand in loader:
+        for x, tile, numeral, turn, stand in loader:
             for g in optimizer.param_groups:
                 g["lr"] = 1e-3 * max(0.02, 1 - (time.time() - start) / total)
-            t, k, s = model(x.to(device))
-            l = loss(t, tile.to(device)) + loss(k, turn.to(device))
+            t, m, k, s = model(x.to(device))
+            l = loss(t, tile.to(device)) + loss(m, numeral.to(device)) + loss(k, turn.to(device))
             if (stand >= 0).any():
                 l = l + stood(s, stand.to(device))
             optimizer.zero_grad()
@@ -146,8 +160,10 @@ if __name__ == "__main__":
             if time.time() - start > total:
                 break
         epoch += 1
-        t, k, s = predict(model, [x for x, *_ in test], device)
-        right = sum(a == b for a, (_, b, _, _) in zip(t.argmax(1).tolist(), test))
+        t, m, k, s = predict(model, [x for x, *_ in test], device)
+        # As the app reads them: by the numeral on a rack, by the tile on the table.
+        right = sum((seen(b, c) if d else a) == tile for a, b, c, (_, tile, _, d)
+                    in zip(t.argmax(1).tolist(), m.argmax(1).tolist(), k.argmax(1).tolist(), test))
         turned = sum(a == c for a, (_, _, c, _) in zip(k.argmax(1).tolist(), test))
         known = [(a, d) for a, (*_, d) in zip(s.argmax(1).tolist(), test)]
         racks = [a for a, d in known if d == 1]
@@ -159,7 +175,7 @@ if __name__ == "__main__":
         print(f"overfitting? held out peaked at {best[0]} in epoch {best[1]}, ended at {right}")
 
     outside = sorted((crops / "outside").glob("*/*.jpg"))
-    _, k, _ = predict(model, [to_tensor(Image.open(p).convert("RGB")) for p in outside], device)
+    _, _, k, _ = predict(model, [to_tensor(Image.open(p).convert("RGB")) for p in outside], device)
     share, turn = k.softmax(1).max(1)
     with open(crops / "outside.turns", "w") as f:
         for p, t, s in zip(outside, turn.tolist(), share.tolist()):

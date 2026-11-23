@@ -299,7 +299,7 @@ struct ContentView: View {
       if !game.plays.isEmpty, game.plays.allSatisfy({ $0.placed == 0 }) {
         Text("No moves.").font(.callout).frame(maxWidth: .infinity, alignment: .leading)
       }
-      ForEach(Array(game.plays.enumerated()), id: \.offset) { i, play in
+      ForEach(Array((game.onBoard ? game.plays : []).enumerated()), id: \.offset) { i, play in
         if play.placed == 0 {
           // Placing nothing means drawing, and the rack scanner then looks for the one tile drawn.
           Button { game.draw() } label: { Text("Draw a tile").frame(maxWidth: .infinity) }

@@ -331,6 +331,7 @@ import UniformTypeIdentifiers
 
   private func scan(_ part: Area) {
     // A play's steps name tiles by where they were, so scanning drops the play.
+    plays = []
     step = nil
     if locked.contains(part) { before = scene }
     locked.remove(part)
@@ -461,8 +462,10 @@ import UniformTypeIdentifiers
   }
 
   func solve() async {
-    let table = scene.tableTiles, rack = scene.rackTiles, opened = opened
-    plays = await Task.detached { RummikubKit.solve(table: table, rack: rack, opened: opened) }.value
+    let table = scene.tableTiles, rack = scene.rackTiles, opened = opened, parts = locked
+    let solved = await Task.detached { RummikubKit.solve(table: table, rack: rack, opened: opened) }.value
+    guard table == scene.tableTiles, rack == scene.rackTiles, opened == self.opened, parts == locked else { return }
+    plays = solved
     choice = max(0, plays.count - 1)
   }
 }

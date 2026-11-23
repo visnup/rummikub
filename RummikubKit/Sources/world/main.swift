@@ -50,11 +50,8 @@ for path in CommandLine.arguments.dropFirst() {
     let reads = place.reads.sorted { $0.value > $1.value }.map { String(format: "%@ %.1f", $0.key.description, $0.value) }
       .joined(separator: " ")
     let nearest = world.places.filter { $0.id != place.id }.map { distance($0.point, place.point) }.min() ?? 0
-    // Height over width as the tile reads, upright.
-    let turned = place.turns.indices.max { place.turns[$0] < place.turns[$1] }! % 2 == 1
-    let upright = turned ? 1 / place.aspect : place.aspect
     print(String(format: "    #%-3d seen %2d  rack %.2f  tall %.2f  width %2.0f mm, %2.0f mm from the next, %2.0f mm up  %@",
-      place.id, place.seen, place.onRack ?? -1, upright, place.width * 1000, nearest * 1000, place.height * 1000,
+      place.id, place.seen, place.onRack ?? -1, place.tall, place.width * 1000, nearest * 1000, place.height * 1000,
       String(reads.prefix(30))))
   }
 }

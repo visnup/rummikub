@@ -21,18 +21,10 @@ public struct Finder: @unchecked Sendable {
     request.onCPUInSimulator()
   }
 
-  /// Boxes in top-left-origin pixels, most confident first. A box cut by a crop's edge is left to the neighboring crop
-  /// it's whole in, and one that overlaps a more confident box by over .3 (IoU) is dropped. Angled tiles' neighbors
-  /// overlap by up to .25; .1 dropped them, and .4 up let more duplicates through.
-  public func tiles(in image: CGImage) throws -> [CGRect] { try find(in: image).boxes }
-
-  /// The boxes, and how many regions it took to find them.
-  public func find(in image: CGImage) throws -> (boxes: [CGRect], regions: Int) {
-    let (found, regions) = try scored(in: image)
-    return (found.map(\.box), regions)
-  }
-
-  /// The boxes with their confidences, and how many regions it took to find them.
+  /// Boxes in top-left-origin pixels with their confidences, most confident first, and how many regions it took to
+  /// find them. A box cut by a crop's edge is left to the neighboring crop it's whole in, and one that overlaps a more
+  /// confident box by over .3 (IoU) is dropped. Angled tiles' neighbors overlap by up to .25; .1 dropped them, and .4
+  /// up let more duplicates through.
   public func scored(in image: CGImage) throws -> (found: [(box: CGRect, confidence: Float)], regions: Int) {
     let (w, h) = (image.width, image.height)
     let whole = CGRect(x: 0, y: 0, width: w, height: h)
@@ -42,7 +34,7 @@ public struct Finder: @unchecked Sendable {
     for region in [whole] + Self.crops(width: w, height: h) {
       // Decided once, after the whole image.
       if regions == 1, let enough, !found.isEmpty,
-        found.allSatisfy({ min($0.box.width, $0.box.height) * 1920 / Double(max(w, h)) >= enough })
+        found.allSatisfy({ Self.inScope($0.box, width: w, height: h, smallest: enough) })
       {
         break
       }

@@ -47,12 +47,11 @@ public struct Classifier: @unchecked Sendable {
       }
     }
     return zip(kept, read).compactMap { box, probabilities in
-      // Classes are tiles, or tiles at a turn ("k6@2"), summed over turns, and maybe on a rack ("k6@2@rack").
       var turned = [Tile: [Float]](), rack: Float?
       for (label, p) in probabilities {
         let parts = label.split(separator: "@")
         guard let tile = Tile(parts[0]) else { continue }
-        turned[tile, default: [0, 0, 0, 0]][parts.count > 1 ? Int(parts[1])! : 0] += p
+        turned[tile, default: [0, 0, 0, 0]][Int(parts[1])!] += p
         if parts.count > 2 { rack = (rack ?? 0) + p }
       }
       let odds = turned.mapValues { $0.reduce(0, +) }.filter { $0.value >= 0.001 }

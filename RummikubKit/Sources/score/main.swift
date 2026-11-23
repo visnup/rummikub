@@ -67,7 +67,8 @@
     let truth = labels.map { CGRect(xywh: $0["frame"] as! [Double]) }
     let url = captures.appending(path: name + ".png")
     let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
-    let (boxes, used) = try finder.find(in: image)
+    let (found, used) = try finder.scored(in: image)
+    let boxes = found.map(\.box)
     regions += used
     frames += 1
 

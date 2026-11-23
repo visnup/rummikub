@@ -93,7 +93,6 @@ extension Play {
     return Scene(table: table, rack: scene.rack.indices.filter { !used.contains($0) }.map { scene.rack[$0] })
   }
 
-
   /// The steps from `index` on that take tiles from the same place, the rack or one meld, to the same meld: shown and
   /// done as one, like three 6s from the rack laid down as a group.
   public func group(at index: Int) -> Range<Int> {

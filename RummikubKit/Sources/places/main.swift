@@ -53,7 +53,7 @@
     func tally() {
       guard let last else { return }
       let rack = world.parts(from: last, knowing: before).rack.map(\.frame)
-      let camera = SIMD3(last.transform.columns.3.x, last.transform.columns.3.y, last.transform.columns.3.z)
+      let camera = last.transform.position
       for (place, detection) in world.detections(from: last) {
         guard let v = votes[place.id], v.rack != v.table else { continue }
         let isRack = v.rack > v.table, byRules = rack.contains(detection.frame)
@@ -67,11 +67,10 @@
           if byRules { score.rulesTable += 1 }
         }
         let rise = world.rise(of: place, from: last), d = distance(camera, place.point)
-        let turned = place.turns.indices.max { place.turns[$0] < place.turns[$1] }! % 2 == 1
         rows.append([recording, place.tile.description, isRack ? "1" : "0", "\(place.seen)",
           String(format: "%.3f", place.onRack ?? 0), String(format: "%.4f", rise?.height ?? 0),
           String(format: "%.4f", rise?.motion ?? 0), String(format: "%.3f", d),
-          String(format: "%.3f", (camera.y - place.point.y) / d), String(format: "%.3f", turned ? 1 / place.aspect : place.aspect),
+          String(format: "%.3f", (camera.y - place.point.y) / d), String(format: "%.3f", place.tall),
           String(format: "%.4f", place.width)].joined(separator: "\t"))
       }
       votes = [:]

@@ -30,6 +30,10 @@ public struct World: Sendable {
     var rack: Float = 0, racked = 0
 
     public var tile: Tile { reads.max { ($0.value, $1.key.index) < ($1.value, $0.key.index) }!.key }
+    /// Its likeliest orientation.
+    public var turn: Int { turns.indices.max { turns[$0] < turns[$1] }! }
+    /// Height over width as the tile reads, upright.
+    public var tall: Float { turn % 2 == 1 ? 1 / aspect : aspect }
     /// Its reads as odds, for `Recognizer.valid`.
     public var odds: [Tile: Float] {
       let total = reads.values.reduce(0, +)
@@ -50,10 +54,8 @@ public struct World: Sendable {
 
     /// Where it meets `plane`, and how that point moves per metre the plane rises.
     func meets(_ plane: simd_float4x4) -> (point: SIMD3<Float>, rise: SIMD3<Float>) {
-      let normal = SIMD3(plane.columns.1.x, plane.columns.1.y, plane.columns.1.z)
-      let onPlane = SIMD3(plane.columns.3.x, plane.columns.3.y, plane.columns.3.z)
-      let facing = dot(direction, normal)
-      return (origin + dot(onPlane - origin, normal) / facing * direction, direction / facing)
+      let facing = dot(direction, plane.up)
+      return (origin + dot(plane.position - origin, plane.up) / facing * direction, direction / facing)
     }
   }
 
@@ -144,7 +146,7 @@ public struct World: Sendable {
     if let lift = Self.lift(detections, pose: found) { lifts = (lifts + [lift]).suffix(30) }
     let pose = level(found), plane = pose.plane!
     for j in places.indices { Self.settle(&places[j], on: plane) }
-    let camera = SIMD3(pose.transform.columns.3.x, pose.transform.columns.3.y, pose.transform.columns.3.z)
+    let camera = pose.transform.position
     let feet = detections.map { d -> (point: SIMD3<Float>, width: Float, axis: SIMD3<Float>, ray: Ray, rise: SIMD3<Float>)? in
       let box = d.frame
       guard let a = pose.ground(CGPoint(x: box.minX, y: box.maxY)), let b = pose.ground(CGPoint(x: box.maxX, y: box.maxY))
@@ -323,8 +325,7 @@ public struct World: Sendable {
     let axis = sure.filter(onRack).reduce(SIMD3<Float>.zero) { $0 + $1.axis }
     return sure.compactMap { place in
       box(place, from: pose).map { frame in
-        let turns = place.turns.indices.max { place.turns[$0] < place.turns[$1] }!
-        var detection = Detection(tile: place.tile, frame: frame, turns: turns, odds: place.odds, rack: place.onRack)
+        var detection = Detection(tile: place.tile, frame: frame, turns: place.turn, odds: place.odds, rack: place.onRack)
         // Every place, not only the rack's by Values: the rules move tiles it doubted onto the rack, and without a
         // place along it they went to the ends of their rows.
         if length(axis) > 0 { detection.along = dot(place.point, normalize(axis)) }

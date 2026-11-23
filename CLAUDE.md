@@ -57,7 +57,8 @@ there's nothing to do), or say how it could be, with a rough cost and saving.
     before. `swift run -c release places ../Captures` replays every recording whose captures have boxes marked by
     hand (`x` for rack) and scores rack or table against them, by Values' mean and by the rules; each marked place's
     features (height and camera motion from its rays, distance, viewing angle, box shape) go to
-    `Captures/.places.tsv`. On 2026-11-13, of 516 places, no feature but Values' mean came near separating them.  - `Render.swift`: table images and where their tiles lie, for tests, and drawing overlays onto images.
+    `Captures/.places.tsv`. On 2026-11-13, of 516 places, no feature but Values' mean came near separating them.
+  - `Render.swift`: table images and where their tiles lie, for tests, and drawing overlays onto images.
   - `score` (`make score`) runs the finder on the held-out done captures, through `Finder`: tiles found (a box
     overlapping a true one by half), then those boxes read by `Values.mlpackage` when it's beside the captures, as
     the app reads them. It takes `Captures/Tiles.mlpackage`, and counts each error by name: a tile **missed**, a

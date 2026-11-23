@@ -55,7 +55,7 @@
     let truth = labels.map { CGRect(xywh: $0["frame"] as! [Double]) }
 
     var left = Array(truth.indices), extra = [[Double]]()
-    for box in try finder.tiles(in: image) {
+    for (box, _) in try finder.scored(in: image).found {
       if let i = left.max(by: { Finder.overlap(truth[$0], box) < Finder.overlap(truth[$1], box) }),
         Finder.overlap(truth[i], box) > 0.5
       {

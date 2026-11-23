@@ -25,21 +25,16 @@ public struct Pose: Sendable {
     let k = intrinsics
     let ray = transform * SIMD4((x - k[2][0]) / k[0][0], -(y - k[2][1]) / k[1][1], -1, 0)
     let direction = SIMD3(ray.x, ray.y, ray.z)
-    let origin = SIMD3(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
-    let normal = SIMD3(plane.columns.1.x, plane.columns.1.y, plane.columns.1.z)
-    let onPlane = SIMD3(plane.columns.3.x, plane.columns.3.y, plane.columns.3.z)
-    let facing = dot(direction, normal)
+    let origin = transform.position
+    let facing = dot(direction, plane.up)
     guard facing != 0 else { return nil }
-    let t = dot(onPlane - origin, normal) / facing
+    let t = dot(plane.position - origin, plane.up) / facing
     return t > 0 ? origin + t * direction : nil
   }
 
   /// The camera's height above the table, in metres.
   public var height: Float? {
-    guard let plane else { return nil }
-    let normal = SIMD3(plane.columns.1.x, plane.columns.1.y, plane.columns.1.z)
-    let onPlane = SIMD3(plane.columns.3.x, plane.columns.3.y, plane.columns.3.z)
-    return dot(SIMD3(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z) - onPlane, normal)
+    plane.map { dot(transform.position - $0.position, $0.up) }
   }
 
   /// Where a world point shows in the upright image, or nil behind the camera.
@@ -75,4 +70,10 @@ public struct Pose: Sendable {
     else { return SIMD2(width, .infinity) }
     return SIMD2(width, distance((tl + tr) / 2, (bl + br) / 2))
   }
+}
+
+extension simd_float4x4 {
+  public var position: SIMD3<Float> { SIMD3(columns.3.x, columns.3.y, columns.3.z) }
+  /// The y axis, a plane anchor's normal.
+  var up: SIMD3<Float> { SIMD3(columns.1.x, columns.1.y, columns.1.z) }
 }
